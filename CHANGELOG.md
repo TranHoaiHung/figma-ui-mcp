@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.1] — 2026-03-14
+
+### Changed
+- README: clarify Figma Desktop requirement and localhost bridge mechanism
+- README: reorder sections — Star History moved before License
+
+### CI
+- Switch to npm Trusted Publishing (OIDC) — remove `NPM_TOKEN` dependency
+- Add `--provenance` flag for signed npm attestation
+
+---
+
 ## [1.1.0] — 2026-03-14
 
 ### Added
