@@ -67,7 +67,7 @@ function nodeToInfo(node) {
     id:       node.id,
     name:     node.name,
     type:     node.type,
-    parentId: node.parent?.id ?? null,
+    parentId: node.parent ? node.parent.id : null,
   };
   if ("x" in node)      info.x = Math.round(node.x);
   if ("y" in node)      info.y = Math.round(node.y);
@@ -94,7 +94,7 @@ function extractDesignTree(node, depth = 0) {
 
   if ("fills" in node)      info.fill   = getFillHex(node);
   if ("strokes" in node)    info.stroke = getStrokeHex(node);
-  if ("strokeWeight" in node && node.strokes?.length) info.strokeWeight = node.strokeWeight;
+  if ("strokeWeight" in node && node.strokes && node.strokes.length) info.strokeWeight = node.strokeWeight;
   if ("cornerRadius" in node) info.cornerRadius = node.cornerRadius;
   if ("opacity" in node && node.opacity !== 1) info.opacity = node.opacity;
   if ("visible" in node && !node.visible) info.visible = false;
@@ -102,9 +102,9 @@ function extractDesignTree(node, depth = 0) {
   if (node.type === "TEXT") {
     info.content    = node.characters;
     info.fontSize   = node.fontSize;
-    info.fontFamily = node.fontName?.family;
-    info.fontWeight = node.fontName?.style;
-    info.lineHeight = node.lineHeight?.value ?? null;
+    info.fontFamily = node.fontName ? node.fontName.family : null;
+    info.fontWeight = node.fontName ? node.fontName.style : null;
+    info.lineHeight = node.lineHeight ? node.lineHeight.value : null;
     info.textAlign  = node.textAlignHorizontal;
   }
 
@@ -284,7 +284,7 @@ handlers.modify = async (params) => {
   if (params.cornerRadius !== undefined && "cornerRadius" in node) node.cornerRadius = params.cornerRadius;
 
   if ((params.width !== undefined || params.height !== undefined) && "resize" in node) {
-    node.resize(params.width ?? node.width, params.height ?? node.height);
+    node.resize(params.width !== undefined ? params.width : node.width, params.height !== undefined ? params.height : node.height);
   }
 
   if (node.type === "TEXT") {
@@ -305,7 +305,7 @@ handlers.delete = async (params) => {
   if (!node) throw new Error(`Node not found: ${JSON.stringify(params)}`);
   const info = nodeToInfo(node);
   node.remove();
-  return { deleted: true, ...info };
+  return Object.assign({ deleted: true }, info);
 };
 
 handlers.append = async ({ parentId, childId }) => {
@@ -368,10 +368,9 @@ handlers.get_page_nodes = async () => {
   const page = figma.currentPage;
   return {
     page: page.name,
-    nodes: page.children.map(n => ({
-      ...nodeToInfo(n),
-      childCount: "children" in n ? n.children.length : 0,
-    })),
+    nodes: page.children.map(function(n) {
+      return Object.assign(nodeToInfo(n), { childCount: "children" in n ? n.children.length : 0 });
+    }),
   };
 };
 
