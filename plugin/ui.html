@@ -15,7 +15,6 @@
     header h1 { font-size: 13px; font-weight: 600; color: #cba6f7; }
     header p  { font-size: 10px; color: #6c7086; margin-top: 1px; }
 
-    /* Status bar */
     .status-bar {
       display: flex; align-items: center; gap: 8px;
       background: #181825; border: 1px solid #313244;
@@ -27,41 +26,30 @@
     .dot.yellow { background: #f9e2af; animation: blink 1s ease infinite; }
     @keyframes blink { 0%,100%{opacity:1}50%{opacity:.3} }
     .status-label { font-size: 11px; flex: 1; }
-    .badge {
-      font-size: 9px; padding: 2px 6px; border-radius: 4px;
-      background: #313244; color: #6c7086;
-    }
+    .badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #313244; color: #6c7086; }
 
-    /* Stats */
     .stats { display: flex; gap: 8px; margin-bottom: 12px; }
-    .stat {
-      flex: 1; background: #181825; border: 1px solid #313244;
-      border-radius: 8px; padding: 8px; text-align: center;
-    }
+    .stat { flex: 1; background: #181825; border: 1px solid #313244; border-radius: 8px; padding: 8px; text-align: center; }
     .stat .n { font-size: 18px; font-weight: 700; color: #cdd6f4; }
     .stat .l { font-size: 9px; color: #6c7086; margin-top: 2px; }
 
-    /* Log */
     .log-wrap { margin-bottom: 10px; }
     .log-label { font-size: 10px; color: #6c7086; margin-bottom: 4px; }
     .log {
       background: #11111b; border: 1px solid #313244; border-radius: 8px;
       font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
       font-size: 10px; padding: 8px; height: 150px;
-      overflow-y: auto; white-space: pre-wrap; word-break: break-all;
-      color: #585b70;
+      overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: #585b70;
     }
     .log .ok   { color: #a6e3a1; }
     .log .err  { color: #f38ba8; }
     .log .info { color: #89b4fa; }
-    .log .warn { color: #f9e2af; }
 
-    /* Buttons */
     .btn-row { display: flex; gap: 6px; }
     button {
-      flex: 1; padding: 7px; border-radius: 6px; font-size: 11px;
-      font-weight: 500; cursor: pointer; border: 1px solid #313244;
-      background: #181825; color: #cdd6f4; transition: background .15s;
+      flex: 1; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 500;
+      cursor: pointer; border: 1px solid #313244; background: #181825; color: #cdd6f4;
+      transition: background .15s;
     }
     button:hover { background: #313244; }
     button.primary { background: #cba6f7; color: #1e1e2e; border-color: transparent; }
@@ -85,7 +73,7 @@
 
   <div class="status-bar">
     <div class="dot yellow" id="dot"></div>
-    <span class="status-label" id="status-text">Connecting to MCP server...</span>
+    <span class="status-label" id="status-text">Connecting...</span>
     <span class="badge" id="mode-badge">—</span>
   </div>
 
@@ -106,16 +94,17 @@
   </div>
 
   <script>
-    const BRIDGE = "http://localhost:38451";
-    const POLL_MS = 900;
+    var BRIDGE  = "http://localhost:38451";
+    var POLL_MS = 900;
 
-    let writeCount = 0, readCount = 0, errCount = 0;
-    let polling = true;
+    // In-memory counters (no storage APIs — Figma runs in data: URL iframe)
+    var writeCount = 0, readCount = 0, errCount = 0;
+    var polling = true;
 
-    const logEl    = document.getElementById("log");
-    const dotEl    = document.getElementById("dot");
-    const statusEl = document.getElementById("status-text");
-    const modeEl   = document.getElementById("mode-badge");
+    var logEl    = document.getElementById("log");
+    var dotEl    = document.getElementById("dot");
+    var statusEl = document.getElementById("status-text");
+    var modeEl   = document.getElementById("mode-badge");
 
     function setStatus(state, text, mode) {
       dotEl.className = "dot " + state;
@@ -123,11 +112,11 @@
       if (mode) modeEl.textContent = mode;
     }
 
-    function log(msg, cls = "") {
-      const line = document.createElement("div");
+    function log(msg, cls) {
+      var line = document.createElement("div");
       if (cls) line.className = cls;
-      const ts = new Date().toLocaleTimeString("en", { hour12: false });
-      line.textContent = `${ts}  ${msg}`;
+      var ts = new Date().toLocaleTimeString("en", { hour12: false });
+      line.textContent = ts + "  " + msg;
       logEl.appendChild(line);
       logEl.scrollTop = logEl.scrollHeight;
       while (logEl.children.length > 300) logEl.removeChild(logEl.firstChild);
@@ -135,69 +124,77 @@
 
     function clearLog() { logEl.innerHTML = ""; }
 
-    function reconnect() {
-      polling = false;
-      setTimeout(() => { polling = true; poll(); }, 100);
-    }
+    function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
     async function sendResponse(id, success, data, error) {
       try {
-        await fetch(`${BRIDGE}/response`, {
+        await fetch(BRIDGE + "/response", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, success, data: data ?? null, error: error ?? null }),
+          body: JSON.stringify({
+            id: id,
+            success: success,
+            data: data !== undefined ? data : null,
+            error: error !== undefined ? error : null
+          })
         });
       } catch (e) {
-        log("Failed to send response: " + e.message, "err");
+        log("Response failed: " + e.message, "err");
       }
     }
 
-    function dispatchToMain(request) {
-      parent.postMessage({ pluginMessage: request }, "*");
+    function dispatchToMain(req) {
+      parent.postMessage({ pluginMessage: req }, "*");
     }
 
     async function poll() {
       while (polling) {
         try {
-          const res = await fetch(`${BRIDGE}/poll`, { signal: AbortSignal.timeout(3000) });
-          if (!res.ok) { setStatus("red", "Bridge server unreachable"); await sleep(POLL_MS); continue; }
+          var res = await fetch(BRIDGE + "/poll", { signal: AbortSignal.timeout(3000) });
+          if (!res.ok) { setStatus("yellow", "Bridge not responding"); await sleep(POLL_MS); continue; }
 
-          const { requests, mode } = await res.json();
-          setStatus("green", `Connected — ${requests.length ? requests.length + " cmd(s)" : "idle"}`, mode || "ready");
+          var body = await res.json();
+          var reqs = body.requests;
+          setStatus("green", reqs.length ? reqs.length + " cmd(s)" : "Connected — idle", body.mode || "ready");
 
-          for (const req of requests) {
-            const isRead = ["get_selection","get_design","get_page_nodes","screenshot","to_code"].includes(req.operation);
-            log(`→ ${req.operation}`, isRead ? "info" : "ok");
+          for (var i = 0; i < reqs.length; i++) {
+            var req = reqs[i];
+            var isRead = ["get_selection","get_design","get_page_nodes","screenshot","to_code"].indexOf(req.operation) >= 0;
+            log("→ " + req.operation, isRead ? "info" : "ok");
             dispatchToMain(req);
           }
-        } catch {
-          setStatus("red", "Cannot reach MCP server on :38451");
+        } catch (e) {
+          setStatus("red", "Cannot reach :38451 — is MCP server running?");
+          log("Poll: " + e.message, "err");
         }
         await sleep(POLL_MS);
       }
     }
 
-    // Receive results from plugin main thread (code.js)
-    window.onmessage = async (event) => {
-      const msg = event.data.pluginMessage;
+    function reconnect() {
+      polling = false;
+      setStatus("yellow", "Reconnecting...");
+      setTimeout(function() { polling = true; poll(); }, 300);
+    }
+
+    // Messages from code.js main thread
+    window.onmessage = async function(event) {
+      var msg = event.data.pluginMessage;
       if (!msg) return;
-
-      const isRead = ["get_selection","get_design","get_page_nodes","screenshot","to_code"].includes(msg.operation);
-
+      var isRead = ["get_selection","get_design","get_page_nodes","screenshot","to_code"].indexOf(msg.operation) >= 0;
       if (msg.success) {
         if (isRead) { readCount++; document.getElementById("read-count").textContent = readCount; }
         else        { writeCount++; document.getElementById("write-count").textContent = writeCount; }
-        log(`✓ ${msg.id?.slice(-6)}`, "ok");
+        log("✓ " + (msg.id ? msg.id.slice(-6) : "?"), "ok");
       } else {
         errCount++;
         document.getElementById("err-count").textContent = errCount;
-        log(`✗ ${msg.id?.slice(-6)}: ${msg.error}`, "err");
+        log("✗ " + (msg.id ? msg.id.slice(-6) : "?") + ": " + msg.error, "err");
       }
       await sendResponse(msg.id, msg.success, msg.data, msg.error);
     };
 
-    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
+    // Auto-start polling immediately — no storage needed
     poll();
   </script>
 </body>

@@ -10,6 +10,7 @@ const WRITE_OPS = [
   "status", "listPages", "setPage", "createPage",
   "query", "create", "modify", "delete", "append",
   "listComponents", "instantiate",
+  "ensure_library", "get_library_tokens",
 ];
 
 const READ_OPS = [

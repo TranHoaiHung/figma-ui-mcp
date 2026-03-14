@@ -1,6 +1,67 @@
 export const DOCS = `
 # figma-ui-mcp — Write API Reference (figma_write)
 
+---
+
+## ⚑ MANDATORY DESIGN SYSTEM RULES (read before every design task)
+
+### Rule 1 — Design Library Frame
+Before drawing any new design, ALWAYS:
+1. Call \`figma.get_page_nodes()\` to check if a frame named **"🎨 Design Library"** exists on the current page
+2. If it does NOT exist → call \`figma.ensure_library()\` to create it
+3. If it exists → call \`figma.get_library_tokens()\` to read existing colors, text styles, and components
+4. ONLY use colors, font sizes, and component patterns already defined in the library
+5. If you need a new color or text style not in the library → add it to "🎨 Design Library" FIRST, then use it
+
+### Rule 2 — Library Frame Structure
+The "🎨 Design Library" frame lives at x: -2000, y: 0 (off-canvas, never on-screen).
+It contains labeled sections:
+- **Colors** — rectangles named "color/{name}" with the hex fill
+- **Text Styles** — text nodes named "text/{role}" (e.g. text/heading-xl, text/body-sm)
+- **Buttons** — frames named "btn/{variant}" (e.g. btn/primary, btn/danger)
+- **Badges** — frames named "badge/{variant}"
+- **Inputs** — frames named "input/{state}"
+- **Cards** — frames named "card/{variant}"
+
+### Rule 3 — Read selection when user refers to a frame
+When user says "this frame", "the selected one", "bạn thấy không", "cái đang chọn":
+→ Immediately call figma_read with operation "get_selection" to read what the user has selected in Figma.
+Never assume which frame the user means — always read it first.
+
+### Rule 5 — Visual QA after every design (self-check loop)
+After finishing any design section, perform a self-QA pass:
+1. Call \`figma_read\` with \`operation: "screenshot"\` on the root frame (scale: 0.4)
+2. The base64 PNG is returned — Claude views it directly as an image
+3. Analyze visually: check for overlapping elements, misaligned nodes, text overflow, off-canvas items
+4. Cross-check coordinates via \`get_page_nodes\` — compare x/y/width/height of each node
+5. If overlap found → call \`figma.modify({ id, x, y, width, height })\` to fix
+6. Re-screenshot to confirm — repeat until clean
+This loop runs automatically after every major draw step.
+
+### Rule 4 — Naming convention
+- Frame names: PascalCase (e.g. "Trading Dashboard", "Signal Card")
+- Component names: kebab-case with type prefix (e.g. "btn/primary-lg", "badge/success")
+- Color names: descriptive (e.g. "color/bg-surface", "color/accent-purple", "color/positive-green")
+
+---
+
+## ensure_library — Bootstrap the Design Library frame
+
+\`\`\`js
+// Creates "🎨 Design Library" frame if it doesn't exist.
+// Returns { id, existed } — use .id to add components to it.
+const lib = await figma.ensure_library();
+\`\`\`
+
+## get_library_tokens — Read all tokens from the library
+
+\`\`\`js
+// Returns { colors: [{name, hex}], textStyles: [{name, fontSize, fontWeight, fill}] }
+const tokens = await figma.get_library_tokens();
+\`\`\`
+
+---
+
 All figma operations are async. Always use \`await\`.
 
 ---

@@ -1,7 +1,7 @@
 # figma-ui-mcp
 
 <p align="center">
-  <img src="assets/logo.png" alt="figma-ui-mcp logo" width="160" />
+  <img src="assets/logo-v6.png" alt="figma-ui-mcp" width="480" />
 </p>
 
 **Bidirectional Figma MCP** — use Claude (or any MCP client) to draw UI directly in Figma, and read existing designs back as structured data or code.

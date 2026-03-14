@@ -3,7 +3,7 @@ import http from "node:http";
 
 export const CONFIG = {
   PORT: 38451,
-  HOST: "127.0.0.1",        // localhost only, never exposed to network
+  HOST: null,               // null = Node.js binds :: (dual-stack IPv4+IPv6), accepts localhost on both
   OP_TIMEOUT_MS: 10_000,    // per-operation timeout
   MAX_BODY_BYTES: 500_000,
   MAX_QUEUE: 50,
@@ -74,7 +74,7 @@ export class BridgeServer {
     this.#headers(res);
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
-    const path = new URL(req.url, `http://${CONFIG.HOST}`).pathname;
+    const path = new URL(req.url, `http://localhost:${CONFIG.PORT}`).pathname;
 
     // Plugin → pick up queued operations
     if (path === "/poll" && req.method === "GET") {
@@ -90,6 +90,25 @@ export class BridgeServer {
       this.#readJson(req)
         .then(body => { this.#settle(body); res.writeHead(200); res.end(JSON.stringify({ ok: true })); })
         .catch(err  => { res.writeHead(400); res.end(JSON.stringify({ error: err.message })); });
+      return;
+    }
+
+    // Direct HTTP execution — allows any HTTP client to send operations without MCP layer
+    // POST /exec { operation, params } → waits for plugin response (max 10s)
+    if (path === "/exec" && req.method === "POST") {
+      this.#readJson(req)
+        .then(async body => {
+          if (!this.isPluginConnected()) {
+            res.writeHead(503); res.end(JSON.stringify({ error: "Plugin not connected" })); return;
+          }
+          try {
+            const data = await this.sendOperation(body.operation, body.params || {});
+            res.writeHead(200); res.end(JSON.stringify({ success: true, data }));
+          } catch (e) {
+            res.writeHead(200); res.end(JSON.stringify({ success: false, error: e.message }));
+          }
+        })
+        .catch(err => { res.writeHead(400); res.end(JSON.stringify({ error: err.message })); });
       return;
     }
 
