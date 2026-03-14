@@ -6,10 +6,18 @@
 
 **Bidirectional Figma MCP** — use Claude (or any MCP client) to draw UI directly in Figma, and read existing designs back as structured data or code.
 
+> **Requires Figma Desktop** — the plugin communicates with the MCP server over `localhost` HTTP polling. Figma's web app does not allow localhost network access, so **Figma Desktop is required**.
+
 ```
-Claude ──figma_write──▶ MCP Server ──HTTP──▶ Figma Plugin ──▶ Figma Document
-Claude ◀─figma_read──── MCP Server ◀─HTTP─── Figma Plugin ◀── Figma Document
+Claude ──figma_write──▶ MCP Server ──HTTP (localhost:38451)──▶ Figma Plugin ──▶ Figma Document
+Claude ◀─figma_read──── MCP Server ◀──HTTP (localhost:38451)── Figma Plugin ◀── Figma Document
 ```
+
+### How the localhost bridge works
+
+The MCP server starts a small HTTP server bound to `localhost:38451`. The Figma plugin (running inside Figma Desktop) polls this server every 500 ms to pick up queued operations and post results back. All traffic stays on your machine — nothing is sent to any external server.
+
+This approach is necessary because Figma plugins run in a sandboxed iframe and cannot use stdio or WebSocket to talk to a local process directly. HTTP polling over localhost is the only supported method for a Figma plugin to communicate with a local tool.
 
 ---
 
