@@ -1,0 +1,85 @@
+name: Release & Publish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write  # needed to create tags and GitHub releases
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history needed for tag check
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install
+
+      # ── Read local version ─────────────────────────────────────────────────
+      - name: Get package version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      # ── Check if this version was already published to npm ─────────────────
+      - name: Check npm registry
+        id: check
+        run: |
+          PUBLISHED=$(npm view figma-ui-mcp version 2>/dev/null || echo "0.0.0")
+          echo "published=$PUBLISHED" >> $GITHUB_OUTPUT
+          if [ "$PUBLISHED" = "${{ steps.pkg.outputs.version }}" ]; then
+            echo "skip=true"  >> $GITHUB_OUTPUT
+            echo "⏭  v${{ steps.pkg.outputs.version }} already on npm — skipping release."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "🚀 New version v${{ steps.pkg.outputs.version }} (npm has $PUBLISHED) — will release."
+          fi
+
+      # ── Publish to npm ─────────────────────────────────────────────────────
+      - name: Publish to npm
+        if: steps.check.outputs.skip == 'false'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # ── Create git tag ─────────────────────────────────────────────────────
+      - name: Create git tag
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ steps.pkg.outputs.version }}"
+          git push origin "v${{ steps.pkg.outputs.version }}"
+
+      # ── Extract changelog section for this version ─────────────────────────
+      - name: Extract changelog
+        if: steps.check.outputs.skip == 'false'
+        id: changelog
+        run: |
+          VERSION="${{ steps.pkg.outputs.version }}"
+          # Extract the block between ## [VERSION] and the next ## [
+          NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          # Write to file to preserve newlines
+          echo "$NOTES" > /tmp/release-notes.md
+          echo "Release notes extracted for v$VERSION"
+
+      # ── Create GitHub Release ──────────────────────────────────────────────
+      - name: Create GitHub Release
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.pkg.outputs.version }}" \
+            --title "v${{ steps.pkg.outputs.version }}" \
+            --notes-file /tmp/release-notes.md \
+            --latest
