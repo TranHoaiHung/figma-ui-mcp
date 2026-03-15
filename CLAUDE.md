@@ -240,6 +240,73 @@ icon paddingTop = (textLineHeight - iconSize) / 2
 Example: text 22px line-height, dot 8px → paddingTop = (22 - 8) / 2 = 7
 ```
 
+### PROGRESS BAR RULE (MANDATORY — CRITICAL)
+Progress bars require TWO rectangles overlapping: track (full width bg) + fill (partial width foreground).
+**Auto-layout frames stack children sequentially**, so placing both rectangles inside auto-layout will show them SIDE BY SIDE, not overlapping.
+
+**ALWAYS wrap progress bars in a non-auto-layout frame:**
+```js
+// CORRECT: wrapper frame WITHOUT layoutMode → children overlap via absolute x,y
+var pbWrap = await figma.create({
+  type: "FRAME", name: "progress-bar", parentId: autoLayoutParent.id,
+  width: 352, height: 6
+  // NO layoutMode here!
+});
+await figma.create({ type: "RECTANGLE", name: "progress-track", parentId: pbWrap.id, x: 0, y: 0, width: 352, height: 6, fill: "#E7EAF0", cornerRadius: 3 });
+await figma.create({ type: "RECTANGLE", name: "progress-fill", parentId: pbWrap.id, x: 0, y: 0, width: 211, height: 6, fill: "#6C5CE7", cornerRadius: 3 });
+
+// WRONG: both rectangles directly in auto-layout → they sit next to each other
+await figma.create({ type: "RECTANGLE", parentId: autoLayoutFrame.id, width: 352, height: 6, fill: "#E7EAF0" });
+await figma.create({ type: "RECTANGLE", parentId: autoLayoutFrame.id, width: 211, height: 6, fill: "#6C5CE7" });
+// ↑ These will NOT overlap — they'll be placed 352px + 211px = 563px total width!
+```
+
+**This rule applies to ANY overlapping elements inside auto-layout:** score rings, slider tracks, overlay badges, etc.
+Use a non-auto-layout wrapper frame whenever children must overlap.
+
+### BADGE / PILL / TAG RULE (MANDATORY — TWO CONCERNS)
+Badges have TWO separate concerns: (1) text centering INSIDE badge, (2) badge POSITION on parent.
+
+**Concern 1 — Text inside badge: ALWAYS use auto-layout CENTER/CENTER**
+```js
+// CORRECT: Auto-layout frame → text auto-centers inside badge
+var badge = await figma.create({
+  type: "FRAME", name: "badge", parentId: parent.id,
+  x: 100, y: 10, width: 64, height: 20,
+  fill: "#E8FBF5", cornerRadius: 10,
+  layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "CENTER",   // centers text horizontally
+  counterAxisAlignItems: "CENTER"    // centers text vertically
+});
+await figma.create({ type: "TEXT", parentId: badge.id, content: "Free", fontSize: 10, fontWeight: "SemiBold", fill: "#00B894" });
+
+// WRONG: Separate rectangle + text → text never properly centered
+```
+
+**Concern 2 — Badge position on card: use absolute x,y on PARENT (not inside card auto-layout)**
+```js
+// Badge at top-right corner of a card:
+// badgeX = cardX + cardWidth - badgeWidth - margin (e.g. 6px)
+// badgeY = cardY + margin (e.g. 6px)
+var badge = await figma.create({
+  ..., parentId: rootFrame.id,    // parent is ROOT, not the card!
+  x: cardX + cardWidth - 64 - 6, // top-right corner
+  y: cardY + 6,
+  ...
+});
+// Badge is a sibling of the card, overlapping its top-right corner via absolute positioning.
+// Do NOT put badge inside the card's auto-layout — it will be stacked with other children!
+```
+
+**This applies to:** badges, pills, tags, labels, small buttons, notification dots with numbers, level indicators.
+
+### CONTAINER HEIGHT MUST FIT CONTENT RULE (MANDATORY)
+When creating auto-layout containers (cards, banners, panels):
+- Set height **generously** to fit all children with padding + spacing
+- If unsure, add 20-30px buffer — too tall is better than content being clipped
+- After creating, verify with `get_design` or `screenshot` that no content overflows
+- Formula: height = paddingTop + paddingBottom + (childCount * avgChildHeight) + ((childCount-1) * itemSpacing)
+
 ## Images & Icons (Server-side helpers — NO bash/curl needed)
 
 ### figma.loadImage(url, opts) — Download image and place on canvas

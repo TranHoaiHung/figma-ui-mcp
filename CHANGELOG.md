@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.1] — 2026-03-15
+
+### Added
+- **CLAUDE.md** — 3 new mandatory design rules:
+  - **Progress Bar Rule** — overlapping elements must use non-auto-layout wrapper frame
+  - **Badge/Pill Rule** — separate concerns for text centering (auto-layout) vs position on parent (absolute x,y)
+  - **Container Height Rule** — height formula to prevent content overflow/clipping
+
+---
+
 ## [1.4.0] — 2026-03-15
 
 ### Added
