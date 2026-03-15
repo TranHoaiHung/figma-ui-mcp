@@ -1,9 +1,10 @@
 {
   "name": "Figma UI MCP Bridge",
-  "id": "figma-ui-mcp-bridge",
+  "id": "1614927480683426278",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
+  "documentAccess": "dynamic-page",
   "editorType": ["figma", "dev"],
   "networkAccess": {
     "allowedDomains": ["http://localhost:38451"],

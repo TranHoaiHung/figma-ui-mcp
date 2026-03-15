@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.3.0] — 2026-03-15
+
+### Added
+- **HTTP proxy mode** — MCP server auto-detects if bridge port is in use; connects to existing bridge via HTTP instead of crashing (supports multiple MCP clients sharing one bridge)
+- **Name-based lookups** — `append`, `instantiate`, `get_selection`, `screenshot` now accept `name`/`parentName`/`componentName` params alongside IDs
+- **fillOpacity on modify** — can update opacity on existing fills without changing color
+- **Version reporting** — `figma_status` now returns plugin version and bridge mode (direct/http-proxy)
+
+### Changed
+- `plugin/manifest.json` — official Figma plugin ID `1614927480683426278`, added `documentAccess: "dynamic-page"`
+- `plugin/code.js` — refactored `append`, `instantiate`, `get_selection`, `screenshot` to use `var`/`function` syntax (Figma sandbox safe, no arrow functions)
+- `server/index.js` — bridge connection strategy: try own server first, fallback to HTTP proxy if port taken
+- Plugin cover image and 128px icon added to `assets/`
+
+---
+
 ## [1.2.0] — 2026-03-15
 
 ### Added

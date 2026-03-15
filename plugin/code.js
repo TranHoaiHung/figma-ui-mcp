@@ -1,4 +1,4 @@
-// figma-ui-mcp — Figma Plugin main thread
+// figma-ui-mcp — Figma Plugin main thread v1.2.1
 // Handles both WRITE (draw UI) and READ (extract design) operations.
 
 figma.showUI(__html__, { width: 300, height: 340, title: "Figma UI MCP" });
@@ -161,6 +161,7 @@ const handlers = {};
 
 handlers.status = async () => ({
   connected:   true,
+  version:     "1.2.4",
   fileName:    figma.root.name,
   currentPage: figma.currentPage.name,
   pageCount:   figma.root.children.length,
@@ -411,7 +412,13 @@ handlers.modify = async (params) => {
   const node = resolveNode(params);
   if (!node) throw new Error(`Node not found: ${JSON.stringify(params)}`);
 
-  if (params.fill     !== undefined && "fills"   in node) node.fills   = solidFill(params.fill);
+  if (params.fill     !== undefined && "fills"   in node) node.fills   = solidFill(params.fill, params.fillOpacity);
+  if (params.fillOpacity !== undefined && params.fill === undefined && "fills" in node && node.fills && node.fills.length) {
+    // Update fillOpacity on existing fill without changing color
+    var existingFills = JSON.parse(JSON.stringify(node.fills));
+    existingFills[0].opacity = params.fillOpacity;
+    node.fills = existingFills;
+  }
   if (params.stroke   !== undefined && "strokes" in node) {
     node.strokes = solidStroke(params.stroke);
     if (params.strokeWeight !== undefined) node.strokeWeight = params.strokeWeight;
@@ -475,9 +482,13 @@ handlers.delete = async (params) => {
   return Object.assign({ deleted: true }, info);
 };
 
-handlers.append = async ({ parentId, childId }) => {
-  const parent = findNodeById(parentId);
-  const child  = findNodeById(childId);
+handlers.append = async function(params) {
+  var parentId = params.parentId || null;
+  var parentName = params.parentName || null;
+  var childId = params.childId || null;
+  var childName = params.childName || null;
+  var parent = parentId ? findNodeById(parentId) : (parentName ? findNodeByName(parentName) : null);
+  var child = childId ? findNodeById(childId) : (childName ? findNodeByName(childName) : null);
   if (!parent || !child) throw new Error("Parent or child not found");
   parent.appendChild(child);
   return { parentId: parent.id, childId: child.id };
@@ -488,15 +499,24 @@ handlers.listComponents = async () => {
   return comps.map(c => ({ id: c.id, name: c.name, key: c.key || null }));
 };
 
-handlers.instantiate = async ({ componentId, parentId, x = 0, y = 0 }) => {
-  const comp = figma.root.findOne(n => n.id === componentId && n.type === "COMPONENT");
-  if (!comp) throw new Error(`Component ${componentId} not found`);
-  const inst = comp.createInstance();
-  inst.x = x; inst.y = y;
-  if (parentId) {
-    const p = findNodeById(parentId);
-    if (p) p.appendChild(inst);
+handlers.instantiate = async function(params) {
+  var componentId = params.componentId || null;
+  var componentName = params.componentName || null;
+  var parentId = params.parentId || null;
+  var parentName = params.parentName || null;
+  var x = params.x || 0;
+  var y = params.y || 0;
+  var comp = null;
+  if (componentId) {
+    comp = figma.root.findOne(function(n) { return n.id === componentId && n.type === "COMPONENT"; });
+  } else if (componentName) {
+    comp = figma.root.findOne(function(n) { return n.name === componentName && n.type === "COMPONENT"; });
   }
+  if (!comp) throw new Error("Component " + (componentId || componentName) + " not found");
+  var inst = comp.createInstance();
+  inst.x = x; inst.y = y;
+  var parent = parentId ? findNodeById(parentId) : (parentName ? findNodeByName(parentName) : null);
+  if (parent) parent.appendChild(inst);
   return nodeToInfo(inst);
 };
 
@@ -631,10 +651,17 @@ handlers.get_library_tokens = async function() {
 // ─── READ HANDLERS ────────────────────────────────────────────────────────────
 
 // get_selection — returns full design data for current selection (or specified node)
-handlers.get_selection = async ({ id } = {}) => {
-  const nodes = id
-    ? [findNodeById(id)].filter(Boolean)
-    : [...figma.currentPage.selection];
+handlers.get_selection = async function(params) {
+  var id = params ? params.id : null;
+  var nodeName = params ? params.name : null;
+  var nodes;
+  if (id) {
+    nodes = [findNodeById(id)].filter(Boolean);
+  } else if (nodeName) {
+    nodes = [findNodeByName(nodeName)].filter(Boolean);
+  } else {
+    nodes = [].concat(figma.currentPage.selection);
+  }
 
   if (!nodes.length) return { nodes: [], message: "Nothing selected" };
 
@@ -669,61 +696,78 @@ handlers.get_page_nodes = async () => {
   };
 };
 
-// screenshot — export node as PNG base64
-// Uses figma.getNodeById() for reliable node access + chunked btoa for large images
+// screenshot — export node as PNG base64 (v1.2.4)
 handlers.screenshot = async function(params) {
-  var id = params ? params.id : null;
-  var s = params ? (params.scale || 1) : 1;
+  var id = params && params.id ? params.id : null;
+  var nodeName = params && params.name ? params.name : null;
+  var s = params && params.scale ? params.scale : 1;
+
+  // Use figma.currentPage.selection or children to find node
+  var page = figma.currentPage;
+  var children = page.children;
   var node = null;
+  var i;
 
-  // Find node by id in top-level children
   if (id) {
-    var children = figma.currentPage.children;
-    for (var ci = 0; ci < children.length; ci++) {
-      if (children[ci].id === id) { node = children[ci]; break; }
-    }
-    if (!node) node = figma.currentPage.findOne(function(n) { return n.id === id; });
-  }
-  // Fall back to first top-level frame (avoids PageNode which has no exportAsync)
-  if (!node) {
-    var frames = figma.currentPage.children;
-    for (var fi = 0; fi < frames.length; fi++) {
-      if (frames[fi].type === "FRAME") { node = frames[fi]; break; }
+    for (i = 0; i < children.length; i++) {
+      if (children[i].id === id) { node = children[i]; break; }
     }
   }
-  if (!node) throw new Error("No frame found to screenshot");
-
-  // Detailed type check
-  var exportType = typeof node.exportAsync;
-  if (exportType !== "function") {
-    throw new Error("exportAsync is " + exportType + " on " + node.type + "/" + node.id + " — reload plugin");
+  if (node === null && nodeName) {
+    for (i = 0; i < children.length; i++) {
+      if (children[i].name === nodeName) { node = children[i]; break; }
+    }
+  }
+  if (node === null) {
+    for (i = 0; i < children.length; i++) {
+      if (children[i].type === "FRAME") { node = children[i]; break; }
+    }
+  }
+  if (node === null) {
+    return Promise.reject(new Error("[v1.2.4] No frame. children=" + children.length));
   }
 
-  // Try export with scale constraint
-  var bytes;
   try {
-    bytes = await node.exportAsync({ format: "PNG", constraint: { type: "SCALE", value: s } });
-  } catch (e1) {
-    // Retry without constraint (some API versions differ)
-    try {
-      bytes = await node.exportAsync({ format: "PNG" });
-    } catch (e2) {
-      throw new Error("exportAsync failed: " + e1.message + " | retry: " + e2.message);
-    }
+    var bytes = await node.exportAsync({ format: "PNG", constraint: { type: "SCALE", value: s } });
+  } catch(exportErr) {
+    return Promise.reject(new Error("[v1.2.4-export] " + exportErr.message + " type=" + node.type + " id=" + node.id));
   }
 
-  var arr = new Uint8Array(bytes);
-  var b64 = "";
-  var CHUNK = 8192;
-  for (var i = 0; i < arr.length; i += CHUNK) {
-    b64 += btoa(String.fromCharCode.apply(null, arr.subarray(i, i + CHUNK)));
+  // Figma plugin sandbox: no btoa, no TextEncoder — manual base64
+  try {
+    // exportAsync returns Uint8Array directly in Figma sandbox
+    var arr = bytes;
+    if (typeof Uint8Array !== "undefined" && !(bytes instanceof Uint8Array)) {
+      arr = new Uint8Array(bytes);
+    }
+    var CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    var b64 = "";
+    var len = arr.length;
+    for (var j = 0; j < len; j += 3) {
+      var b0 = arr[j];
+      var b1 = j + 1 < len ? arr[j + 1] : 0;
+      var b2 = j + 2 < len ? arr[j + 2] : 0;
+      b64 += CHARS[b0 >> 2];
+      b64 += CHARS[((b0 & 3) << 4) | (b1 >> 4)];
+      b64 += j + 1 < len ? CHARS[((b1 & 15) << 2) | (b2 >> 6)] : "=";
+      b64 += j + 2 < len ? CHARS[b2 & 63] : "=";
+    }
+    return { dataUrl: "data:image/png;base64," + b64, nodeId: node.id, width: node.width, height: node.height };
+  } catch(encodeErr) {
+    return Promise.reject(new Error("[v1.2.4-encode] " + encodeErr.message));
   }
-  return { dataUrl: "data:image/png;base64," + b64, nodeId: node.id, width: node.width, height: node.height };
 };
 
 // export_svg — export node as SVG string
-handlers.export_svg = async ({ id } = {}) => {
-  const node = id ? findNodeById(id) : figma.currentPage;
+handlers.export_svg = async function(params) {
+  var id = params ? params.id : null;
+  var nodeName = params ? params.name : null;
+  var node = null;
+  if (id) node = findNodeById(id);
+  if (!node && nodeName) {
+    node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
+  }
+  if (!node) node = figma.currentPage;
   if (!node) throw new Error("Node not found");
   const bytes = await node.exportAsync({ format: "SVG" });
   return { svg: new TextDecoder().decode(bytes), nodeId: node.id };
@@ -744,9 +788,10 @@ figma.ui.onmessage = async (request) => {
   }
 
   try {
-    const data = await handler(params || {});
-    figma.ui.postMessage({ id, operation, success: true, data });
+    var data = await handler(params || {});
+    figma.ui.postMessage({ id: id, operation: operation, success: true, data: data });
   } catch (err) {
-    figma.ui.postMessage({ id, operation, success: false, error: err.message });
+    var errMsg = "[dispatch:" + operation + "] " + (err && err.message ? err.message : String(err));
+    figma.ui.postMessage({ id: id, operation: operation, success: false, error: errMsg });
   }
 };
