@@ -4,6 +4,13 @@
   <img src="assets/logo-v6.png" alt="figma-ui-mcp" width="480" />
 </p>
 
+<p align="center">
+  <a href="https://www.npmjs.com/package/figma-ui-mcp"><img src="https://img.shields.io/npm/v/figma-ui-mcp?color=blue" alt="npm version" /></a>
+  <a href="https://registry.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-Registry-purple" alt="MCP Registry" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://github.com/TranHoaiHung/figma-ui-mcp/stargazers"><img src="https://img.shields.io/github/stars/TranHoaiHung/figma-ui-mcp?style=social" alt="GitHub stars" /></a>
+</p>
+
 **Bidirectional Figma MCP** — use Claude (or any MCP client) to draw UI directly in Figma, and read existing designs back as structured data or code.
 
 > **Requires Figma Desktop** — the plugin communicates with the MCP server over `localhost` HTTP polling. Figma's web app does not allow localhost network access, so **Figma Desktop is required**.
