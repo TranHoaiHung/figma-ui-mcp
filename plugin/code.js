@@ -45,6 +45,12 @@ function getStrokeHex(node) {
 const FONT_STYLE_MAP = {
   Regular: "Regular", Medium: "Medium",
   SemiBold: "Semi Bold", Bold: "Bold", Light: "Light",
+  Thin: "Thin", Heavy: "Heavy",
+  "Condensed Heavy": "Condensed Heavy",
+  "Thin Italic": "Thin Italic",
+  "Light Italic": "Light Italic",
+  "Extra Bold": "Extra Bold",
+  "Semi Bold": "Semi Bold",
 };
 
 function findNodeById(id) {
@@ -94,33 +100,73 @@ function extractDesignTree(node, depth = 0) {
     height:"height" in node ? Math.round(node.height)  : undefined,
   };
 
-  if ("fills" in node)      info.fill   = getFillHex(node);
-  if ("strokes" in node)    info.stroke = getStrokeHex(node);
-  if ("strokeWeight" in node && node.strokes && node.strokes.length) info.strokeWeight = node.strokeWeight;
-  if ("cornerRadius" in node) info.cornerRadius = node.cornerRadius;
-  if ("opacity" in node && node.opacity !== 1) info.opacity = node.opacity;
-  if ("visible" in node && !node.visible) info.visible = false;
+  // Safely read style properties — COMPONENT_SET and some nodes
+  // throw "Cannot unwrap symbol" when accessing fills/strokes/etc.
+  try {
+    if ("fills" in node)      info.fill   = getFillHex(node);
+  } catch(e) { /* skip fills for this node type */ }
+  try {
+    if ("strokes" in node)    info.stroke = getStrokeHex(node);
+  } catch(e) { /* skip strokes */ }
+  try {
+    if ("strokeWeight" in node && node.strokes && node.strokes.length) info.strokeWeight = node.strokeWeight;
+  } catch(e) { /* skip strokeWeight */ }
+  try {
+    if ("cornerRadius" in node) info.cornerRadius = node.cornerRadius;
+  } catch(e) { /* skip cornerRadius */ }
+  try {
+    if ("opacity" in node && node.opacity !== 1) info.opacity = node.opacity;
+  } catch(e) { /* skip opacity */ }
+  try {
+    if ("visible" in node && !node.visible) info.visible = false;
+  } catch(e) { /* skip visible */ }
 
   if (node.type === "TEXT") {
-    info.content    = node.characters;
-    info.fontSize   = node.fontSize;
-    info.fontFamily = node.fontName ? node.fontName.family : null;
-    info.fontWeight = node.fontName ? node.fontName.style : null;
-    info.lineHeight = node.lineHeight ? node.lineHeight.value : null;
-    info.textAlign  = node.textAlignHorizontal;
+    try {
+      info.content    = node.characters;
+      info.fontSize   = node.fontSize;
+      info.fontFamily = node.fontName ? node.fontName.family : null;
+      info.fontWeight = node.fontName ? node.fontName.style : null;
+      info.lineHeight = node.lineHeight ? node.lineHeight.value : null;
+      info.textAlign  = node.textAlignHorizontal;
+    } catch(e) {
+      // Mixed text styles — read character-level styles
+      try {
+        info.content = node.characters;
+        // For mixed fonts, get the first character's style as representative
+        if (node.characters.length > 0) {
+          var rs = node.getRangeFontName(0, 1);
+          if (rs) { info.fontFamily = rs.family; info.fontWeight = rs.style; }
+          info.fontSize = node.getRangeFontSize(0, 1);
+        }
+      } catch(e2) { info.content = node.characters || ""; }
+    }
   }
 
-  if ("layoutMode" in node && node.layoutMode !== "NONE") {
-    info.layout = {
-      mode:        node.layoutMode,
-      spacing:     node.itemSpacing,
-      paddingTop:  node.paddingTop,
-      paddingRight: node.paddingRight,
-      paddingBottom: node.paddingBottom,
-      paddingLeft:  node.paddingLeft,
-      align:        node.primaryAxisAlignItems,
-      crossAlign:   node.counterAxisAlignItems,
-    };
+  try {
+    if ("layoutMode" in node && node.layoutMode !== "NONE") {
+      info.layout = {
+        mode:        node.layoutMode,
+        spacing:     node.itemSpacing,
+        paddingTop:  node.paddingTop,
+        paddingRight: node.paddingRight,
+        paddingBottom: node.paddingBottom,
+        paddingLeft:  node.paddingLeft,
+        align:        node.primaryAxisAlignItems,
+        crossAlign:   node.counterAxisAlignItems,
+      };
+    }
+  } catch(e) { /* skip layout for this node type */ }
+
+  // Add component-specific info
+  if (node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
+    try { info.description = node.description; } catch(e) {}
+  }
+  if (node.type === "INSTANCE") {
+    try {
+      var mainComp = node.mainComponent;
+      if (mainComp) { info.componentName = mainComp.name; info.componentId = mainComp.id; }
+    } catch(e) {}
   }
 
   if ("children" in node && node.children.length) {
@@ -333,6 +379,53 @@ handlers.create = async (params) => {
       }
     }
 
+  } else if (type === "VECTOR") {
+    // Create vector paths from SVG path data (d attribute)
+    // Supports: diagonal lines, curves (bezier, quadratic, arcs), polygons, any shape
+    // params.paths: array of {d, windingRule?} or single string d
+    // params.d: shorthand — single path data string (alternative to paths)
+    // params.strokeCap: "NONE" | "ROUND" | "SQUARE" | "ARROW_LINES" | "ARROW_EQUILATERAL"
+    // params.strokeJoin: "MITER" | "BEVEL" | "ROUND"
+    var pathData = params.d || params.path;
+    var pathsArr = params.paths;
+
+    if (!pathData && !pathsArr) {
+      throw new Error('VECTOR type requires "d" (path data string) or "paths" (array of {d, windingRule})');
+    }
+
+    node = figma.createVector();
+    node.resize(width, height);
+
+    // Build vectorPaths
+    if (pathsArr && Array.isArray(pathsArr)) {
+      node.vectorPaths = pathsArr.map(function(p) {
+        return {
+          data: typeof p === "string" ? p : p.d,
+          windingRule: (typeof p === "object" && p.windingRule) ? p.windingRule : "NONZERO"
+        };
+      });
+    } else {
+      node.vectorPaths = [{
+        data: pathData,
+        windingRule: params.windingRule || "NONZERO"
+      }];
+    }
+
+    // Fill and stroke
+    if (fill) {
+      node.fills = solidFill(fill, params.fillOpacity);
+    } else {
+      node.fills = [];
+    }
+    if (stroke) {
+      node.strokes = solidStroke(stroke);
+      node.strokeWeight = strokeWeight;
+    }
+
+    // Stroke styling
+    if (params.strokeCap) node.strokeCap = params.strokeCap;
+    if (params.strokeJoin) node.strokeJoin = params.strokeJoin;
+
   } else if (type === "IMAGE") {
     // Create a rectangle with an image fill from base64 data
     // params.imageData: base64-encoded image (PNG/JPG)
@@ -376,7 +469,7 @@ handlers.create = async (params) => {
     if (stroke) { node.strokes = solidStroke(stroke); node.strokeWeight = strokeWeight; }
 
   } else {
-    throw new Error('Unsupported node type: "' + type + '". Use FRAME, RECTANGLE, ELLIPSE, LINE, TEXT, SVG, IMAGE.');
+    throw new Error('Unsupported node type: "' + type + '". Use FRAME, RECTANGLE, ELLIPSE, LINE, TEXT, SVG, VECTOR, IMAGE.');
   }
 
   if (name)   node.name = name;
@@ -435,10 +528,11 @@ handlers.modify = async (params) => {
   }
 
   if (node.type === "TEXT") {
-    if (params.content !== undefined || params.fontWeight !== undefined) {
+    if (params.content !== undefined || params.fontWeight !== undefined || params.fontFamily !== undefined) {
+      const family = params.fontFamily || node.fontName.family;
       const style = FONT_STYLE_MAP[params.fontWeight] || node.fontName.style;
-      await figma.loadFontAsync({ family: node.fontName.family, style });
-      if (params.fontWeight) node.fontName = { family: node.fontName.family, style };
+      await figma.loadFontAsync({ family, style });
+      node.fontName = { family, style };
       if (params.content !== undefined) node.characters = params.content;
     }
     if (params.fontSize !== undefined) node.fontSize = params.fontSize;
@@ -678,11 +772,15 @@ handlers.get_design = async ({ id, name, depth = 4 } = {}) => {
   else if (name) root = findNodeByName(name);
   else      root = figma.currentPage;
 
-  if (!root) throw new Error("Node not found");
+  if (!root) throw new Error("Node not found: id=" + (id || "none") + " name=" + (name || "none"));
 
-  const tree = extractDesignTree(root, 8 - depth);
-  const tokens = extractTokens(tree);
-  return { tree, tokens };
+  try {
+    const tree = extractDesignTree(root, 8 - depth);
+    const tokens = extractTokens(tree);
+    return { tree, tokens };
+  } catch(e) {
+    throw new Error("[get_design] " + e.message + " nodeType=" + root.type + " id=" + root.id);
+  }
 };
 
 // get_page_nodes — shallow list of top-level frames on current page
@@ -696,35 +794,44 @@ handlers.get_page_nodes = async () => {
   };
 };
 
-// screenshot — export node as PNG base64 (v1.2.4)
+// screenshot — export node as PNG base64 (v1.2.5)
 handlers.screenshot = async function(params) {
   var id = params && params.id ? params.id : null;
   var nodeName = params && params.name ? params.name : null;
   var s = params && params.scale ? params.scale : 1;
 
-  // Use figma.currentPage.selection or children to find node
   var page = figma.currentPage;
   var children = page.children;
   var node = null;
   var i;
 
+  // Deep search by ID — check top-level first, then deep search
   if (id) {
     for (i = 0; i < children.length; i++) {
       if (children[i].id === id) { node = children[i]; break; }
     }
+    if (!node) {
+      node = figma.currentPage.findOne(function(n) { return n.id === id; });
+    }
   }
+  // Deep search by name
   if (node === null && nodeName) {
     for (i = 0; i < children.length; i++) {
       if (children[i].name === nodeName) { node = children[i]; break; }
     }
+    if (!node) {
+      node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
+    }
   }
+  // Fallback: any exportable top-level node (FRAME, COMPONENT, COMPONENT_SET, SECTION)
   if (node === null) {
+    var exportableTypes = ["FRAME", "COMPONENT", "COMPONENT_SET", "SECTION", "INSTANCE", "GROUP"];
     for (i = 0; i < children.length; i++) {
-      if (children[i].type === "FRAME") { node = children[i]; break; }
+      if (exportableTypes.indexOf(children[i].type) !== -1) { node = children[i]; break; }
     }
   }
   if (node === null) {
-    return Promise.reject(new Error("[v1.2.4] No frame. children=" + children.length));
+    return Promise.reject(new Error("[v1.2.5] No exportable node found. children=" + children.length));
   }
 
   try {
@@ -775,6 +882,30 @@ handlers.export_svg = async function(params) {
 
 // ─── DISPATCHER ───────────────────────────────────────────────────────────────
 
+// Sanitize data before postMessage — remove Symbol values (e.g. figma.mixed)
+// that cannot be serialized via structured clone / JSON
+function sanitizeForPostMessage(obj) {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === "symbol") return "mixed";
+  if (typeof obj === "number" || typeof obj === "string" || typeof obj === "boolean") return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForPostMessage);
+  if (typeof obj === "object") {
+    var clean = {};
+    for (var key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        var val = obj[key];
+        if (typeof val === "symbol") {
+          clean[key] = "mixed";
+        } else {
+          clean[key] = sanitizeForPostMessage(val);
+        }
+      }
+    }
+    return clean;
+  }
+  return obj;
+}
+
 figma.ui.onmessage = async (request) => {
   const { id, operation, params } = request;
   const handler = handlers[operation];
@@ -789,7 +920,7 @@ figma.ui.onmessage = async (request) => {
 
   try {
     var data = await handler(params || {});
-    figma.ui.postMessage({ id: id, operation: operation, success: true, data: data });
+    figma.ui.postMessage({ id: id, operation: operation, success: true, data: sanitizeForPostMessage(data) });
   } catch (err) {
     var errMsg = "[dispatch:" + operation + "] " + (err && err.message ? err.message : String(err));
     figma.ui.postMessage({ id: id, operation: operation, success: false, error: errMsg });

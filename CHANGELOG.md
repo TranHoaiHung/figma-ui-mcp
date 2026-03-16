@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.5.0] — 2026-03-16
+
+### Added — Plugin (`plugin/code.js`)
+- **VECTOR node type** — create diagonal lines, bezier curves, arcs, polygons from SVG path data (`d` param or `paths` array), with `strokeCap` and `strokeJoin` support
+- **Component-aware design tree** — `COMPONENT`, `COMPONENT_SET` show description; `INSTANCE` shows `componentName` + `componentId`
+- **Mixed text style handling** — `extractDesignTree` now reads `getRangeFontName()/getRangeFontSize()` for multi-style text nodes instead of crashing
+- **Deep search for screenshot/export** — `screenshot` and `export_svg` now use `findOne()` fallback when node not found at top level
+- **Expanded exportable types** — screenshot supports `COMPONENT`, `COMPONENT_SET`, `SECTION`, `INSTANCE`, `GROUP` (not just FRAME)
+- **Extended font style map** — added Thin, Heavy, Condensed Heavy, Thin Italic, Light Italic, Extra Bold
+- **`sanitizeForPostMessage()`** — strips `figma.mixed` Symbol values before postMessage to prevent structured clone errors
+
+### Fixed — Plugin
+- **COMPONENT_SET crash** — try/catch around fills/strokes/cornerRadius/opacity/layoutMode reads that threw "Cannot unwrap symbol"
+- **get_design error reporting** — wraps tree extraction with nodeType + id in error message for easier debugging
+
+### Added — API Docs (`server/api-docs.js`)
+- **6 new design rules** (Rule 6–10): layer order, text vs bg color, container height, no emoji as icons, layout quality standards
+- **Design Library tokens** — full color table (9 tokens) + text style table (8 tokens) in API docs
+- **Auto Layout reference** — complete guide with creation, common patterns, child properties, modification
+- **Icon system docs** — library priority table, coloring rule, sizing rule with container ratios
+- **VECTOR type documentation** — path data examples (diagonal, bezier, quadratic, wave, arc, multi-path)
+- **Image & icon helper docs** — `loadImage`, `loadIcon`, `loadIconIn` with usage examples
+
+---
+
 ## [1.4.1] — 2026-03-15
 
 ### Added
