@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.TranHoaiHung/figma-ui-mcp",
+  "description": "Bidirectional Figma MCP — AI draws UI on Figma canvas, reads designs back",
+  "repository": {
+    "url": "https://github.com/TranHoaiHung/figma-ui-mcp",
+    "source": "github"
+  },
+  "version": "1.5.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "figma-ui-mcp",
+      "version": "1.5.1",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

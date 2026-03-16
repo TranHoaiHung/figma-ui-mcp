@@ -34,33 +34,136 @@ This approach is necessary because Figma plugins run in a sandboxed iframe and c
 
 ## Quick Start
 
-### 1. Install the MCP server
+### Step 1 — Add the MCP server to your AI client
 
-**Via npx (recommended):**
+Choose your platform:
+
+<details>
+<summary><strong>Claude Code (CLI)</strong></summary>
+
 ```bash
+# Project scope (default)
 claude mcp add figma-ui-mcp -- npx figma-ui-mcp
-```
 
-**Or clone and run locally:**
+# Global scope (all projects)
+claude mcp add --scope user figma-ui-mcp -- npx figma-ui-mcp
+```
+</details>
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+Edit config file:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "figma-ui-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Edit `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "figma-ui-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>VS Code / GitHub Copilot</strong></summary>
+
+Edit `.vscode/mcp.json` (project) or add to `settings.json` (global):
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "figma": {
+        "command": "npx",
+        "args": ["-y", "figma-ui-mcp"]
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+Edit `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "figma-ui-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Antigravity (Google)</strong></summary>
+
+1. Open **"..." dropdown** at the top of the agent panel
+2. Click **"Manage MCP Servers"** → **"View raw config"**
+3. Add to `mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "figma-ui-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>From source (any client)</strong></summary>
+
 ```bash
 git clone https://github.com/TranHoaiHung/figma-ui-mcp
 cd figma-ui-mcp
 npm install
-claude mcp add figma-ui-mcp -- node /path/to/figma-ui-mcp/server/index.js
+# Then point your MCP client to: node /path/to/figma-ui-mcp/server/index.js
 ```
+</details>
 
-### 2. Install the Figma plugin
+### Step 2 — Run the Figma plugin
 
-1. Open **Figma Desktop**
+1. Open **Figma Desktop** (required — web app cannot access localhost)
 2. Go to **Plugins → Development → Import plugin from manifest...**
 3. Select `plugin/manifest.json` from this repo
 4. Run **Plugins → Development → Figma UI MCP Bridge**
 
-The plugin UI shows a green dot when the MCP server is connected.
+The plugin UI shows a **green dot** when the MCP server is connected.
 
-### 3. Use with Claude
+### Step 3 — Start designing with AI
 
-Start a new Claude Code session — the MCP tools are automatically available:
+The MCP tools are automatically available in your AI client:
 
 ```
 figma_status     — check connection
@@ -177,34 +280,6 @@ figma-ui-mcp/
 | `export_svg` | Export node as SVG markup |
 
 ---
-
-## Add to Other MCP Clients
-
-**Claude Desktop** (`claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "figma-ui-mcp": {
-      "command": "npx",
-      "args": ["figma-ui-mcp"]
-    }
-  }
-}
-```
-
-**Cursor / VS Code:**
-```json
-{
-  "mcp": {
-    "servers": {
-      "figma-ui-mcp": {
-        "command": "npx",
-        "args": ["figma-ui-mcp"]
-      }
-    }
-  }
-}
-```
 
 ## Star History
 
