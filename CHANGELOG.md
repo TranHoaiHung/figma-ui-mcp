@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.4] — 2026-03-17
+
+### Added — CI/CD MCP Registry Auto-Publish
+- GitHub Actions workflow now auto-publishes to MCP Registry on version bump
+- `server.json` version auto-synced from `package.json` in CI
+- Uses `mcp-publisher` CLI with GitHub OIDC authentication (no token needed)
+
+### Updated
+- `server.json` version synced to 1.6.4
+
+---
+
 ## [1.6.3] — 2026-03-17
 
 ### Fixed — Deep Design Extraction (critical)

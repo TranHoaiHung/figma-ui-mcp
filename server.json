@@ -6,12 +6,12 @@
     "url": "https://github.com/TranHoaiHung/figma-ui-mcp",
     "source": "github"
   },
-  "version": "1.6.0",
+  "version": "1.6.4",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "figma-ui-mcp",
-      "version": "1.6.0",
+      "version": "1.6.4",
       "transport": {
         "type": "stdio"
       }
