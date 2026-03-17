@@ -1,5 +1,65 @@
 # Changelog
 
+## [1.6.1] — 2026-03-17
+
+### Fixed — Async API Compatibility (`plugin/code.js`)
+- **`get_styles`** — migrated to async Figma API (`getLocalPaintStylesAsync`, etc.) for `documentAccess: "dynamic-page"` compatibility
+- **`get_local_components`** — added `figma.loadAllPagesAsync()` before `findAllWithCriteria`
+- **`get_variables`** — migrated to `getLocalVariableCollectionsAsync` and `getVariableByIdAsync`
+- **`listComponents`** — added `figma.loadAllPagesAsync()` for cross-page component discovery
+
+### Improved — Screenshot Inline Display (`server/index.js`)
+- Screenshots now return as MCP `image` content type (base64 PNG) instead of JSON text
+- Claude Code displays screenshots **inline** in chat — no bash permission needed
+- Metadata (nodeId, width, height) returned as separate text content alongside image
+
+### Improved — Design Data Extraction (`plugin/code.js` — `extractDesignTree`)
+- **Fill**: multiple fills, gradient stops (linear/radial/angular), image fills with scaleMode, fill opacity
+- **Text**: color (`fill`), letter spacing, line height (auto/percent/px), text decoration, truncation, auto-resize mode, vertical align
+- **Layout**: sizing modes (`primarySizing`, `counterSizing`), layout wrap, compact uniform padding, `layoutGrow`, `layoutAlign`, absolute positioning
+- **Effects**: drop shadow, inner shadow, blur — with color, offset, radius, spread
+- **Corner radius**: per-corner support (tl/tr/br/bl)
+- **Visual**: blend mode, clip content, opacity (rounded)
+- **Constraints**: horizontal/vertical constraint detection
+- **Components**: instance override count, component description
+- **Icon detection**: `isIcon: true` flag on small VECTOR/GROUP/INSTANCE nodes with SVG export hint
+- **Image detection**: `hasImage: true` flag on nodes with IMAGE fills with screenshot export hint
+- **VECTOR nodes**: path count for vector/boolean operations
+
+### Updated — Plugin Manifest (`plugin/manifest.json`)
+- Added `"documentAccess": "dynamic-page"` for Figma Community publish compatibility
+
+---
+
+## [1.6.0] — 2026-03-17
+
+### Added — New Read Operations (`plugin/code.js`)
+- **`get_styles`** — read all local paint, text, effect, grid styles from the document
+- **`get_local_components`** — enhanced component listing with descriptions, dimensions, variant properties, and component sets
+- **`get_viewport`** — read current viewport position, zoom level, and visible bounds
+- **`get_variables`** — read Figma local variables (Design Tokens) with collections, modes, and resolved values
+- **`set_viewport`** — navigate viewport to a node or specific position/zoom
+
+### Added — New Write Operations
+- **`clone`** — duplicate any node with optional repositioning and reparenting
+- **`group`** — group multiple nodes by IDs into a named group
+- **`ungroup`** — ungroup a GROUP/FRAME, moving children to parent
+- **`flatten`** — flatten/merge vectors into a single path
+- **`resize`** — resize any node with width/height params
+- **`set_selection`** — programmatically select nodes by IDs
+- **`batch`** — execute up to 50 operations in a single call for 10-25x performance
+
+### Updated — Tool Definitions (`server/tool-definitions.js`)
+- `figma_read` enum expanded: `get_styles`, `get_local_components`, `get_viewport`, `get_variables`
+- `figma_write` description updated with new operations list
+
+### Updated — API Docs (`server/api-docs.js`)
+- Full reference for all new read operations with examples
+- Full reference for clone, group, ungroup, flatten, resize, set_selection, set_viewport, batch
+- Batch operation examples showing multi-op patterns
+
+---
+
 ## [1.5.0] — 2026-03-16
 
 ### Added — Plugin (`plugin/code.js`)

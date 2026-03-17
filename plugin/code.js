@@ -86,11 +86,49 @@ function nodeToInfo(node) {
 
 // ─── READ HELPERS ─────────────────────────────────────────────────────────────
 
-// Recursively extract design data from a node tree (for figma_get_design)
-function extractDesignTree(node, depth = 0) {
-  if (depth > 8) return null; // guard against huge documents
+// Detect if a node is likely an icon (small vector/group/instance)
+function isLikelyIcon(node) {
+  if (!node || !("width" in node)) return false;
+  var w = node.width, h = node.height;
+  // Icons are typically small (8-64px) and roughly square
+  if (w < 8 || w > 80 || h < 8 || h > 80) return false;
+  var ratio = Math.max(w, h) / Math.min(w, h);
+  if (ratio > 1.5) return false;
+  var iconTypes = ["VECTOR", "BOOLEAN_OPERATION", "STAR", "POLYGON", "LINE"];
+  if (iconTypes.indexOf(node.type) !== -1) return true;
+  // Small instance or group with only vectors inside
+  if (node.type === "INSTANCE" || node.type === "GROUP" || node.type === "FRAME") {
+    if (!node.children || node.children.length === 0) return false;
+    if (node.children.length > 10) return false;
+    var allVectors = true;
+    for (var i = 0; i < node.children.length; i++) {
+      var ct = node.children[i].type;
+      if (iconTypes.indexOf(ct) === -1 && ct !== "GROUP" && ct !== "FRAME" && ct !== "BOOLEAN_OPERATION") {
+        allVectors = false; break;
+      }
+    }
+    return allVectors;
+  }
+  return false;
+}
 
-  const info = {
+// Check if node has image fill
+function hasImageFill(node) {
+  try {
+    if (!node.fills || !node.fills.length) return false;
+    for (var i = 0; i < node.fills.length; i++) {
+      if (node.fills[i].type === "IMAGE" && node.fills[i].visible !== false) return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+// Recursively extract design data from a node tree (enhanced v1.6.0)
+function extractDesignTree(node, depth) {
+  if (depth === undefined) depth = 0;
+  if (depth > 8) return null;
+
+  var info = {
     id:    node.id,
     name:  node.name,
     type:  node.type,
@@ -100,65 +138,160 @@ function extractDesignTree(node, depth = 0) {
     height:"height" in node ? Math.round(node.height)  : undefined,
   };
 
-  // Safely read style properties — COMPONENT_SET and some nodes
-  // throw "Cannot unwrap symbol" when accessing fills/strokes/etc.
+  // ── Fill (multiple fills, gradients, images) ──
   try {
-    if ("fills" in node)      info.fill   = getFillHex(node);
-  } catch(e) { /* skip fills for this node type */ }
-  try {
-    if ("strokes" in node)    info.stroke = getStrokeHex(node);
-  } catch(e) { /* skip strokes */ }
-  try {
-    if ("strokeWeight" in node && node.strokes && node.strokes.length) info.strokeWeight = node.strokeWeight;
-  } catch(e) { /* skip strokeWeight */ }
-  try {
-    if ("cornerRadius" in node) info.cornerRadius = node.cornerRadius;
-  } catch(e) { /* skip cornerRadius */ }
-  try {
-    if ("opacity" in node && node.opacity !== 1) info.opacity = node.opacity;
-  } catch(e) { /* skip opacity */ }
-  try {
-    if ("visible" in node && !node.visible) info.visible = false;
-  } catch(e) { /* skip visible */ }
+    if ("fills" in node && node.fills && node.fills.length) {
+      var fills = node.fills;
+      if (fills.length === 1 && fills[0].type === "SOLID") {
+        info.fill = rgbToHex(fills[0].color);
+        if (fills[0].opacity !== undefined && fills[0].opacity !== 1) {
+          info.fillOpacity = Math.round(fills[0].opacity * 100) / 100;
+        }
+      } else {
+        info.fills = [];
+        for (var fi = 0; fi < fills.length; fi++) {
+          var f = fills[fi];
+          var fd = { type: f.type, visible: f.visible !== false };
+          if (f.type === "SOLID") {
+            fd.color = rgbToHex(f.color);
+            if (f.opacity !== undefined && f.opacity !== 1) fd.opacity = Math.round(f.opacity * 100) / 100;
+          } else if (f.type === "GRADIENT_LINEAR" || f.type === "GRADIENT_RADIAL" || f.type === "GRADIENT_ANGULAR") {
+            fd.gradientStops = f.gradientStops ? f.gradientStops.map(function(gs) {
+              return { color: rgbToHex(gs.color), position: Math.round(gs.position * 100) / 100 };
+            }) : [];
+          } else if (f.type === "IMAGE") {
+            fd.scaleMode = f.scaleMode || "FILL";
+            fd.imageHash = f.imageHash || null;
+          }
+          info.fills.push(fd);
+        }
+      }
+    }
+  } catch(e) { /* skip fills */ }
 
+  // ── Stroke ──
+  try {
+    if ("strokes" in node && node.strokes && node.strokes.length) {
+      info.stroke = getStrokeHex(node);
+      if (node.strokeWeight) info.strokeWeight = node.strokeWeight;
+      if (node.strokeAlign) info.strokeAlign = node.strokeAlign;
+    }
+  } catch(e) { /* skip strokes */ }
+
+  // ── Corner radius (per-corner support) ──
+  try {
+    if ("cornerRadius" in node && node.cornerRadius !== 0) {
+      if (typeof node.cornerRadius === "number") {
+        info.cornerRadius = node.cornerRadius;
+      } else {
+        info.cornerRadius = {
+          tl: node.topLeftRadius || 0, tr: node.topRightRadius || 0,
+          br: node.bottomRightRadius || 0, bl: node.bottomLeftRadius || 0,
+        };
+      }
+    }
+  } catch(e) {}
+
+  // ── Opacity, visibility, blend mode, clip ──
+  try { if ("opacity" in node && node.opacity !== 1) info.opacity = Math.round(node.opacity * 100) / 100; } catch(e) {}
+  try { if ("visible" in node && !node.visible) info.visible = false; } catch(e) {}
+  try { if ("blendMode" in node && node.blendMode !== "NORMAL" && node.blendMode !== "PASS_THROUGH") info.blendMode = node.blendMode; } catch(e) {}
+  try { if ("clipsContent" in node && node.clipsContent) info.clipsContent = true; } catch(e) {}
+
+  // ── Effects (shadows, blurs) ──
+  try {
+    if ("effects" in node && node.effects && node.effects.length) {
+      var effs = [];
+      for (var ei = 0; ei < node.effects.length; ei++) {
+        var eff = node.effects[ei];
+        if (eff.visible === false) continue;
+        var ed = { type: eff.type };
+        if (eff.color) ed.color = rgbToHex(eff.color);
+        if (eff.offset) ed.offset = { x: eff.offset.x, y: eff.offset.y };
+        if (eff.radius !== undefined) ed.radius = eff.radius;
+        if (eff.spread !== undefined) ed.spread = eff.spread;
+        effs.push(ed);
+      }
+      if (effs.length) info.effects = effs;
+    }
+  } catch(e) {}
+
+  // ── TEXT node — comprehensive extraction ──
   if (node.type === "TEXT") {
     try {
-      info.content    = node.characters;
-      info.fontSize   = node.fontSize;
+      info.content = node.characters;
+      info.fill = getFillHex(node);
+      info.fontSize = node.fontSize;
       info.fontFamily = node.fontName ? node.fontName.family : null;
       info.fontWeight = node.fontName ? node.fontName.style : null;
-      info.lineHeight = node.lineHeight ? node.lineHeight.value : null;
-      info.textAlign  = node.textAlignHorizontal;
+      if (node.lineHeight) {
+        if (node.lineHeight.unit === "AUTO") info.lineHeight = "auto";
+        else if (node.lineHeight.unit === "PERCENT") info.lineHeight = Math.round(node.lineHeight.value) + "%";
+        else info.lineHeight = node.lineHeight.value;
+      }
+      if (node.letterSpacing && node.letterSpacing.value !== 0) info.letterSpacing = node.letterSpacing.value;
+      info.textAlign = node.textAlignHorizontal;
+      if (node.textAlignVertical && node.textAlignVertical !== "TOP") info.textAlignVertical = node.textAlignVertical;
+      if (node.textDecoration && node.textDecoration !== "NONE") info.textDecoration = node.textDecoration;
+      if (node.textTruncation && node.textTruncation !== "DISABLED") info.textTruncation = node.textTruncation;
+      if (node.textAutoResize) info.textAutoResize = node.textAutoResize;
     } catch(e) {
-      // Mixed text styles — read character-level styles
+      // Mixed text styles — extract per-segment
       try {
         info.content = node.characters;
-        // For mixed fonts, get the first character's style as representative
+        info.fill = getFillHex(node);
         if (node.characters.length > 0) {
           var rs = node.getRangeFontName(0, 1);
           if (rs) { info.fontFamily = rs.family; info.fontWeight = rs.style; }
           info.fontSize = node.getRangeFontSize(0, 1);
+          try { var rfill = node.getRangeFills(0, 1); if (rfill && rfill[0] && rfill[0].type === "SOLID") info.fill = rgbToHex(rfill[0].color); } catch(e3) {}
         }
+        info.textAlign = node.textAlignHorizontal;
+        info.mixedStyles = true;
       } catch(e2) { info.content = node.characters || ""; }
     }
   }
 
+  // ── Auto Layout (comprehensive) ──
   try {
     if ("layoutMode" in node && node.layoutMode !== "NONE") {
+      var pt = node.paddingTop, pr = node.paddingRight, pb = node.paddingBottom, pl = node.paddingLeft;
       info.layout = {
-        mode:        node.layoutMode,
-        spacing:     node.itemSpacing,
-        paddingTop:  node.paddingTop,
-        paddingRight: node.paddingRight,
-        paddingBottom: node.paddingBottom,
-        paddingLeft:  node.paddingLeft,
-        align:        node.primaryAxisAlignItems,
-        crossAlign:   node.counterAxisAlignItems,
+        mode:    node.layoutMode,
+        spacing: node.itemSpacing,
+        align:   node.primaryAxisAlignItems,
+        crossAlign: node.counterAxisAlignItems,
       };
+      // Compact padding
+      if (pt === pr && pr === pb && pb === pl) {
+        info.layout.padding = pt;
+      } else {
+        info.layout.paddingTop = pt; info.layout.paddingRight = pr;
+        info.layout.paddingBottom = pb; info.layout.paddingLeft = pl;
+      }
+      // Sizing modes
+      if (node.primaryAxisSizingMode) info.layout.primarySizing = node.primaryAxisSizingMode;
+      if (node.counterAxisSizingMode) info.layout.counterSizing = node.counterAxisSizingMode;
+      if (node.layoutWrap && node.layoutWrap !== "NO_WRAP") info.layout.wrap = node.layoutWrap;
     }
-  } catch(e) { /* skip layout for this node type */ }
+  } catch(e) {}
 
-  // Add component-specific info
+  // ── Child layout properties ──
+  try { if ("layoutAlign" in node && node.layoutAlign && node.layoutAlign !== "INHERIT") info.layoutAlign = node.layoutAlign; } catch(e) {}
+  try { if ("layoutGrow" in node && node.layoutGrow !== 0) info.layoutGrow = node.layoutGrow; } catch(e) {}
+  try { if ("layoutPositioning" in node && node.layoutPositioning === "ABSOLUTE") info.layoutPositioning = "ABSOLUTE"; } catch(e) {}
+
+  // ── Constraints ──
+  try {
+    if ("constraints" in node && node.constraints) {
+      var ch = node.constraints.horizontal, cv = node.constraints.vertical;
+      if ((ch && ch !== "MIN") || (cv && cv !== "MIN")) {
+        info.constraints = { horizontal: ch, vertical: cv };
+      }
+    }
+  } catch(e) {}
+
+  // ── Component-specific info ──
   if (node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
     try { info.description = node.description; } catch(e) {}
   }
@@ -167,11 +300,30 @@ function extractDesignTree(node, depth = 0) {
       var mainComp = node.mainComponent;
       if (mainComp) { info.componentName = mainComp.name; info.componentId = mainComp.id; }
     } catch(e) {}
+    try { if (node.overrides && node.overrides.length) info.overrideCount = node.overrides.length; } catch(e) {}
   }
 
+  // ── VECTOR / BOOLEAN_OPERATION ──
+  if (node.type === "VECTOR" || node.type === "BOOLEAN_OPERATION") {
+    try { if (node.vectorPaths) info.pathCount = node.vectorPaths.length; } catch(e) {}
+  }
+
+  // ── Image detection — flag nodes with image fills ──
+  if (hasImageFill(node)) {
+    info.hasImage = true;
+    info.imageHint = "Use figma_read screenshot with nodeId to extract this image";
+  }
+
+  // ── Icon detection — flag small vector/instance nodes ──
+  if (isLikelyIcon(node)) {
+    info.isIcon = true;
+    info.iconHint = "Use figma_read export_svg with nodeId to extract SVG markup";
+  }
+
+  // ── Children ──
   if ("children" in node && node.children.length) {
     info.children = node.children
-      .map(c => extractDesignTree(c, depth + 1))
+      .map(function(c) { return extractDesignTree(c, depth + 1); })
       .filter(Boolean);
   }
 
@@ -589,6 +741,7 @@ handlers.append = async function(params) {
 };
 
 handlers.listComponents = async () => {
+  await figma.loadAllPagesAsync();
   const comps = figma.root.findAllWithCriteria({ types: ["COMPONENT"] });
   return comps.map(c => ({ id: c.id, name: c.name, key: c.key || null }));
 };
@@ -878,6 +1031,266 @@ handlers.export_svg = async function(params) {
   if (!node) throw new Error("Node not found");
   const bytes = await node.exportAsync({ format: "SVG" });
   return { svg: new TextDecoder().decode(bytes), nodeId: node.id };
+};
+
+// ─── NEW READ OPERATIONS ─────────────────────────────────────────────────────
+
+// get_styles — read all local paint, text, effect, and grid styles
+handlers.get_styles = async function() {
+  var paintStyles = await figma.getLocalPaintStylesAsync();
+  var textStyles = await figma.getLocalTextStylesAsync();
+  var effectStyles = await figma.getLocalEffectStylesAsync();
+  var gridStyles = await figma.getLocalGridStylesAsync();
+
+  return {
+    paintStyles: paintStyles.map(function(s) {
+      var paints = s.paints || [];
+      var hex = null;
+      if (paints.length > 0 && paints[0].type === "SOLID") {
+        hex = rgbToHex(paints[0].color);
+      }
+      return { id: s.id, name: s.name, hex: hex, type: "PAINT" };
+    }),
+    textStyles: textStyles.map(function(s) {
+      return {
+        id: s.id, name: s.name, type: "TEXT",
+        fontSize: s.fontSize,
+        fontFamily: s.fontName ? s.fontName.family : null,
+        fontWeight: s.fontName ? s.fontName.style : null,
+        lineHeight: s.lineHeight ? s.lineHeight.value : null,
+        letterSpacing: s.letterSpacing ? s.letterSpacing.value : null,
+      };
+    }),
+    effectStyles: effectStyles.map(function(s) {
+      return { id: s.id, name: s.name, type: "EFFECT", effects: s.effects.length };
+    }),
+    gridStyles: gridStyles.map(function(s) {
+      return { id: s.id, name: s.name, type: "GRID" };
+    }),
+  };
+};
+
+// get_local_components — enhanced component listing with descriptions and properties
+handlers.get_local_components = async function() {
+  await figma.loadAllPagesAsync();
+  var comps = figma.root.findAllWithCriteria({ types: ["COMPONENT"] });
+  var sets = figma.root.findAllWithCriteria({ types: ["COMPONENT_SET"] });
+
+  return {
+    components: comps.map(function(c) {
+      var info = {
+        id: c.id, name: c.name, key: c.key || null,
+        description: c.description || "",
+        width: Math.round(c.width), height: Math.round(c.height),
+        page: c.parent ? (function findPage(n) {
+          while (n && n.type !== "PAGE") n = n.parent;
+          return n ? n.name : null;
+        })(c) : null,
+      };
+      // Component properties (variant props)
+      try {
+        if (c.componentPropertyDefinitions) {
+          var defs = c.componentPropertyDefinitions;
+          var props = {};
+          for (var key in defs) {
+            if (Object.prototype.hasOwnProperty.call(defs, key)) {
+              props[key] = { type: defs[key].type, defaultValue: defs[key].defaultValue };
+              if (defs[key].variantOptions) props[key].options = defs[key].variantOptions;
+            }
+          }
+          info.properties = props;
+        }
+      } catch(e) { /* skip properties */ }
+      return info;
+    }),
+    componentSets: sets.map(function(s) {
+      return {
+        id: s.id, name: s.name, key: s.key || null,
+        description: s.description || "",
+        variantCount: s.children ? s.children.length : 0,
+      };
+    }),
+    total: comps.length + sets.length,
+  };
+};
+
+// get_viewport — current viewport position and zoom
+handlers.get_viewport = async function() {
+  var vp = figma.viewport;
+  return {
+    center: { x: Math.round(vp.center.x), y: Math.round(vp.center.y) },
+    zoom: vp.zoom,
+    bounds: vp.bounds ? {
+      x: Math.round(vp.bounds.x), y: Math.round(vp.bounds.y),
+      width: Math.round(vp.bounds.width), height: Math.round(vp.bounds.height),
+    } : null,
+  };
+};
+
+// set_viewport — navigate to specific area
+handlers.set_viewport = async function(params) {
+  if (params.nodeId || params.nodeName) {
+    // Zoom to fit a specific node
+    var node = params.nodeId ? findNodeById(params.nodeId) : findNodeByName(params.nodeName);
+    if (!node) throw new Error("Node not found for viewport navigation");
+    figma.viewport.scrollAndZoomIntoView([node]);
+    return { scrolledTo: node.id, name: node.name };
+  }
+  if (params.center) {
+    figma.viewport.center = { x: params.center.x, y: params.center.y };
+  }
+  if (params.zoom !== undefined) {
+    figma.viewport.zoom = params.zoom;
+  }
+  return {
+    center: { x: Math.round(figma.viewport.center.x), y: Math.round(figma.viewport.center.y) },
+    zoom: figma.viewport.zoom,
+  };
+};
+
+// get_variables — read Figma local variables (Design Tokens)
+handlers.get_variables = async function() {
+  var collections = [];
+  try {
+    var localCollections = await figma.variables.getLocalVariableCollectionsAsync();
+    for (var ci = 0; ci < localCollections.length; ci++) {
+      var col = localCollections[ci];
+      var variables = [];
+      for (var vi = 0; vi < col.variableIds.length; vi++) {
+        var v = await figma.variables.getVariableByIdAsync(col.variableIds[vi]);
+        if (!v) continue;
+        var values = {};
+        for (var modeId in v.valuesByMode) {
+          if (Object.prototype.hasOwnProperty.call(v.valuesByMode, modeId)) {
+            var val = v.valuesByMode[modeId];
+            // Convert color values to hex
+            if (val && typeof val === "object" && "r" in val && "g" in val && "b" in val) {
+              values[modeId] = rgbToHex(val);
+            } else {
+              values[modeId] = val;
+            }
+          }
+        }
+        variables.push({
+          id: v.id, name: v.name,
+          resolvedType: v.resolvedType,
+          values: values,
+          description: v.description || "",
+        });
+      }
+      collections.push({
+        id: col.id, name: col.name,
+        modes: col.modes.map(function(m) { return { id: m.modeId, name: m.name }; }),
+        variables: variables,
+      });
+    }
+  } catch(e) {
+    return { error: "Variables API not available: " + e.message, collections: [] };
+  }
+  return { collections: collections };
+};
+
+// ─── NEW WRITE OPERATIONS ────────────────────────────────────────────────────
+
+// clone — duplicate a node
+handlers.clone = async function(params) {
+  var node = resolveNode(params);
+  if (!node) throw new Error("Node not found for cloning");
+  var clone = node.clone();
+  if (params.x !== undefined) clone.x = params.x;
+  if (params.y !== undefined) clone.y = params.y;
+  if (params.name) clone.name = params.name;
+  if (params.parentId) {
+    var parent = findNodeById(params.parentId);
+    if (parent) parent.appendChild(clone);
+  }
+  return nodeToInfo(clone);
+};
+
+// group — group selected or specified nodes
+handlers.group = async function(params) {
+  var nodeIds = params.nodeIds || [];
+  var nodes = [];
+  for (var i = 0; i < nodeIds.length; i++) {
+    var n = findNodeById(nodeIds[i]);
+    if (n) nodes.push(n);
+  }
+  if (nodes.length < 1) throw new Error("Need at least 1 node to group");
+  var parent = nodes[0].parent || figma.currentPage;
+  var group = figma.group(nodes, parent);
+  if (params.name) group.name = params.name;
+  return nodeToInfo(group);
+};
+
+// ungroup — ungroup a group node
+handlers.ungroup = async function(params) {
+  var node = resolveNode(params);
+  if (!node) throw new Error("Node not found for ungrouping");
+  if (node.type !== "GROUP" && node.type !== "FRAME") throw new Error("Node must be GROUP or FRAME to ungroup");
+  var children = [];
+  var parent = node.parent || figma.currentPage;
+  var nodeChildren = [].concat(node.children);
+  for (var i = 0; i < nodeChildren.length; i++) {
+    parent.appendChild(nodeChildren[i]);
+    children.push(nodeToInfo(nodeChildren[i]));
+  }
+  node.remove();
+  return { ungrouped: children };
+};
+
+// flatten — flatten a node (merge vectors)
+handlers.flatten = async function(params) {
+  var node = resolveNode(params);
+  if (!node) throw new Error("Node not found for flatten");
+  var flat = figma.flatten([node]);
+  return nodeToInfo(flat);
+};
+
+// resize — resize a node with constraints
+handlers.resize = async function(params) {
+  var node = resolveNode(params);
+  if (!node) throw new Error("Node not found for resize");
+  if (!("resize" in node)) throw new Error("Node type does not support resize");
+  var w = params.width !== undefined ? params.width : node.width;
+  var h = params.height !== undefined ? params.height : node.height;
+  node.resize(w, h);
+  return nodeToInfo(node);
+};
+
+// set_selection — programmatically select nodes
+handlers.set_selection = async function(params) {
+  var nodeIds = params.nodeIds || [];
+  var nodes = [];
+  for (var i = 0; i < nodeIds.length; i++) {
+    var n = findNodeById(nodeIds[i]);
+    if (n) nodes.push(n);
+  }
+  figma.currentPage.selection = nodes;
+  return { selected: nodes.map(nodeToInfo) };
+};
+
+// batch — execute multiple operations in one call
+handlers.batch = async function(params) {
+  var operations = params.operations || [];
+  if (!operations.length) throw new Error("No operations provided");
+  if (operations.length > 50) throw new Error("Max 50 operations per batch");
+
+  var results = [];
+  for (var i = 0; i < operations.length; i++) {
+    var op = operations[i];
+    var handler = handlers[op.operation];
+    if (!handler) {
+      results.push({ index: i, operation: op.operation, success: false, error: "Unknown operation" });
+      continue;
+    }
+    try {
+      var data = await handler(op.params || {});
+      results.push({ index: i, operation: op.operation, success: true, data: data });
+    } catch(e) {
+      results.push({ index: i, operation: op.operation, success: false, error: e.message });
+    }
+  }
+  return { results: results, total: operations.length, succeeded: results.filter(function(r) { return r.success; }).length };
 };
 
 // ─── DISPATCHER ───────────────────────────────────────────────────────────────

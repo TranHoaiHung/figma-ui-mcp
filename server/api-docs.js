@@ -159,7 +159,7 @@ await figma.create({
 When creating a profile/detail screen with avatar + name + subtitle stacked vertically:
 
 **Text MUST be center-aligned relative to the full frame width:**
-```js
+\`\`\`js
 // CORRECT: use textAlign "CENTER" with full-width text
 await figma.create({
   type: "TEXT", parentId: rootId,
@@ -168,16 +168,16 @@ await figma.create({
   fontSize: 22, fontWeight: "Bold", fill: TEXT1,
   textAlign: "CENTER",              // CENTER aligned
 });
-```
-**WRONG:** Using `x: 120` with auto-width text — this won't center properly.
+\`\`\`
+**WRONG:** Using \`x: 120\` with auto-width text — this won't center properly.
 
-**For centered badge/status below name:** Calculate `x = (frameWidth - badgeWidth) / 2`
+**For centered badge/status below name:** Calculate \`x = (frameWidth - badgeWidth) / 2\`
 
 ### Rule 12 — Key-Value Info Rows Must Have Spacing (CRITICAL)
 When displaying label:value pairs (e.g. "Họ và tên: Phạm Văn An"):
 
 **NEVER place label and value as a single text string.** Always use separate text nodes in a horizontal auto-layout:
-```js
+\`\`\`js
 // CORRECT: separate text nodes with auto-layout spacing
 var row = await figma.create({
   type: "FRAME", parentId: parentId,
@@ -203,7 +203,7 @@ await figma.create({
   fontWeight: "Medium", fill: TEXT1,
   layoutGrow: 1,
 });
-```
+\`\`\`
 **Row height rules:**
 - Simple key-value: minimum 36px height (not 32px)
 - With icon prefix: minimum 40px height
@@ -211,14 +211,14 @@ await figma.create({
 
 ### Rule 13 — Container Height Must Accommodate All Children (CRITICAL)
 **Always calculate container height BEFORE creating:**
-```
+\`\`\`
 containerHeight = paddingTop + paddingBottom
                 + (numberOfChildren × childHeight)
                 + ((numberOfChildren - 1) × itemSpacing)
                 + dividerCount × 1  // if using dividers
-```
-**Use `primaryAxisSizingMode: "AUTO"` when possible** to let the container grow:
-```js
+\`\`\`
+**Use \`primaryAxisSizingMode: "AUTO"\` when possible** to let the container grow:
+\`\`\`js
 var card = await figma.create({
   type: "FRAME",
   width: 353,
@@ -228,13 +228,13 @@ var card = await figma.create({
   paddingTop: 24, paddingBottom: 24,
   itemSpacing: 12,
 });
-```
+\`\`\`
 **After drawing, ALWAYS verify** with screenshot that no content is clipped or overflowing.
-If content is clipped → increase height or use `primaryAxisSizingMode: "AUTO"`.
+If content is clipped → increase height or use \`primaryAxisSizingMode: "AUTO"\`.
 
 ### Rule 14 — Score/Match Result Cards Must Have Inner Padding (MANDATORY)
 When displaying match results (Team A vs Team B with score):
-```js
+\`\`\`js
 // CORRECT: teams row with proper padding
 var scoreRow = await figma.create({
   type: "FRAME",
@@ -246,7 +246,7 @@ var scoreRow = await figma.create({
   paddingRight: 8,
   layoutAlign: "STRETCH",
 });
-```
+\`\`\`
 **WRONG:** No paddingLeft/Right on score rows — team names touch the card edges.
 
 ---
@@ -795,6 +795,80 @@ const { dataUrl } = await figma.screenshot({ id: f.id, scale: 2 });
 
 // Top-level frames on current page
 const { nodes: frames } = await figma.get_page_nodes();
+
+// Get all local styles (paint, text, effect, grid)
+const styles = await figma.get_styles();
+// → { paintStyles: [{id, name, hex}], textStyles: [{id, name, fontSize, fontFamily, fontWeight}], effectStyles, gridStyles }
+
+// Get enhanced component listing with properties
+const comps = await figma.get_local_components();
+// → { components: [{id, name, key, description, width, height, properties}], componentSets, total }
+
+// Get current viewport position and zoom
+const vp = await figma.get_viewport();
+// → { center: {x, y}, zoom, bounds: {x, y, width, height} }
+
+// Read Figma local variables (Design Tokens)
+const vars = await figma.get_variables();
+// → { collections: [{id, name, modes, variables: [{id, name, resolvedType, values, description}]}] }
+\`\`\`
+
+---
+
+## New write operations
+
+### Clone — duplicate a node
+\`\`\`js
+const copy = await figma.clone({ id: "123:456", x: 500, y: 0, name: "Card Copy" });
+// Optionally move to different parent:
+await figma.clone({ id: "123:456", parentId: otherFrame.id });
+\`\`\`
+
+### Group / Ungroup
+\`\`\`js
+// Group multiple nodes
+const group = await figma.group({ nodeIds: ["1:2", "1:3", "1:4"], name: "Header Group" });
+
+// Ungroup — children moved to parent, group removed
+const { ungrouped } = await figma.ungroup({ id: group.id });
+\`\`\`
+
+### Flatten — merge vectors
+\`\`\`js
+const flat = await figma.flatten({ id: "1:2" });
+\`\`\`
+
+### Resize
+\`\`\`js
+await figma.resize({ id: "1:2", width: 500, height: 300 });
+\`\`\`
+
+### Set Selection — programmatically select nodes
+\`\`\`js
+await figma.set_selection({ nodeIds: ["1:2", "1:3"] });
+\`\`\`
+
+### Set Viewport — navigate to specific area
+\`\`\`js
+// Zoom to fit a specific node
+await figma.set_viewport({ nodeId: "1:2" });
+await figma.set_viewport({ nodeName: "Dashboard" });
+
+// Manual position + zoom
+await figma.set_viewport({ center: { x: 500, y: 300 }, zoom: 0.5 });
+\`\`\`
+
+### Batch — execute multiple operations in one call
+\`\`\`js
+// Up to 50 operations per batch — much faster than individual calls
+const result = await figma.batch({
+  operations: [
+    { operation: "create", params: { type: "RECTANGLE", parentId: f.id, x: 0, y: 0, width: 100, height: 100, fill: "#ff0000" } },
+    { operation: "create", params: { type: "TEXT", parentId: f.id, x: 10, y: 10, content: "Hello", fontSize: 14, fill: "#ffffff" } },
+    { operation: "modify", params: { id: "1:5", fill: "#00ff00" } },
+  ]
+});
+// → { results: [{index, operation, success, data}], total: 3, succeeded: 3 }
 \`\`\`
 
 ---

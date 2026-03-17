@@ -169,6 +169,20 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
 
     try {
       const data = await bridge.sendOperation(operation, params);
+
+      // Return screenshot as MCP image content (displays inline in Claude Code)
+      if (operation === "screenshot" && data && data.dataUrl) {
+        var b64 = data.dataUrl;
+        if (b64.indexOf(",") !== -1) b64 = b64.split(",")[1];
+        var meta = Object.assign({}, data);
+        delete meta.dataUrl;
+        var content = [{ type: "image", data: b64, mimeType: "image/png" }];
+        if (Object.keys(meta).length > 0) {
+          content.push({ type: "text", text: JSON.stringify(meta, null, 2) });
+        }
+        return { content: content };
+      }
+
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     } catch (e) {
       return err(e.message);
