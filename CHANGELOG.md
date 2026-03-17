@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.6.2] — 2026-03-17
+
+### Improved — Plugin UI Redesign (`plugin/ui.html`)
+- Modern dark theme (purple-navy palette) with gradient accents
+- Custom SVG logo matching project branding (S-curve flows, donut nodes, code symbols)
+- Window resized to 320×420 — no body scroll, log area flex-grows to fill
+- Stats counters colored per type (purple writes, blue reads, red errors)
+- Custom thin scrollbar for activity log
+- Button press animation and gradient primary button
+
+### Improved — Connection Stability
+- **Exponential backoff** on disconnect: 900ms → 1.8s → 3.6s → 5s cap (was fixed 900ms flood)
+- **Graceful reconnect states**: yellow "Reconnecting (1/3)" → red "Offline" after 3 fails
+- **Health TTL** increased 15s → 30s — tolerates Figma Desktop lag/tab switching
+- **Port conflict recovery** (`bridge-server.js`): auto-kill old process on `EADDRINUSE` + retry
+- **Graceful shutdown** method `bridge.stop()` clears pending ops and queue
+- **Reconnect button** resets backoff counter for immediate retry
+- **Read ops list** updated with all new operations for correct stats counting
+
+---
+
 ## [1.6.1] — 2026-03-17
 
 ### Fixed — Async API Compatibility (`plugin/code.js`)

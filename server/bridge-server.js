@@ -7,7 +7,7 @@ export const CONFIG = {
   OP_TIMEOUT_MS: 10_000,    // per-operation timeout
   MAX_BODY_BYTES: 5_000_000,  // 5MB to support image payloads
   MAX_QUEUE: 50,
-  HEALTH_TTL_MS: 15_000,    // plugin considered offline after 15s without poll
+  HEALTH_TTL_MS: 30_000,    // plugin considered offline after 30s without poll (was 15s, too aggressive)
 };
 
 export class BridgeServer {
@@ -130,10 +130,37 @@ export class BridgeServer {
 
   start() {
     this.#server = http.createServer((req, res) => this.#route(req, res));
+    this.#server.on("error", err => {
+      if (err.code === "EADDRINUSE") {
+        process.stderr.write(`[figma-ui-mcp] Port ${CONFIG.PORT} in use — killing old process and retrying...\n`);
+        // Try to reclaim the port
+        import("node:child_process").then(cp => {
+          cp.execSync(`lsof -ti :${CONFIG.PORT} | xargs kill -9 2>/dev/null || true`);
+          setTimeout(() => {
+            this.#server.listen(CONFIG.PORT, CONFIG.HOST);
+          }, 1000);
+        }).catch(() => {
+          process.stderr.write(`[figma-ui-mcp] Could not reclaim port ${CONFIG.PORT}. Kill the old process manually.\n`);
+        });
+      } else {
+        process.stderr.write(`[figma-ui-mcp bridge] ${err.message}\n`);
+      }
+    });
     this.#server.listen(CONFIG.PORT, CONFIG.HOST);
-    this.#server.on("error", err =>
-      process.stderr.write(`[figma-ui-mcp bridge] ${err.message}\n`)
-    );
     return this;
+  }
+
+  stop() {
+    if (this.#server) {
+      this.#server.close();
+      this.#server = null;
+    }
+    // Clear all pending operations
+    for (var [id, p] of this.#pending) {
+      clearTimeout(p.timer);
+      p.reject(new Error("Bridge shutting down"));
+    }
+    this.#pending.clear();
+    this.#requestQueue.length = 0;
   }
 }

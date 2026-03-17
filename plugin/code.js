@@ -1,7 +1,7 @@
 // figma-ui-mcp — Figma Plugin main thread v1.2.1
 // Handles both WRITE (draw UI) and READ (extract design) operations.
 
-figma.showUI(__html__, { width: 300, height: 340, title: "Figma UI MCP" });
+figma.showUI(__html__, { width: 320, height: 420, title: "Figma UI MCP Bridge" });
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 
