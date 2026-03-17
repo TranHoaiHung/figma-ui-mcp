@@ -155,6 +155,100 @@ await figma.create({
 - Avatar circles: width/2 (perfect circle)
 - Bottom nav: 0 (flush with screen edge)
 
+### Rule 11 — Centered Profile Layouts (CRITICAL for detail/profile screens)
+When creating a profile/detail screen with avatar + name + subtitle stacked vertically:
+
+**Text MUST be center-aligned relative to the full frame width:**
+```js
+// CORRECT: use textAlign "CENTER" with full-width text
+await figma.create({
+  type: "TEXT", parentId: rootId,
+  x: 0, y: 202, width: frameWidth,  // FULL width of parent
+  content: "Phạm Văn An",
+  fontSize: 22, fontWeight: "Bold", fill: TEXT1,
+  textAlign: "CENTER",              // CENTER aligned
+});
+```
+**WRONG:** Using `x: 120` with auto-width text — this won't center properly.
+
+**For centered badge/status below name:** Calculate `x = (frameWidth - badgeWidth) / 2`
+
+### Rule 12 — Key-Value Info Rows Must Have Spacing (CRITICAL)
+When displaying label:value pairs (e.g. "Họ và tên: Phạm Văn An"):
+
+**NEVER place label and value as a single text string.** Always use separate text nodes in a horizontal auto-layout:
+```js
+// CORRECT: separate text nodes with auto-layout spacing
+var row = await figma.create({
+  type: "FRAME", parentId: parentId,
+  width: 305, height: 36,  // height 36px minimum for readable rows
+  fill: CARD, fillOpacity: 0,
+  layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "MIN",
+  counterAxisAlignItems: "CENTER",
+  itemSpacing: 8,           // MINIMUM 8px gap between label and value
+  layoutAlign: "STRETCH",
+});
+// Label (fixed width for alignment)
+await figma.create({
+  type: "TEXT", parentId: row.id,
+  content: "Họ và tên:", fontSize: 13,
+  fontWeight: "Regular", fill: TEXT3,
+  width: 110,              // Fixed width so values align vertically
+});
+// Value (flexible)
+await figma.create({
+  type: "TEXT", parentId: row.id,
+  content: "Phạm Văn An", fontSize: 13,
+  fontWeight: "Medium", fill: TEXT1,
+  layoutGrow: 1,
+});
+```
+**Row height rules:**
+- Simple key-value: minimum 36px height (not 32px)
+- With icon prefix: minimum 40px height
+- Between rows: use divider (1px) OR minimum 4px itemSpacing in parent
+
+### Rule 13 — Container Height Must Accommodate All Children (CRITICAL)
+**Always calculate container height BEFORE creating:**
+```
+containerHeight = paddingTop + paddingBottom
+                + (numberOfChildren × childHeight)
+                + ((numberOfChildren - 1) × itemSpacing)
+                + dividerCount × 1  // if using dividers
+```
+**Use `primaryAxisSizingMode: "AUTO"` when possible** to let the container grow:
+```js
+var card = await figma.create({
+  type: "FRAME",
+  width: 353,
+  height: 500,  // generous initial height
+  primaryAxisSizingMode: "AUTO",  // auto-grow to fit content
+  layoutMode: "VERTICAL",
+  paddingTop: 24, paddingBottom: 24,
+  itemSpacing: 12,
+});
+```
+**After drawing, ALWAYS verify** with screenshot that no content is clipped or overflowing.
+If content is clipped → increase height or use `primaryAxisSizingMode: "AUTO"`.
+
+### Rule 14 — Score/Match Result Cards Must Have Inner Padding (MANDATORY)
+When displaying match results (Team A vs Team B with score):
+```js
+// CORRECT: teams row with proper padding
+var scoreRow = await figma.create({
+  type: "FRAME",
+  width: 317, height: 32,
+  layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "SPACE_BETWEEN",
+  counterAxisAlignItems: "CENTER",
+  paddingLeft: 8,   // inner padding so text doesn't touch edges
+  paddingRight: 8,
+  layoutAlign: "STRETCH",
+});
+```
+**WRONG:** No paddingLeft/Right on score rows — team names touch the card edges.
+
 ---
 
 ## Design Library Tokens (defaults)
