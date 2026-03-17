@@ -249,6 +249,88 @@ var scoreRow = await figma.create({
 \`\`\`
 **WRONG:** No paddingLeft/Right on score rows — team names touch the card edges.
 
+### Rule 15 — Button Variants System (MANDATORY)
+Every button must use one of these variant patterns. Never create random button styles.
+
+| Variant | Fill | Text | Border | When to use |
+|---------|------|------|--------|-------------|
+| **Solid** | brand color | white | none | Primary CTA |
+| **Flat** | brand color 10% opacity | brand color | none | Secondary actions |
+| **Bordered** | transparent | brand color | 1px brand | Tertiary, filters |
+| **Ghost** | transparent | brand color | none | Minimal, inline |
+| **Light** | #F5F6FA | #1E3150 | none | Neutral, cancel |
+| **Shadow** | brand color | white | none + shadow | Elevated CTA |
+
+**Size scale (apply to ALL interactive elements):**
+| Size | Height | paddingX | fontSize | cornerRadius |
+|------|--------|----------|----------|--------------|
+| sm | 32px | 12px | 12px | 8px |
+| md | 40px | 16px | 14px | 12px |
+| lg | 48px | 24px | 16px | 14px |
+
+### Rule 16 — Consistent Spacing Scale (MANDATORY)
+Use ONLY these spacing values. Never use random pixel values.
+\`\`\`
+4px   — tight: icon-to-text gap, badge padding
+8px   — compact: between related items, small card padding
+12px  — default: standard item spacing, input padding
+16px  — comfortable: section padding, card content padding
+20px  — relaxed: between card sections
+24px  — spacious: page padding, major section gaps
+32px  — large: between major page sections
+48px  — hero: top/bottom of hero sections, major breaks
+\`\`\`
+
+### Rule 17 — Border Radius Consistency (MANDATORY)
+Match radius to element size. NEVER use random radius values.
+| Element type | cornerRadius | Example |
+|-------------|-------------|---------|
+| Small chips/tags | 4-6px | Status badge, tag pill |
+| Input fields | 8px | Text input, select |
+| Buttons | 8-12px | All button variants |
+| Cards | 12-16px | Content cards, modals |
+| Large panels | 16-24px | Side panels, bottom sheets |
+| Full round | 9999px | Avatar, circular icon bg, pills |
+
+**Nested radius rule:** Inner element radius = outer radius - padding.
+Example: Card radius 16px, padding 8px → inner element radius = 8px.
+
+### Rule 18 — Shadow/Elevation System (MANDATORY)
+Use consistent shadows for depth hierarchy. Never mix random shadow values.
+| Level | Effect | Usage |
+|-------|--------|-------|
+| **flat** | No shadow | Inline elements, flat cards |
+| **sm** | 0 1px 2px rgba(0,0,0,0.05) | Subtle lift: inputs, chips |
+| **md** | 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06) | Cards, dropdowns |
+| **lg** | 0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05) | Modals, popovers, floating |
+
+For dark themes: use border (1px #2A2B45) instead of shadows — shadows are invisible on dark bg.
+
+### Rule 19 — Semantic Color Usage (MANDATORY)
+Colors must carry meaning. Never pick colors randomly.
+| Role | Light theme | Dark theme | When to use |
+|------|------------|------------|-------------|
+| **Primary** | #006FEE | #338EF7 | Main CTA, active states, links |
+| **Success** | #17C964 | #45D483 | Confirmations, positive values, online |
+| **Warning** | #F5A524 | #F7B750 | Caution, pending, attention |
+| **Danger** | #F31260 | #F54180 | Errors, destructive actions, offline |
+| **Default** | #71717A | #A1A1AA | Neutral, secondary text, disabled |
+
+**Foreground contrast rule:** Every semantic color must pair with white text (#FFFFFF) for WCAG AA (4.5:1 minimum contrast ratio).
+
+### Rule 20 — Component State Indicators (MANDATORY)
+All interactive elements must visually indicate their state:
+| State | Visual change | How to implement |
+|-------|--------------|-----------------|
+| **Default** | Base appearance | Normal fills/colors |
+| **Hover** | Slight darken or lighten (opacity 0.8-0.9) | Fill opacity change |
+| **Pressed** | Scale down slightly + darken | Smaller size in Figma |
+| **Focused** | 2px ring around element | Stroke with focus color |
+| **Disabled** | 50% opacity, no interaction | opacity: 0.5 |
+| **Loading** | Spinner replaces content/icon | Spinner SVG inside |
+
+When designing in Figma: create one frame per state for interactive components.
+
 ---
 
 ## Design Library Tokens (defaults)

@@ -1,6 +1,6 @@
 {
   "name": "figma-ui-mcp",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "description": "Bidirectional Figma MCP — draw UI with Claude, read design back to code",
   "mcpName": "io.github.TranHoaiHung/figma-ui-mcp",
   "type": "module",

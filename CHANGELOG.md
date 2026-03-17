@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.5] — 2026-03-17
+
+### Added — New Design Rules (inspired by HeroUI design system)
+- **Rule 15 — Button Variants System**: 6 variants (solid, flat, bordered, ghost, light, shadow) with size scale (sm/md/lg) — height, padding, fontSize, cornerRadius
+- **Rule 16 — Consistent Spacing Scale**: 8 fixed values (4-48px) — eliminates random pixel values
+- **Rule 17 — Border Radius Consistency**: element-size-based radius table + nested radius rule
+- **Rule 18 — Shadow/Elevation System**: 4-level hierarchy (flat/sm/md/lg) with dark theme border fallback
+- **Rule 19 — Semantic Color Usage**: role-based colors (primary/success/warning/danger/default) with light/dark theme pairs and WCAG contrast rule
+- **Rule 20 — Component State Indicators**: 6 states (default/hover/pressed/focused/disabled/loading) with visual implementation guide
+
+---
+
 ## [1.6.4] — 2026-03-17
 
 ### Added — CI/CD MCP Registry Auto-Publish
