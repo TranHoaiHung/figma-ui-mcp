@@ -262,29 +262,73 @@ figma-ui-mcp/
 
 ## Available Write Operations (`figma_write`)
 
+### Core CRUD
 | Operation | Description |
 |-----------|-------------|
-| `figma.status()` | Current Figma context |
+| `figma.create({ type, ... })` | Create FRAME / RECTANGLE / ELLIPSE / LINE / TEXT / SVG / IMAGE |
+| `figma.modify({ id, ... })` | Update node properties (fill, size, text, layout, etc.) |
+| `figma.delete({ id })` | Remove a node |
+| `figma.query({ type?, name?, id? })` | Find nodes by type, name, or ID |
+| `figma.append({ parentId, childId })` | Move node into parent |
+
+### Page Management
+| Operation | Description |
+|-----------|-------------|
+| `figma.status()` | Current Figma context info |
 | `figma.listPages()` | List all pages |
 | `figma.setPage({ name })` | Switch active page |
 | `figma.createPage({ name })` | Add a new page |
-| `figma.query({ type?, name?, id? })` | Find nodes |
-| `figma.create({ type, ... })` | Create FRAME / RECTANGLE / ELLIPSE / LINE / TEXT |
-| `figma.modify({ id, ... })` | Update node properties |
-| `figma.delete({ id? name? })` | Remove a node |
-| `figma.append({ parentId, childId })` | Move node into parent |
-| `figma.listComponents()` | List all components |
-| `figma.instantiate({ componentId, ... })` | Create component instance |
+
+### Node Operations
+| Operation | Description |
+|-----------|-------------|
+| `figma.clone({ id, x?, y?, parentId? })` | Duplicate a node with optional repositioning |
+| `figma.group({ nodeIds, name? })` | Group multiple nodes |
+| `figma.ungroup({ id })` | Ungroup a GROUP/FRAME |
+| `figma.flatten({ id })` | Flatten/merge vectors into single path |
+| `figma.resize({ id, width, height })` | Resize any node |
+| `figma.set_selection({ ids })` | Programmatically select nodes |
+| `figma.set_viewport({ nodeId?, x?, y?, zoom? })` | Navigate viewport |
+| `figma.batch({ operations })` | Execute up to 50 ops in one call (10-25x faster) |
+
+### Components
+| Operation | Description |
+|-----------|-------------|
+| `figma.listComponents()` | List all components in document |
+| `figma.instantiate({ componentId })` | Create component instance |
+| `figma.createComponent({ nodeId, name? })` | Convert FRAME/GROUP → reusable Component |
+
+### Design Tokens & Styles
+| Operation | Description |
+|-----------|-------------|
+| `figma.createVariableCollection({ name })` | Create variable collection ("Colors", "Spacing") |
+| `figma.createVariable({ name, collectionId, value })` | Create COLOR/FLOAT/STRING/BOOLEAN variable |
+| `figma.applyVariable({ nodeId, field, variableName })` | Bind variable to node fill/stroke/opacity |
+| `figma.createPaintStyle({ name, color })` | Create reusable paint style |
+| `figma.createTextStyle({ name, fontFamily, fontSize, ... })` | Create reusable text style |
+| `figma.ensure_library()` | Create/get Design Library frame |
+| `figma.get_library_tokens()` | Read library color + text tokens |
+
+### Image & Icon Helpers (server-side)
+| Operation | Description |
+|-----------|-------------|
+| `figma.loadImage(url, opts)` | Download image → place on canvas |
+| `figma.loadIcon(name, opts)` | Fetch SVG icon (auto fallback: Fluent → Bootstrap → Phosphor → Lucide) |
+| `figma.loadIconIn(name, opts)` | Icon inside centered circle background |
 
 ## Available Read Operations (`figma_read`)
 
 | Operation | Description |
 |-----------|-------------|
 | `get_selection` | Full design tree of selected node(s) + design tokens |
-| `get_design` | Full node tree for a specified frame or page |
+| `get_design` | Full node tree for a frame/page (depth param: default 10, or "full") |
 | `get_page_nodes` | Top-level frames on the current page |
-| `screenshot` | Export node as PNG (base64) |
+| `screenshot` | Export node as PNG — displays **inline** in Claude Code |
 | `export_svg` | Export node as SVG markup |
+| `get_styles` | All local paint, text, effect, grid styles |
+| `get_local_components` | Component listing with descriptions + variant properties |
+| `get_viewport` | Current viewport position, zoom, bounds |
+| `get_variables` | Local variables (Design Tokens) — collections, modes, values |
 
 ---
 
