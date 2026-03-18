@@ -953,6 +953,120 @@ const result = await figma.batch({
 // → { results: [{index, operation, success, data}], total: 3, succeeded: 3 }
 \`\`\`
 
+### Design Tokens — Variables, Styles, Components (v1.7.0)
+
+#### createVariableCollection — create a named collection
+\`\`\`js
+// Create collections to organize variables
+var colors = await figma.createVariableCollection({ name: "Colors" });
+var spacing = await figma.createVariableCollection({ name: "Spacing" });
+// → { id: "VariableCollectionId:123", name: "Colors", modes: [{ id: "...", name: "Mode 1" }] }
+\`\`\`
+
+#### createVariable — create a variable in a collection
+\`\`\`js
+// COLOR variable — pass hex string, auto-converts to RGBA
+var bgBase = await figma.createVariable({
+  name: "bg-base",
+  collectionId: colors.id,    // or collection name: "Colors"
+  resolvedType: "COLOR",      // COLOR | FLOAT | STRING | BOOLEAN
+  value: "#08090E"
+});
+
+// FLOAT variable for spacing
+var spaceMd = await figma.createVariable({
+  name: "space-md",
+  collectionId: spacing.id,
+  resolvedType: "FLOAT",
+  value: 16
+});
+// → { id: "VariableID:456", name: "bg-base", resolvedType: "COLOR", collectionId: "..." }
+\`\`\`
+
+#### applyVariable — bind variable to a node property
+\`\`\`js
+// Bind fill color to variable — change variable later → all bound nodes update
+await figma.applyVariable({
+  nodeId: card.id,
+  field: "fill",           // fill | stroke | opacity | cornerRadius | width | height
+  variableName: "bg-base"  // or variableId: bgBase.id
+});
+
+// Bind stroke to variable
+await figma.applyVariable({
+  nodeId: card.id,
+  field: "stroke",
+  variableName: "border-color"
+});
+\`\`\`
+
+#### createPaintStyle — create reusable paint style
+\`\`\`js
+var primaryStyle = await figma.createPaintStyle({
+  name: "color/primary",     // use slash naming for organization
+  color: "#006FEE",
+  description: "Primary brand color"
+});
+// → { id: "S:...", name: "color/primary", key: "...", color: "#006FEE" }
+\`\`\`
+
+#### createTextStyle — create reusable text style
+\`\`\`js
+var headingStyle = await figma.createTextStyle({
+  name: "text/heading-xl",
+  fontFamily: "Inter",
+  fontWeight: "Bold",        // Regular | Medium | SemiBold | Bold | Heavy
+  fontSize: 24,
+  lineHeight: 32,            // px number, "auto", or "150%"
+  letterSpacing: -0.5,       // px
+  description: "Page headings"
+});
+// → { id: "S:...", name: "text/heading-xl", key: "...", fontSize: 24 }
+\`\`\`
+
+#### createComponent — convert frame to reusable component
+\`\`\`js
+// First create a frame with desired design
+var btnFrame = await figma.create({
+  type: "FRAME", name: "btn/primary",
+  width: 120, height: 40, fill: "#006FEE", cornerRadius: 12,
+  layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER",
+});
+await figma.create({ type: "TEXT", parentId: btnFrame.id, content: "Button", fontSize: 14, fontWeight: "SemiBold", fill: "#FFFFFF" });
+
+// Convert to component — now reusable via instantiate()
+var btnComp = await figma.createComponent({ nodeId: btnFrame.id, name: "btn/primary" });
+// → { id: "...", name: "btn/primary", key: "...", width: 120, height: 40 }
+
+// Use it everywhere
+var btn1 = await figma.instantiate({ componentId: btnComp.id, parentId: form.id, x: 0, y: 100 });
+var btn2 = await figma.instantiate({ componentId: btnComp.id, parentId: card.id, x: 16, y: 200 });
+// Edit original component → all instances update automatically
+\`\`\`
+
+#### Full Design Token Workflow
+\`\`\`js
+// 1. Create variable collections
+var colors = await figma.createVariableCollection({ name: "Brand Colors" });
+var spacing = await figma.createVariableCollection({ name: "Spacing" });
+
+// 2. Define variables
+await figma.createVariable({ name: "primary", collectionId: colors.id, resolvedType: "COLOR", value: "#006FEE" });
+await figma.createVariable({ name: "bg-card", collectionId: colors.id, resolvedType: "COLOR", value: "#FFFFFF" });
+await figma.createVariable({ name: "text-primary", collectionId: colors.id, resolvedType: "COLOR", value: "#1E3150" });
+await figma.createVariable({ name: "md", collectionId: spacing.id, resolvedType: "FLOAT", value: 16 });
+
+// 3. Create paint + text styles
+await figma.createPaintStyle({ name: "color/primary", color: "#006FEE" });
+await figma.createTextStyle({ name: "text/body", fontFamily: "Inter", fontWeight: "Regular", fontSize: 14, lineHeight: 22 });
+
+// 4. Build UI and bind variables
+var card = await figma.create({ type: "FRAME", width: 300, height: 200, fill: "#FFFFFF", cornerRadius: 12 });
+await figma.applyVariable({ nodeId: card.id, field: "fill", variableName: "bg-card" });
+
+// 5. Rebrand later? Just change the variable — everything updates!
+\`\`\`
+
 ---
 
 ## Workflow example — Draw a full screen
