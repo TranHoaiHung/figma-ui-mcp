@@ -33,11 +33,25 @@ export class BridgeServer {
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
+        // Remove from BOTH pending AND queue (prevents stuck requests)
         this.#pending.delete(id);
+        this.#requestQueue = this.#requestQueue.filter(r => r.id !== id);
         reject(new Error(`Operation "${operation}" timed out after ${CONFIG.OP_TIMEOUT_MS}ms`));
       }, CONFIG.OP_TIMEOUT_MS);
       this.#pending.set(id, { resolve, reject, timer });
     });
+  }
+
+  // Clear all queued and pending operations (unstick the queue)
+  clearQueue() {
+    const cleared = this.#requestQueue.length + this.#pending.size;
+    for (const [id, p] of this.#pending) {
+      clearTimeout(p.timer);
+      p.reject(new Error("Queue cleared manually"));
+    }
+    this.#pending.clear();
+    this.#requestQueue.length = 0;
+    return cleared;
   }
 
   #settle(response) {
@@ -76,12 +90,14 @@ export class BridgeServer {
 
     const path = new URL(req.url, `http://localhost:${CONFIG.PORT}`).pathname;
 
-    // Plugin → pick up queued operations
+    // Plugin → pick up queued operations (auto-clean expired requests)
     if (path === "/poll" && req.method === "GET") {
       this.#lastPollAt = Date.now();
-      const requests = this.#requestQueue.splice(0);
+      // Filter out requests whose pending already timed out
+      const alive = this.#requestQueue.filter(r => this.#pending.has(r.id));
+      this.#requestQueue.length = 0;
       res.writeHead(200);
-      res.end(JSON.stringify({ requests, mode: "ready" }));
+      res.end(JSON.stringify({ requests: alive, mode: "ready" }));
       return;
     }
 
@@ -121,6 +137,14 @@ export class BridgeServer {
         pendingCount:    this.pendingCount,
         lastPollAgoMs:   this.#lastPollAt ? Date.now() - this.#lastPollAt : null,
       }));
+      return;
+    }
+
+    // Manual queue clear — unstick when requests are stuck
+    if (path === "/clear" && (req.method === "POST" || req.method === "GET")) {
+      const cleared = this.clearQueue();
+      res.writeHead(200);
+      res.end(JSON.stringify({ cleared, queueLength: 0, pendingCount: 0 }));
       return;
     }
 
