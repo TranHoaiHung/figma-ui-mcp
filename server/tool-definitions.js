@@ -41,7 +41,8 @@ export const TOOLS = [
           type: "string",
           enum: [
             "get_selection", "get_design", "get_page_nodes", "screenshot", "export_svg",
-            "get_styles", "get_local_components", "get_viewport", "get_variables"
+            "get_styles", "get_local_components", "get_viewport", "get_variables",
+            "get_node_detail"
           ],
           description:
             "get_selection: data for currently selected node(s). " +
@@ -52,7 +53,8 @@ export const TOOLS = [
             "get_styles: all local paint, text, effect, grid styles. " +
             "get_local_components: enhanced component listing with properties. " +
             "get_viewport: current viewport position and zoom. " +
-            "get_variables: read Figma local variables (Design Tokens).",
+            "get_variables: read Figma local variables (Design Tokens). " +
+            "get_node_detail: CSS-like properties for a single node (fill, stroke, padding, shadow, font — no tree traversal).",
         },
         nodeId:   { type: "string", description: "Target node ID (optional — omit to use current selection)." },
         nodeName: { type: "string", description: "Target node name (alternative to nodeId)." },

@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.7.2] — 2026-03-18
+
+### Fixed — BLOCKER: export_svg TextDecoder crash
+- Replaced `new TextDecoder()` with manual UTF-8 decoder (`uint8ArrayToString`) — Figma plugin sandbox has no TextDecoder
+- `export_svg` now returns width/height alongside SVG markup
+- Created shared `exportNodeSvg()` helper used by both export_svg and inline icon extraction
+
+### Added — `get_node_detail` operation (figma_read)
+- Query a single node by ID/name → returns CSS-like properties
+- Includes: fills (multi-fill, gradient), stroke, borderRadius, boxShadow (CSS string), opacity, padding, gap, flexDirection, fontSize, fontFamily, color, content, boundVariables
+- No tree traversal needed — replaces parsing 432K chars to find 1 node
+
+### Improved — Inline SVG for icon nodes
+- `get_design` now auto-exports SVG markup for icon nodes (max 20, <5KB each)
+- `svgMarkup` field replaces `iconHint` — no separate export_svg call needed
+
+### Improved — Padding always detailed
+- Layout padding now always shows 4 values (paddingTop/Right/Bottom/Left) — no more compact `padding` that loses detail
+- Added `counterAxisSpacing` for wrapped layouts
+- Renamed `spacing` → `itemSpacing` for clarity
+
+---
+
 ## [1.7.1] — 2026-03-18
 
 ### Added — New Handlers (`plugin/code.js`)

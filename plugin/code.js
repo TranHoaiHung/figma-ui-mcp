@@ -313,17 +313,13 @@ function extractDesignTree(node, depth, maxDepth) {
       var pt = node.paddingTop, pr = node.paddingRight, pb = node.paddingBottom, pl = node.paddingLeft;
       info.layout = {
         mode:    node.layoutMode,
-        spacing: node.itemSpacing,
+        itemSpacing: node.itemSpacing,
         align:   node.primaryAxisAlignItems,
         crossAlign: node.counterAxisAlignItems,
+        paddingTop: pt, paddingRight: pr, paddingBottom: pb, paddingLeft: pl,
       };
-      // Compact padding
-      if (pt === pr && pr === pb && pb === pl) {
-        info.layout.padding = pt;
-      } else {
-        info.layout.paddingTop = pt; info.layout.paddingRight = pr;
-        info.layout.paddingBottom = pb; info.layout.paddingLeft = pl;
-      }
+      // Counter axis spacing (gap between wrapped rows/columns)
+      try { if (node.counterAxisSpacing !== undefined && node.counterAxisSpacing !== 0) info.layout.counterAxisSpacing = node.counterAxisSpacing; } catch(e2) {}
       // Sizing modes
       if (node.primaryAxisSizingMode) info.layout.primarySizing = node.primaryAxisSizingMode;
       if (node.counterAxisSizingMode) info.layout.counterSizing = node.counterAxisSizingMode;
@@ -1002,8 +998,34 @@ handlers.get_design = async function(params) {
 
   try {
     var tree = extractDesignTree(root, 0, maxDepth);
+
+    // Post-process: inline SVG for icon nodes (max 20 to avoid timeout)
+    var iconCount = 0;
+    async function inlineSvgForIcons(node) {
+      if (!node) return;
+      if (node.isIcon && node.id && iconCount < 20) {
+        try {
+          var figNode = findNodeById(node.id);
+          if (figNode) {
+            var svg = await exportNodeSvg(figNode);
+            if (svg && svg.length < 5000) {
+              node.svgMarkup = svg;
+              delete node.iconHint;
+              iconCount++;
+            }
+          }
+        } catch(e) { /* skip failed icon export */ }
+      }
+      if (node.children) {
+        for (var i = 0; i < node.children.length; i++) {
+          await inlineSvgForIcons(node.children[i]);
+        }
+      }
+    }
+    await inlineSvgForIcons(tree);
+
     var tokens = extractTokens(tree);
-    return { tree: tree, tokens: tokens, meta: { maxDepth: maxDepth, nodeType: root.type } };
+    return { tree: tree, tokens: tokens, meta: { maxDepth: maxDepth, nodeType: root.type, inlinedIcons: iconCount } };
   } catch(e) {
     throw new Error("[get_design] " + e.message + " nodeType=" + root.type + " id=" + root.id);
   }
@@ -1091,6 +1113,40 @@ handlers.screenshot = async function(params) {
   }
 };
 
+// Manual UTF-8 decode for Figma sandbox (no TextDecoder available)
+function uint8ArrayToString(arr) {
+  var result = "";
+  var i = 0;
+  while (i < arr.length) {
+    var byte1 = arr[i++];
+    if (byte1 < 0x80) {
+      result += String.fromCharCode(byte1);
+    } else if (byte1 < 0xE0) {
+      var byte2 = arr[i++] & 0x3F;
+      result += String.fromCharCode(((byte1 & 0x1F) << 6) | byte2);
+    } else if (byte1 < 0xF0) {
+      var byte2 = arr[i++] & 0x3F;
+      var byte3 = arr[i++] & 0x3F;
+      result += String.fromCharCode(((byte1 & 0x0F) << 12) | (byte2 << 6) | byte3);
+    } else {
+      var byte2 = arr[i++] & 0x3F;
+      var byte3 = arr[i++] & 0x3F;
+      var byte4 = arr[i++] & 0x3F;
+      var codePoint = ((byte1 & 0x07) << 18) | (byte2 << 12) | (byte3 << 6) | byte4;
+      codePoint -= 0x10000;
+      result += String.fromCharCode(0xD800 + (codePoint >> 10), 0xDC00 + (codePoint & 0x3FF));
+    }
+  }
+  return result;
+}
+
+// Export node SVG — helper used by export_svg and inline icon extraction
+async function exportNodeSvg(node) {
+  var bytes = await node.exportAsync({ format: "SVG" });
+  var arr = (typeof Uint8Array !== "undefined" && !(bytes instanceof Uint8Array)) ? new Uint8Array(bytes) : bytes;
+  return uint8ArrayToString(arr);
+}
+
 // export_svg — export node as SVG string
 handlers.export_svg = async function(params) {
   var id = params ? params.id : null;
@@ -1102,13 +1158,145 @@ handlers.export_svg = async function(params) {
   }
   if (!node) node = figma.currentPage;
   if (!node) throw new Error("Node not found");
-  const bytes = await node.exportAsync({ format: "SVG" });
-  return { svg: new TextDecoder().decode(bytes), nodeId: node.id };
+  var svg = await exportNodeSvg(node);
+  return { svg: svg, nodeId: node.id, width: Math.round(node.width), height: Math.round(node.height) };
 };
 
 // ─── NEW READ OPERATIONS ─────────────────────────────────────────────────────
 
 // get_styles — read all local paint, text, effect, and grid styles
+// get_node_detail — CSS-like properties for a single node (no tree traversal)
+handlers.get_node_detail = async function(params) {
+  var id = params ? params.id : null;
+  var nodeName = params ? params.name : null;
+  var node = null;
+  if (id) node = findNodeById(id);
+  if (!node && nodeName) node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
+  if (!node) throw new Error("Node not found");
+
+  var detail = {
+    id: node.id, name: node.name, type: node.type,
+    x: Math.round(node.x), y: Math.round(node.y),
+    width: Math.round(node.width), height: Math.round(node.height),
+  };
+
+  // Fill(s)
+  try {
+    if (node.fills && node.fills.length) {
+      detail.fills = [];
+      for (var fi = 0; fi < node.fills.length; fi++) {
+        var f = node.fills[fi];
+        if (f.visible === false) continue;
+        var fd = { type: f.type };
+        if (f.type === "SOLID") {
+          fd.color = rgbToHex(f.color);
+          if (f.opacity !== undefined && f.opacity !== 1) fd.opacity = Math.round(f.opacity * 100) / 100;
+        } else if (f.type === "GRADIENT_LINEAR" || f.type === "GRADIENT_RADIAL" || f.type === "GRADIENT_ANGULAR") {
+          fd.gradientStops = f.gradientStops ? f.gradientStops.map(function(gs) {
+            return { color: rgbToHex(gs.color), position: Math.round(gs.position * 100) / 100 };
+          }) : [];
+        } else if (f.type === "IMAGE") {
+          fd.scaleMode = f.scaleMode || "FILL";
+        }
+        detail.fills.push(fd);
+      }
+    }
+  } catch(e) {}
+
+  // Stroke
+  try {
+    if (node.strokes && node.strokes.length) {
+      detail.stroke = getStrokeHex(node);
+      detail.strokeWeight = node.strokeWeight;
+      detail.strokeAlign = node.strokeAlign;
+    }
+  } catch(e) {}
+
+  // Corner radius
+  try {
+    if ("cornerRadius" in node && node.cornerRadius !== 0) {
+      if (typeof node.cornerRadius === "number") {
+        detail.borderRadius = node.cornerRadius + "px";
+      } else {
+        detail.borderRadius = (node.topLeftRadius || 0) + "px " + (node.topRightRadius || 0) + "px " + (node.bottomRightRadius || 0) + "px " + (node.bottomLeftRadius || 0) + "px";
+      }
+    }
+  } catch(e) {}
+
+  // Opacity
+  try { if (node.opacity !== undefined && node.opacity !== 1) detail.opacity = Math.round(node.opacity * 100) / 100; } catch(e) {}
+
+  // Effects → CSS boxShadow
+  try {
+    if (node.effects && node.effects.length) {
+      var shadows = [];
+      for (var ei = 0; ei < node.effects.length; ei++) {
+        var eff = node.effects[ei];
+        if (eff.visible === false) continue;
+        if (eff.type === "DROP_SHADOW" || eff.type === "INNER_SHADOW") {
+          var c = eff.color;
+          var rgba = "rgba(" + Math.round(c.r * 255) + "," + Math.round(c.g * 255) + "," + Math.round(c.b * 255) + "," + (c.a !== undefined ? Math.round(c.a * 100) / 100 : 1) + ")";
+          var prefix = eff.type === "INNER_SHADOW" ? "inset " : "";
+          shadows.push(prefix + (eff.offset ? eff.offset.x : 0) + "px " + (eff.offset ? eff.offset.y : 0) + "px " + (eff.radius || 0) + "px " + (eff.spread || 0) + "px " + rgba);
+        }
+      }
+      if (shadows.length) detail.boxShadow = shadows.join(", ");
+    }
+  } catch(e) {}
+
+  // Layout / padding
+  try {
+    if (node.layoutMode && node.layoutMode !== "NONE") {
+      detail.display = "flex";
+      detail.flexDirection = node.layoutMode === "HORIZONTAL" ? "row" : "column";
+      detail.gap = node.itemSpacing + "px";
+      detail.alignItems = node.counterAxisAlignItems;
+      detail.justifyContent = node.primaryAxisAlignItems;
+      detail.padding = node.paddingTop + "px " + node.paddingRight + "px " + node.paddingBottom + "px " + node.paddingLeft + "px";
+    }
+  } catch(e) {}
+
+  // Text properties
+  if (node.type === "TEXT") {
+    try {
+      detail.content = node.characters;
+      detail.color = getFillHex(node);
+      detail.fontSize = node.fontSize + "px";
+      detail.fontFamily = node.fontName ? node.fontName.family : null;
+      detail.fontWeight = node.fontName ? node.fontName.style : null;
+      if (node.lineHeight) {
+        if (node.lineHeight.unit === "AUTO") detail.lineHeight = "normal";
+        else if (node.lineHeight.unit === "PERCENT") detail.lineHeight = Math.round(node.lineHeight.value) + "%";
+        else detail.lineHeight = node.lineHeight.value + "px";
+      }
+      if (node.letterSpacing && node.letterSpacing.value !== 0) detail.letterSpacing = node.letterSpacing.value + "px";
+      detail.textAlign = node.textAlignHorizontal ? node.textAlignHorizontal.toLowerCase() : null;
+    } catch(e) { try { detail.content = node.characters; } catch(e2) {} }
+  }
+
+  // Bound variables
+  try {
+    if (node.boundVariables) {
+      var bv = {};
+      var bvKeys = Object.keys(node.boundVariables);
+      for (var bvi = 0; bvi < bvKeys.length; bvi++) {
+        var bvk = bvKeys[bvi];
+        var binding = node.boundVariables[bvk];
+        if (binding) {
+          if (Array.isArray(binding)) bv[bvk] = binding.map(function(b) { return b ? b.id : null; });
+          else bv[bvk] = binding.id || null;
+        }
+      }
+      if (Object.keys(bv).length > 0) detail.boundVariables = bv;
+    }
+  } catch(e) {}
+
+  // Children count
+  if ("children" in node) detail.childCount = node.children.length;
+
+  return detail;
+};
+
 handlers.get_styles = async function() {
   var paintStyles = await figma.getLocalPaintStylesAsync();
   var textStyles = await figma.getLocalTextStylesAsync();
