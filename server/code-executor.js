@@ -27,7 +27,7 @@ const READ_OPS = [
   "get_selection", "get_design", "get_page_nodes",
   "screenshot", "export_svg",
   "get_styles", "get_local_components", "get_viewport", "get_variables",
-  "get_node_detail", "export_image", "search_nodes",
+  "get_node_detail", "export_image", "search_nodes", "scan_design",
 ];
 
 const ALL_OPS = [...WRITE_OPS, ...READ_OPS];

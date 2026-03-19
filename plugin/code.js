@@ -1109,6 +1109,147 @@ handlers.get_design = async function(params) {
   }
 };
 
+// scan_design — progressive scan for large/complex designs
+// Returns a structured summary: sections, all text content, all colors, component list, image nodes
+// Works on any size file without token overflow
+handlers.scan_design = async function(params) {
+  var p = params || {};
+  var id = p.id, name = p.name;
+  var root;
+  if (id) root = findNodeById(id);
+  else if (name) root = findNodeByName(name);
+  else root = figma.currentPage;
+  if (!root) throw new Error("Node not found");
+
+  var summary = {
+    rootId: root.id,
+    rootName: root.name,
+    rootType: root.type,
+    width: Math.round(root.width),
+    height: Math.round(root.height),
+    totalNodes: 0,
+    sections: [],      // top-level children with their text content
+    allText: [],       // every text node: id, content, font, color, position
+    allColors: {},     // color → count (usage frequency)
+    allFonts: {},      // "Inter/Bold/16px" → count
+    images: [],        // nodes with image fills
+    icons: [],         // likely icon nodes
+    components: [],    // component instances with names
+  };
+
+  function walkCount(node) {
+    summary.totalNodes++;
+
+    // Collect text
+    if (node.type === "TEXT") {
+      var textInfo = {
+        id: node.id, name: node.name,
+        x: Math.round(node.x), y: Math.round(node.y),
+        width: Math.round(node.width), height: Math.round(node.height),
+      };
+      try {
+        textInfo.content = node.characters;
+        textInfo.fill = getFillHex(node);
+        textInfo.fontSize = node.fontSize;
+        textInfo.fontFamily = node.fontName ? node.fontName.family : null;
+        textInfo.fontWeight = node.fontName ? node.fontName.style : null;
+      } catch(e) {
+        try { textInfo.content = node.characters; } catch(e2) {}
+      }
+      if (summary.allText.length < 500) summary.allText.push(textInfo);
+
+      // Count font usage
+      if (textInfo.fontFamily) {
+        var fontKey = textInfo.fontFamily + "/" + (textInfo.fontWeight || "Regular") + "/" + (textInfo.fontSize || "?") + "px";
+        summary.allFonts[fontKey] = (summary.allFonts[fontKey] || 0) + 1;
+      }
+    }
+
+    // Collect colors
+    try {
+      var hex = getFillHex(node);
+      if (hex) summary.allColors[hex] = (summary.allColors[hex] || 0) + 1;
+    } catch(e) {}
+    try {
+      var strokeHex = getStrokeHex(node);
+      if (strokeHex) summary.allColors[strokeHex] = (summary.allColors[strokeHex] || 0) + 1;
+    } catch(e) {}
+
+    // Collect images
+    if (hasImageFill(node) && summary.images.length < 50) {
+      summary.images.push({
+        id: node.id, name: node.name,
+        x: Math.round(node.x), y: Math.round(node.y),
+        width: Math.round(node.width), height: Math.round(node.height),
+      });
+    }
+
+    // Collect icons
+    if (isLikelyIcon(node) && summary.icons.length < 50) {
+      summary.icons.push({ id: node.id, name: node.name, width: Math.round(node.width), height: Math.round(node.height) });
+    }
+
+    // Collect component instances
+    if (node.type === "INSTANCE" && summary.components.length < 50) {
+      try {
+        var mc = node.mainComponent;
+        summary.components.push({
+          id: node.id, name: node.name,
+          componentName: mc ? mc.name : null,
+          componentId: mc ? mc.id : null,
+          width: Math.round(node.width), height: Math.round(node.height),
+        });
+      } catch(e) {}
+    }
+
+    // Recurse
+    if ("children" in node) {
+      for (var i = 0; i < node.children.length; i++) walkCount(node.children[i]);
+    }
+  }
+
+  // Build sections from top-level children
+  if ("children" in root) {
+    for (var ci = 0; ci < root.children.length; ci++) {
+      var child = root.children[ci];
+      var section = {
+        id: child.id, name: child.name, type: child.type,
+        x: Math.round(child.x), y: Math.round(child.y),
+        width: Math.round(child.width), height: Math.round(child.height),
+        childCount: "children" in child ? child.children.length : 0,
+      };
+      // Summarize text inside this section
+      var sectionTexts = collectTextContent(child, 20);
+      if (sectionTexts.length) section.textContent = sectionTexts;
+      section.iconCount = 0;
+      section.imageCount = 0;
+      // Quick count icons/images in section
+      function countAssets(n) {
+        if (isLikelyIcon(n)) section.iconCount++;
+        if (hasImageFill(n)) section.imageCount++;
+        if ("children" in n) { for (var i = 0; i < n.children.length; i++) countAssets(n.children[i]); }
+      }
+      countAssets(child);
+      summary.sections.push(section);
+    }
+  }
+
+  // Walk entire tree for comprehensive data
+  walkCount(root);
+
+  // Sort colors by usage
+  var colorEntries = Object.keys(summary.allColors).map(function(k) { return { color: k, count: summary.allColors[k] }; });
+  colorEntries.sort(function(a, b) { return b.count - a.count; });
+  summary.allColors = colorEntries.slice(0, 30); // top 30 colors
+
+  // Sort fonts by usage
+  var fontEntries = Object.keys(summary.allFonts).map(function(k) { return { font: k, count: summary.allFonts[k] }; });
+  fontEntries.sort(function(a, b) { return b.count - a.count; });
+  summary.allFonts = fontEntries;
+
+  return summary;
+};
+
 // search_nodes — find nodes by properties (color, type, font, name pattern)
 handlers.search_nodes = async function(params) {
   var p = params || {};

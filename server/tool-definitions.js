@@ -44,7 +44,8 @@ export const TOOLS = [
             "get_styles", "get_local_components", "get_viewport", "get_variables",
             "get_node_detail",
             "export_image",
-            "search_nodes"
+            "search_nodes",
+            "scan_design"
           ],
           description:
             "get_selection: data for currently selected node(s). " +
@@ -58,7 +59,8 @@ export const TOOLS = [
             "get_variables: read Figma local variables (Design Tokens). " +
             "get_node_detail: CSS-like properties for a single node (fill, stroke, padding, shadow, font — no tree traversal). " +
             "export_image: export node as base64 PNG/JPG for saving to disk (use scale param for resolution). " +
-            "search_nodes: find nodes by properties — type, namePattern (wildcard), fill (hex), fontFamily, fontSize, hasImage, hasIcon.",
+            "search_nodes: find nodes by properties — type, namePattern (wildcard), fill (hex), fontFamily, fontSize, hasImage, hasIcon. " +
+            "scan_design: progressive scan for large/complex designs — returns structured summary with all text, colors, fonts, images, icons, sections. No token overflow.",
         },
         nodeId:   { type: "string", description: "Target node ID (optional — omit to use current selection)." },
         nodeName: { type: "string", description: "Target node name (alternative to nodeId)." },
