@@ -43,7 +43,8 @@ export const TOOLS = [
             "get_selection", "get_design", "get_page_nodes", "screenshot", "export_svg",
             "get_styles", "get_local_components", "get_viewport", "get_variables",
             "get_node_detail",
-            "export_image"
+            "export_image",
+            "search_nodes"
           ],
           description:
             "get_selection: data for currently selected node(s). " +
@@ -56,13 +57,15 @@ export const TOOLS = [
             "get_viewport: current viewport position and zoom. " +
             "get_variables: read Figma local variables (Design Tokens). " +
             "get_node_detail: CSS-like properties for a single node (fill, stroke, padding, shadow, font — no tree traversal). " +
-            "export_image: export node as base64 PNG/JPG for saving to disk (use scale param for resolution).",
+            "export_image: export node as base64 PNG/JPG for saving to disk (use scale param for resolution). " +
+            "search_nodes: find nodes by properties — type, namePattern (wildcard), fill (hex), fontFamily, fontSize, hasImage, hasIcon.",
         },
         nodeId:   { type: "string", description: "Target node ID (optional — omit to use current selection)." },
         nodeName: { type: "string", description: "Target node name (alternative to nodeId)." },
         scale:    { type: "number", description: "Export scale for screenshot (default 1)." },
         depth:    { type: "string", description: "Tree depth for get_design/get_selection. Number (default 10) or 'full' for unlimited. Higher = more detail but larger output." },
         format:   { type: "string", description: "Image format for export_image: 'png' (default) or 'jpg'." },
+        detail:   { type: "string", description: "Detail level for get_design/get_selection: 'minimal' (~5% tokens), 'compact' (~30%), 'full' (default, 100%). Use minimal for large files." },
       },
       required: ["operation"],
     },

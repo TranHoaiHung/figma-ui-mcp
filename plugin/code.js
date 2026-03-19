@@ -156,11 +156,19 @@ function collectIconNames(node, maxItems) {
   return icons;
 }
 
-// Recursively extract design data from a node tree (enhanced v1.6.2)
-function extractDesignTree(node, depth, maxDepth) {
+// Detail levels: "minimal" | "compact" | "full"
+// minimal: id, name, type, position, size, childCount — ~5% token cost
+// compact: + fill, stroke, cornerRadius, layout, text content — ~30% token cost
+// full:    + effects, segments, gradient details, boundVariables, inline SVG — 100% token cost
+function extractDesignTree(node, depth, maxDepth, detailLevel) {
   if (depth === undefined) depth = 0;
   if (maxDepth === undefined) maxDepth = 15;
+  if (!detailLevel) detailLevel = "full";
   if (depth > maxDepth) return null;
+
+  var isMinimal = (detailLevel === "minimal");
+  var isCompact = (detailLevel === "compact");
+  var isFull    = (detailLevel === "full");
 
   var info = {
     id:    node.id,
@@ -171,6 +179,18 @@ function extractDesignTree(node, depth, maxDepth) {
     width: "width"  in node ? Math.round(node.width)   : undefined,
     height:"height" in node ? Math.round(node.height)  : undefined,
   };
+
+  // Minimal: only basic info + childCount, skip all style properties
+  if (isMinimal) {
+    if ("children" in node && node.children.length) {
+      info.childCount = node.children.length;
+      if (node.type === "TEXT") { try { info.content = node.characters; } catch(e) {} }
+      info.children = node.children
+        .map(function(c) { return extractDesignTree(c, depth + 1, maxDepth, detailLevel); })
+        .filter(Boolean);
+    }
+    return info;
+  }
 
   // ── Fill (multiple fills, gradients, images) ──
   try {
@@ -232,8 +252,8 @@ function extractDesignTree(node, depth, maxDepth) {
   try { if ("blendMode" in node && node.blendMode !== "NORMAL" && node.blendMode !== "PASS_THROUGH") info.blendMode = node.blendMode; } catch(e) {}
   try { if ("clipsContent" in node && node.clipsContent) info.clipsContent = true; } catch(e) {}
 
-  // ── Bound Variables (Design Tokens) ──
-  try {
+  // ── Bound Variables (Design Tokens) — full only ──
+  if (isFull) try {
     if (node.boundVariables) {
       var bv = {};
       var bvKeys = Object.keys(node.boundVariables);
@@ -253,8 +273,8 @@ function extractDesignTree(node, depth, maxDepth) {
     }
   } catch(e) {}
 
-  // ── Effects (shadows, blurs) ──
-  try {
+  // ── Effects (shadows, blurs) — full only ──
+  if (isFull) try {
     if ("effects" in node && node.effects && node.effects.length) {
       var effs = [];
       for (var ei = 0; ei < node.effects.length; ei++) {
@@ -412,14 +432,14 @@ function extractDesignTree(node, depth, maxDepth) {
     try { if (node.vectorPaths) info.pathCount = node.vectorPaths.length; } catch(e) {}
   }
 
-  // ── Image detection — flag nodes with image fills ──
-  if (hasImageFill(node)) {
+  // ── Image detection — flag nodes with image fills (compact+full) ──
+  if ((isCompact || isFull) && hasImageFill(node)) {
     info.hasImage = true;
     info.imageHint = "Use figma_read screenshot with nodeId to extract this image";
   }
 
-  // ── Icon detection — flag small vector/instance nodes ──
-  if (isLikelyIcon(node)) {
+  // ── Icon detection — flag small vector/instance nodes (compact+full) ──
+  if ((isCompact || isFull) && isLikelyIcon(node)) {
     info.isIcon = true;
     info.iconHint = "Use figma_read export_svg with nodeId to extract SVG markup";
   }
@@ -435,7 +455,7 @@ function extractDesignTree(node, depth, maxDepth) {
       if (icons.length) info.iconNames = icons;
     } else {
       info.children = node.children
-        .map(function(c) { return extractDesignTree(c, depth + 1, maxDepth); })
+        .map(function(c) { return extractDesignTree(c, depth + 1, maxDepth, detailLevel); })
         .filter(Boolean);
     }
   }
@@ -1026,9 +1046,10 @@ handlers.get_selection = async function(params) {
   if (!nodes.length) return { nodes: [], message: "Nothing selected" };
 
   var maxDepth = (params && params.depth !== undefined) ? (params.depth === "full" ? 50 : Number(params.depth)) : 15;
+  var detailLevel = (params && params.detail) || "full";
   return {
-    nodes: nodes.map(function(n) { return extractDesignTree(n, 0, maxDepth); }),
-    tokens: nodes.length === 1 ? extractTokens(extractDesignTree(nodes[0], 0, maxDepth)) : null,
+    nodes: nodes.map(function(n) { return extractDesignTree(n, 0, maxDepth, detailLevel); }),
+    tokens: detailLevel !== "minimal" && nodes.length === 1 ? extractTokens(extractDesignTree(nodes[0], 0, maxDepth, detailLevel)) : null,
   };
 };
 
@@ -1038,6 +1059,7 @@ handlers.get_design = async function(params) {
   var p = params || {};
   var id = p.id, name = p.name;
   var depthParam = p.depth !== undefined ? p.depth : 10;
+  var detailLevel = p.detail || "full"; // "minimal" | "compact" | "full"
 
   var root;
   if (id)   root = findNodeById(id);
@@ -1050,10 +1072,11 @@ handlers.get_design = async function(params) {
   if (isNaN(maxDepth) || maxDepth < 1) maxDepth = 10;
 
   try {
-    var tree = extractDesignTree(root, 0, maxDepth);
+    var tree = extractDesignTree(root, 0, maxDepth, detailLevel);
 
-    // Post-process: inline SVG for icon nodes (max 20 to avoid timeout)
+    // Post-process: inline SVG for icon nodes (full mode only, max 20)
     var iconCount = 0;
+    if (detailLevel !== "full") iconCount = 999; // skip inline SVG for non-full modes
     async function inlineSvgForIcons(node) {
       if (!node) return;
       if (node.isIcon && node.id && iconCount < 20) {
@@ -1078,10 +1101,127 @@ handlers.get_design = async function(params) {
     await inlineSvgForIcons(tree);
 
     var tokens = extractTokens(tree);
-    return { tree: tree, tokens: tokens, meta: { maxDepth: maxDepth, nodeType: root.type, inlinedIcons: iconCount } };
+    var meta = { maxDepth: maxDepth, detail: detailLevel, nodeType: root.type };
+    if (detailLevel === "full") meta.inlinedIcons = iconCount;
+    return { tree: tree, tokens: (detailLevel !== "minimal" ? tokens : undefined), meta: meta };
   } catch(e) {
     throw new Error("[get_design] " + e.message + " nodeType=" + root.type + " id=" + root.id);
   }
+};
+
+// search_nodes — find nodes by properties (color, type, font, name pattern)
+handlers.search_nodes = async function(params) {
+  var p = params || {};
+  var results = [];
+  var maxResults = p.limit || 50;
+
+  // Search criteria
+  var criteria = {
+    type: p.type || null,               // "TEXT", "FRAME", "RECTANGLE", etc.
+    namePattern: p.namePattern || null,  // wildcard pattern: "*header*"
+    fill: p.fill || null,               // hex color: "#FF0000"
+    fontFamily: p.fontFamily || null,    // "Inter"
+    fontWeight: p.fontWeight || null,    // "Bold"
+    fontSize: p.fontSize || null,        // 14
+    hasImage: p.hasImage || false,       // true = nodes with image fills
+    hasIcon: p.hasIcon || false,         // true = likely icon nodes
+    minWidth: p.minWidth || null,
+    maxWidth: p.maxWidth || null,
+    minHeight: p.minHeight || null,
+    maxHeight: p.maxHeight || null,
+  };
+
+  // Convert wildcard pattern to simple matcher
+  function matchName(name, pattern) {
+    if (!pattern) return true;
+    var parts = pattern.toLowerCase().split("*");
+    var str = name.toLowerCase();
+    var pos = 0;
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] === "") continue;
+      var idx = str.indexOf(parts[i], pos);
+      if (idx === -1) return false;
+      pos = idx + parts[i].length;
+    }
+    return true;
+  }
+
+  function matchNode(node) {
+    if (criteria.type && node.type !== criteria.type) return false;
+    if (criteria.namePattern && !matchName(node.name, criteria.namePattern)) return false;
+    if (criteria.fill) {
+      var nodeFill = getFillHex(node);
+      if (!nodeFill || nodeFill.toLowerCase() !== criteria.fill.toLowerCase()) return false;
+    }
+    if (node.type === "TEXT") {
+      try {
+        if (criteria.fontFamily && node.fontName && node.fontName.family !== criteria.fontFamily) return false;
+        if (criteria.fontWeight && node.fontName && node.fontName.style !== criteria.fontWeight) return false;
+        if (criteria.fontSize && node.fontSize !== criteria.fontSize) return false;
+      } catch(e) { /* mixed styles, skip font filter */ }
+    } else {
+      if (criteria.fontFamily || criteria.fontWeight || criteria.fontSize) return false;
+    }
+    if (criteria.hasImage && !hasImageFill(node)) return false;
+    if (criteria.hasIcon && !isLikelyIcon(node)) return false;
+    if (criteria.minWidth && node.width < criteria.minWidth) return false;
+    if (criteria.maxWidth && node.width > criteria.maxWidth) return false;
+    if (criteria.minHeight && node.height < criteria.minHeight) return false;
+    if (criteria.maxHeight && node.height > criteria.maxHeight) return false;
+    return true;
+  }
+
+  function walkAndMatch(node) {
+    if (results.length >= maxResults) return;
+    try {
+      if (matchNode(node)) {
+        var info = {
+          id: node.id, name: node.name, type: node.type,
+          x: Math.round(node.x), y: Math.round(node.y),
+          width: Math.round(node.width), height: Math.round(node.height),
+        };
+        try { info.fill = getFillHex(node); } catch(e) {}
+        if (node.type === "TEXT") {
+          try {
+            info.content = node.characters;
+            info.fontSize = node.fontSize;
+            info.fontFamily = node.fontName ? node.fontName.family : null;
+            info.fontWeight = node.fontName ? node.fontName.style : null;
+          } catch(e) { try { info.content = node.characters; } catch(e2) {} }
+        }
+        // Find page path for context
+        var path = [];
+        var parent = node.parent;
+        while (parent && parent.type !== "PAGE" && path.length < 5) {
+          path.unshift(parent.name);
+          parent = parent.parent;
+        }
+        if (path.length) info.path = path.join(" > ");
+        results.push(info);
+      }
+    } catch(e) { /* skip inaccessible nodes */ }
+    if ("children" in node) {
+      for (var i = 0; i < node.children.length; i++) {
+        if (results.length >= maxResults) return;
+        walkAndMatch(node.children[i]);
+      }
+    }
+  }
+
+  // Search scope: specific node or entire page
+  var root;
+  if (p.id) root = findNodeById(p.id);
+  else if (p.name) root = findNodeByName(p.name);
+  else root = figma.currentPage;
+
+  walkAndMatch(root);
+
+  return {
+    results: results,
+    total: results.length,
+    criteria: criteria,
+    truncated: results.length >= maxResults,
+  };
 };
 
 // get_page_nodes — shallow list of top-level frames on current page

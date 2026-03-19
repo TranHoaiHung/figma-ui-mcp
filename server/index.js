@@ -157,7 +157,7 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
       if (!health.pluginConnected) return notConnected();
     } else if (!bridge.isPluginConnected()) return notConnected();
 
-    const { operation, nodeId, nodeName, scale, depth, format } = args || {};
+    const { operation, nodeId, nodeName, scale, depth, format, detail, ...searchParams } = args || {};
     if (!operation) return err("'operation' is required.");
 
     const params = {};
@@ -166,6 +166,9 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
     if (scale)    params.scale = scale;
     if (depth !== undefined) params.depth = depth;
     if (format) params.format = format;
+    if (detail) params.detail = detail;
+    // Pass search_nodes params (type, namePattern, fill, fontFamily, etc.)
+    if (operation === "search_nodes") Object.assign(params, searchParams);
 
     try {
       const data = await bridge.sendOperation(operation, params);
