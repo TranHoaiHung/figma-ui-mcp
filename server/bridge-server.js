@@ -5,10 +5,10 @@ export const CONFIG = {
   PORT: parseInt(process.env.FIGMA_MCP_PORT || "38451", 10),
   PORT_RANGE: 10,           // try up to 10 ports (38451-38460)
   HOST: null,               // null = Node.js binds :: (dual-stack IPv4+IPv6), accepts localhost on both
-  OP_TIMEOUT_MS: 10_000,    // per-operation timeout
+  OP_TIMEOUT_MS: 30_000,    // per-operation timeout (was 10s, too short for first-run font loading + large exports)
   MAX_BODY_BYTES: 5_000_000,  // 5MB to support image payloads
   MAX_QUEUE: 50,
-  HEALTH_TTL_MS: 30_000,    // plugin considered offline after 30s without poll (was 15s, too aggressive)
+  HEALTH_TTL_MS: 60_000,    // plugin considered offline after 60s without poll (was 30s, plugin may be busy processing)
 };
 
 export class BridgeServer {
