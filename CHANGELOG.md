@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.9.1] — 2026-03-19
+
+### Fixed — Connection stability
+- **OP_TIMEOUT**: 10s → 30s — prevents first-run timeout during font loading and large exports
+- **HEALTH_TTL**: 30s → 60s — plugin won't be marked offline while processing heavy operations
+- **Plugin UI messages**: clear feedback during first connection ("Waiting for MCP server", "first run may take 15s to download", "Cannot connect — run: npx figma-ui-mcp")
+
+---
+
+## [1.9.0] — 2026-03-19
+
+### Added — `scan_design` operation (progressive reading for large files)
+- Walks entire tree, returns structured summary without token overflow
+- Extracts: all text (500 max), top 30 colors by usage frequency, fonts by usage, images (50), icons (50), component instances, sections with text summaries
+- Recommended first step for complex designs before drilling into sections
+
+### Added — `search_nodes` operation (property-based search)
+- Find nodes by: fill color, type, namePattern (wildcard `*header*`), fontFamily, fontWeight, fontSize, hasImage, hasIcon, min/maxWidth, min/maxHeight
+- Returns up to 50 matches with parent path context
+- No tree traversal needed — direct property queries
+
+### Added — Compact output mode for `get_design` / `get_selection`
+- `detail: "minimal"` — ~5% tokens: id, name, type, position, size only
+- `detail: "compact"` — ~30% tokens: + fill, stroke, layout, text content, icon/image flags
+- `detail: "full"` — 100% tokens: + effects, boundVariables, inline SVG (default)
+- Enables progressive reading: minimal overview → compact section → full node detail
+
+### Added — Restart IDE warning in README
+- Clear note after MCP setup: must quit and reopen IDE for MCP server to load
+
+---
+
 ## [1.8.0] — 2026-03-18
 
 ### Fixed — BLOCKER: export_svg TextDecoder crash
