@@ -1,7 +1,7 @@
 {
   "name": "figma-ui-mcp",
   "version": "1.9.1",
-  "description": "Bidirectional Figma MCP — draw UI with Claude, read design back to code",
+  "description": "Claude Code to Figma — Bidirectional MCP bridge. AI draws UI on Figma canvas, reads designs back. Works with Claude, Cursor, VS Code, Windsurf, Antigravity. No API key needed.",
   "mcpName": "io.github.TranHoaiHung/figma-ui-mcp",
   "type": "module",
   "bin": {
@@ -26,7 +26,7 @@
     "@modelcontextprotocol/sdk": "^1.0.4"
   },
   "engines": { "node": ">=18" },
-  "keywords": ["figma", "mcp", "model-context-protocol", "claude", "ai", "design", "plugin", "figma-plugin", "ui-generation"],
+  "keywords": ["figma", "mcp", "model-context-protocol", "claude", "claude-code", "cursor", "windsurf", "vscode", "antigravity", "ai", "design", "plugin", "figma-plugin", "ui-generation", "figma-mcp", "ai-to-figma", "claude-to-figma", "code-to-figma", "design-to-code", "figma-bridge", "figma-automation"],
   "license": "MIT",
   "author": "TranHoaiHung",
   "homepage": "https://github.com/TranHoaiHung/figma-ui-mcp#readme",

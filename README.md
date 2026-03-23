@@ -1,7 +1,7 @@
 # figma-ui-mcp
 
 <p align="center">
-  <img src="assets/logo-v6.png" alt="figma-ui-mcp" width="480" />
+  <img src="assets/logo-v6.png" alt="figma-ui-mcp — Claude Code to Figma, AI to Figma, MCP Figma Bridge" width="480" />
 </p>
 
 <p align="center">
@@ -11,7 +11,15 @@
   <a href="https://github.com/TranHoaiHung/figma-ui-mcp/stargazers"><img src="https://img.shields.io/github/stars/TranHoaiHung/figma-ui-mcp?style=social" alt="GitHub stars" /></a>
 </p>
 
-**Bidirectional Figma MCP** — use Claude (or any MCP client) to draw UI directly in Figma, and read existing designs back as structured data or code.
+<p align="center">
+  <strong>Claude Code to Figma</strong> · <strong>Antigravity to Figma</strong> · <strong>Cursor to Figma</strong> · <strong>Any MCP IDE to Figma</strong>
+</p>
+
+<p align="center">
+  <sub>✅ Tested: Claude Code, Antigravity &nbsp;|&nbsp; 🔧 Compatible: Cursor, VS Code, Windsurf, Zed (any MCP stdio client)</sub>
+</p>
+
+**Bidirectional Figma MCP bridge** — let AI assistants (Claude Code, Cursor, Windsurf, Antigravity, VS Code Copilot, or any MCP-compatible IDE) **draw UI directly on Figma canvas** and **read existing designs back** as structured data, screenshots, or code-ready tokens. No Figma API key needed — works entirely over localhost.
 
 > **Requires Figma Desktop** — the plugin communicates with the MCP server over `localhost` HTTP polling. Figma's web app does not allow localhost network access, so **Figma Desktop is required**.
 
@@ -355,3 +363,7 @@ If **figma-ui-mcp** helps you, please give it a star — it helps others discove
 MIT © [TranHoaiHung](https://github.com/TranHoaiHung) — free to use, modify, and distribute. See [LICENSE](LICENSE) for details.
 
 ---
+
+## Keywords
+
+figma mcp, claude code to figma, cursor to figma, ai to figma, figma ai plugin, figma mcp bridge, figma mcp server, figma design to code, code to figma design, ai ui design, figma automation, figma plugin ai, model context protocol figma, claude figma, windsurf figma, vs code figma, antigravity figma, ai design tool, figma api alternative, figma localhost plugin, draw ui with ai, ai generate figma design, figma design system ai, mcp server figma, figma read design, figma write design, bidirectional figma, figma desktop plugin, npx figma-ui-mcp
