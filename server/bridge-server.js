@@ -171,21 +171,65 @@ export class BridgeServer {
   get port() { return this.#actualPort; }
   #actualPort = CONFIG.PORT;
 
+  // Kill stale bridge processes on all ports in range before starting
+  async #killStaleBridges() {
+    var killed = 0;
+    for (var port = CONFIG.PORT; port < CONFIG.PORT + CONFIG.PORT_RANGE; port++) {
+      try {
+        // Check if port is a figma-ui-mcp bridge by hitting /health
+        var isOurs = await new Promise((resolve) => {
+          var req = http.get({ hostname: "127.0.0.1", port, path: "/health", timeout: 500 }, (res) => {
+            var data = "";
+            res.on("data", (c) => { data += c; });
+            res.on("end", () => {
+              try {
+                var j = JSON.parse(data);
+                // If it has pluginConnected field and plugin is NOT connected, it's stale
+                resolve(j.pluginConnected !== undefined && !j.pluginConnected);
+              } catch { resolve(false); }
+            });
+          });
+          req.on("error", () => resolve(false));
+          req.on("timeout", () => { req.destroy(); resolve(false); });
+        });
+        if (isOurs) {
+          // Try to gracefully close by connecting and letting it fail
+          // Find and kill the process holding this port
+          try {
+            var { execSync } = await import("node:child_process");
+            var pid = execSync("lsof -ti tcp:" + port + " 2>/dev/null", { encoding: "utf8" }).trim();
+            if (pid) {
+              execSync("kill " + pid + " 2>/dev/null");
+              killed++;
+              process.stderr.write("[figma-ui-mcp] Killed stale bridge on port " + port + " (PID " + pid + ")\n");
+              // Wait briefly for port to free up
+              await new Promise((r) => setTimeout(r, 200));
+            }
+          } catch { /* ignore kill errors */ }
+        }
+      } catch { /* ignore */ }
+    }
+    return killed;
+  }
+
   start() {
-    return new Promise((resolve) => {
-      const tryPort = (port, attempt) => {
+    return new Promise(async (resolve) => {
+      // Kill stale bridges first to reclaim port 38451
+      await this.#killStaleBridges();
+
+      var tryPort = (port, attempt) => {
         if (attempt >= CONFIG.PORT_RANGE) {
-          process.stderr.write(`[figma-ui-mcp] All ports ${CONFIG.PORT}-${CONFIG.PORT + CONFIG.PORT_RANGE - 1} in use.\n`);
+          process.stderr.write("[figma-ui-mcp] All ports " + CONFIG.PORT + "-" + (CONFIG.PORT + CONFIG.PORT_RANGE - 1) + " in use.\n");
           resolve(this);
           return;
         }
         this.#server = http.createServer((req, res) => this.#route(req, res));
-        this.#server.once("error", err => {
+        this.#server.once("error", (err) => {
           if (err.code === "EADDRINUSE") {
-            process.stderr.write(`[figma-ui-mcp] Port ${port} in use — trying ${port + 1}...\n`);
+            process.stderr.write("[figma-ui-mcp] Port " + port + " in use — trying " + (port + 1) + "...\n");
             tryPort(port + 1, attempt + 1);
           } else {
-            process.stderr.write(`[figma-ui-mcp bridge] ${err.message}\n`);
+            process.stderr.write("[figma-ui-mcp bridge] " + err.message + "\n");
             resolve(this);
           }
         });

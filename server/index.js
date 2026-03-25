@@ -89,7 +89,7 @@ if (!useHttpProxy) {
 }
 
 const server = new Server(
-  { name: "figma-ui-mcp", version: "1.0.0" },
+  { name: "figma-ui-mcp", version: "1.9.2" },
   { capabilities: { tools: {} } }
 );
 

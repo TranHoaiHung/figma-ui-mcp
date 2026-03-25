@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.9.2] — 2026-03-23
+
+### Fixed — Text wrapping in mobile UI
+- **Auto-detect text wrap**: when `width` is set on TEXT node, plugin now defaults `textAutoResize: "HEIGHT"` — text wraps within frame instead of overflowing
+- Previously text with fixed width still used `WIDTH_AND_HEIGHT` (Figma default) → multi-line text spilled outside containers
+- No code change needed from AI side — plugin handles it automatically
+
+### Fixed — Stale bridge port conflict
+- **Auto-kill stale bridges**: on startup, scans ports 38451-38460 for disconnected figma-ui-mcp processes and kills them before binding
+- Fixes issue where multiple Claude Code sessions leave zombie bridge servers, causing plugin to connect to wrong port
+- Always reclaims port 38451 when possible
+
+### Improved — SEO & discoverability
+- README: added IDE-specific subtitle (Claude Code, Antigravity, Cursor, VS Code)
+- README: added keywords section for Google indexing
+- package.json: expanded keywords and description for npm search
+- Clarified tested vs compatible IDEs
+
+---
+
 ## [1.9.1] — 2026-03-19
 
 ### Fixed — Connection stability

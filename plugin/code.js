@@ -492,7 +492,7 @@ const handlers = {};
 
 handlers.status = async () => ({
   connected:   true,
-  version:     "1.2.4",
+  version:     "1.9.1",
   fileName:    figma.root.name,
   currentPage: figma.currentPage.name,
   pageCount:   figma.root.children.length,
@@ -626,7 +626,12 @@ handlers.create = async (params) => {
     if (params.textAlignHorizontal) node.textAlignHorizontal = params.textAlignHorizontal;
     if (params.textAlignVertical) node.textAlignVertical = params.textAlignVertical;
     // Auto-resize: "WIDTH_AND_HEIGHT" (default, hug), "HEIGHT" (fixed width, auto height), "NONE" (fixed both)
-    if (params.textAutoResize) node.textAutoResize = params.textAutoResize;
+    // Auto-detect: if width is set, default to "HEIGHT" so text wraps instead of overflowing
+    if (params.textAutoResize) {
+      node.textAutoResize = params.textAutoResize;
+    } else if (width) {
+      node.textAutoResize = "HEIGHT";
+    }
 
   } else if (type === "SVG") {
     // Create vector node from SVG string using Figma's built-in API
@@ -1419,7 +1424,7 @@ handlers.screenshot = async function(params) {
   try {
     var bytes = await node.exportAsync({ format: "PNG", constraint: { type: "SCALE", value: s } });
   } catch(exportErr) {
-    return Promise.reject(new Error("[v1.2.4-export] " + exportErr.message + " type=" + node.type + " id=" + node.id));
+    return Promise.reject(new Error("[v1.9.1-export] " + exportErr.message + " type=" + node.type + " id=" + node.id));
   }
 
   // Figma plugin sandbox: no btoa, no TextEncoder — manual base64
@@ -1443,7 +1448,7 @@ handlers.screenshot = async function(params) {
     }
     return { dataUrl: "data:image/png;base64," + b64, nodeId: node.id, width: node.width, height: node.height };
   } catch(encodeErr) {
-    return Promise.reject(new Error("[v1.2.4-encode] " + encodeErr.message));
+    return Promise.reject(new Error("[v1.9.1-encode] " + encodeErr.message));
   }
 };
 

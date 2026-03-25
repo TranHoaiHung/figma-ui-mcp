@@ -201,11 +201,14 @@ Every design must meet these quality standards:
 - Badges/pills: text ALWAYS centered inside (use auto-layout)
 - Numbers/stats: center-aligned within their containers
 
-**Text Wrapping & Overflow:**
-- Long text labels: set \`textAutoResize: "HEIGHT"\` with fixed width to allow wrapping
-- Single-line labels: use \`textAutoResize: "WIDTH_AND_HEIGHT"\` for auto-sizing
+**Text Wrapping & Overflow (CRITICAL for mobile UI):**
+- **Auto-detect**: plugin now defaults to \`textAutoResize: "HEIGHT"\` when width is set → text wraps automatically
+- Long text / descriptions: ALWAYS set \`width\` on text node → text wraps within that width
+- Single-line labels (no width set): defaults to \`"WIDTH_AND_HEIGHT"\` (auto-size, no wrap)
+- Override with explicit \`textAutoResize\`: \`"HEIGHT"\` (fixed width, auto height), \`"NONE"\` (fixed both), \`"WIDTH_AND_HEIGHT"\` (hug)
 - Truncation: if text may overflow, ensure container has \`clipsContent: true\`
 - Multi-line text: use appropriate \`lineHeight\` (1.4-1.6x fontSize)
+- **Mobile rule**: paragraphs, descriptions, chat messages MUST have \`width: parentWidth - paddingLeft - paddingRight\`
 
 **Borders & Strokes:**
 - Card borders: use subtle \`stroke\` color (e.g. "#E0E0E0" or "#EEEEEE"), \`strokeWeight: 1\`
