@@ -178,15 +178,79 @@ npm install
 
 The plugin UI shows a **green dot** when the MCP server is connected.
 
-### Step 3 — Start designing with AI
+### Step 3 — Connect AI to Figma
 
-The MCP tools are automatically available in your AI client:
+Tell your AI assistant to connect:
 
 ```
-figma_status     — check connection
-figma_write      — draw / modify UI
-figma_read       — extract design data
-figma_docs       — API reference
+"Connect to figma-ui-mcp"
+```
+
+The AI will call `figma_status` and confirm:
+
+```
+✅ Connected — File: "My Project", Page: "Page 1", Plugin v1.9.2
+```
+
+> If you see "Plugin not connected", make sure the Figma plugin is running (Step 2).
+
+### Step 4 — Start designing with prompts
+
+Once connected, just describe what you want in natural language:
+
+```
+"Use figma-ui-mcp to draw a login screen for mobile"
+```
+
+The AI will automatically:
+1. Call `figma_docs` to load the API reference and design rules
+2. Call `figma_read get_page_nodes` to understand the current canvas
+3. Call `figma_write` to create the design on your Figma canvas
+4. Call `figma_read screenshot` to verify the result
+
+### Prompt examples
+
+| Prompt | What happens |
+|--------|-------------|
+| `"Draw a mobile login screen with social login buttons"` | Creates a 390×844 frame with email/password inputs, Apple/Google buttons |
+| `"Read the selected frame and describe the design"` | Extracts colors, typography, spacing from your selection |
+| `"Take a screenshot of the current frame"` | Returns an inline image the AI can analyze |
+| `"Create a dark theme dashboard with KPI cards"` | Draws a full dashboard layout with charts and stats |
+| `"Design an e-commerce product card"` | Creates a product card with image, price, rating, CTA |
+| `"Draw a settings page with toggle switches"` | Creates grouped settings with icons and toggles |
+
+### Tips for better results
+
+- **Be specific about style**: `"dark theme"`, `"glassmorphism"`, `"minimal white"` gives the AI clear direction
+- **Mention platform**: `"mobile"` (390×844), `"tablet"` (768×1024), `"desktop"` (1440×900)
+- **Iterate**: After the first draw, say `"fix the spacing"` or `"make the buttons bigger"` — the AI reads and modifies existing nodes
+- **Use selection**: Select a frame in Figma and ask `"improve this design"` — the AI reads your selection first
+- **Multi-screen flows**: `"Now draw the signup screen next to the login screen"` — the AI positions frames side by side
+
+### Workflow summary
+
+```
+You: "Connect to figma-ui-mcp"
+AI:  ✅ Connected to Figma
+
+You: "Draw a mobile onboarding screen with 3 steps"
+AI:  [calls figma_docs → figma_write → figma_read screenshot]
+AI:  ✅ Done — here's what I created: [inline screenshot]
+
+You: "The title text is not centered"
+AI:  [calls figma_read get_selection → figma_write modify → screenshot]
+AI:  ✅ Fixed — text is now centered
+
+You: "Now draw the next onboarding screen beside it"
+AI:  [reads page_nodes to find position → draws at x+440]
+AI:  ✅ Done — 2 screens side by side
+```
+
+```
+figma_status     — check connection (always call first)
+figma_docs       — load API reference (call before drawing)
+figma_write      — draw / modify UI on canvas
+figma_read       — extract design data, screenshots, SVG
 ```
 
 ---

@@ -21,6 +21,8 @@ function rgbToHex({ r, g, b }) {
 }
 
 function solidFill(hex, fillOpacity) {
+  // "NONE" or empty means no fill → return empty array
+  if (!hex || hex.toUpperCase() === "NONE") return [];
   var fill = { type: "SOLID", color: hexToRgb(hex) };
   if (fillOpacity !== undefined) fill.opacity = fillOpacity;
   return [fill];
@@ -826,6 +828,13 @@ handlers.modify = async (params) => {
       if (params.content !== undefined) node.characters = params.content;
     }
     if (params.fontSize !== undefined) node.fontSize = params.fontSize;
+    // textAlign, textAlignVertical, lineHeight require font to be loaded
+    if (params.textAlign !== undefined || params.textAlignVertical !== undefined || params.lineHeight !== undefined) {
+      await figma.loadFontAsync(node.fontName);
+      if (params.textAlign !== undefined) node.textAlignHorizontal = params.textAlign.toUpperCase();
+      if (params.textAlignVertical !== undefined) node.textAlignVertical = params.textAlignVertical.toUpperCase();
+      if (params.lineHeight !== undefined) node.lineHeight = { value: params.lineHeight, unit: "PIXELS" };
+    }
   }
 
   // Auto Layout properties (modify existing frame)
@@ -1353,6 +1362,9 @@ handlers.search_nodes = async function(params) {
       }
     }
   }
+
+  // Ensure all pages are loaded for findOne() calls
+  await figma.loadAllPagesAsync();
 
   // Search scope: specific node or entire page
   var root;
@@ -2284,7 +2296,8 @@ handlers.set_selection = async function(params) {
 
 // batch — execute multiple operations in one call
 handlers.batch = async function(params) {
-  var operations = params.operations || [];
+  // Support both figma.batch([...]) (array) and figma.batch({ operations: [...] })
+  var operations = Array.isArray(params) ? params : (params.operations || []);
   if (!operations.length) throw new Error("No operations provided");
   if (operations.length > 50) throw new Error("Max 50 operations per batch");
 

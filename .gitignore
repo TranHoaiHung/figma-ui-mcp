@@ -5,3 +5,4 @@ node_modules/
 .claude/*
 .mcpregistry_*
 docs/*
+CLAUDE.md

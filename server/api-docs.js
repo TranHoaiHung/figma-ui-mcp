@@ -764,6 +764,339 @@ var badge = await figma.create({
 
 ---
 
+## MOBILE BOTTOM ANCHORING RULE (MANDATORY)
+When designing a mobile screen (e.g. 390×844), bottom-anchored elements (tab bar, bottom nav, FAB)
+MUST be positioned relative to the **frame bottom**, not placed with arbitrary y values.
+
+**Formula:**
+\`\`\`
+home_indicator_y = frameHeight - 18                        (e.g. 826)
+nav_bar_y        = frameHeight - safeArea - navHeight      (e.g. 844 - 34 - 64 = 746)
+cta_above_nav_y  = nav_bar_y - gap - ctaHeight             (e.g. 746 - 12 - 56 = 678)
+\`\`\`
+
+**Standard iOS safe area:** 34px from bottom (home indicator region).
+
+| Element | Position from bottom | Example y (844px frame) |
+|---------|---------------------|------------------------|
+| Home indicator | 18px from bottom | 826 |
+| Tab bar / Nav (64px) | 34px safe + height | 746 |
+| CTA / FAB above nav | nav_y - 12px - height | 678 (56px CTA) |
+
+\`\`\`js
+// CORRECT — calculate from frame bottom
+var frameH = 844;
+var safeArea = 34;
+var navH = 64;
+var navY = frameH - safeArea - navH;  // 746
+
+// WRONG — arbitrary y value
+var navY = 676;  // leaves 104px gap at bottom!
+\`\`\`
+
+**NEVER** hardcode y for bottom elements without calculating from frameHeight.
+**ALWAYS** verify with \`screenshot\` after placing bottom elements.
+
+---
+
+## HUG vs STRETCH CONFLICT RULE (MANDATORY)
+When mass-modifying frames to HUG (\`primaryAxisSizingMode: "AUTO"\`), be careful with
+HORIZONTAL auto-layout frames that must fill parent width.
+
+**The conflict:** In a VERTICAL parent, \`layoutAlign: "STRETCH"\` tells child to fill width.
+But if child is HORIZONTAL layout with \`primaryAxisSizingMode: "AUTO"\`, it **hugs its own
+content width** — overriding the parent's STRETCH.
+
+| Parent layout | Child layout | Child fills width? | primaryAxisSizingMode |
+|--------------|-------------|-------------------|----------------------|
+| VERTICAL | HORIZONTAL | YES (search bars, nav rows) | **FIXED** + layoutAlign: STRETCH |
+| VERTICAL | HORIZONTAL | NO (inline tags, pills) | AUTO (hug) |
+| VERTICAL | VERTICAL | YES (sections) | N/A (use counterAxisSizingMode: FIXED) |
+
+\`\`\`js
+// CORRECT — HORIZONTAL child stretches in VERTICAL parent
+await figma.create({
+  type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisSizingMode: "FIXED",  // accept parent width
+  layoutAlign: "STRETCH"           // fill parent cross-axis
+});
+
+// WRONG — child hugs, ignores parent STRETCH
+await figma.create({
+  type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisSizingMode: "AUTO",   // hugs content → only 153px instead of 342px!
+  layoutAlign: "STRETCH"           // has no effect because AUTO wins
+});
+\`\`\`
+
+---
+
+## CENTERED CONTENT MUST USE AUTO-LAYOUT RULE (MANDATORY)
+When a container has children that need centering (icon above text, text centered in card),
+**ALWAYS use auto-layout** instead of manual x/y math.
+
+Manual \`x = (containerW - childW) / 2\` is fragile — it breaks if content width changes,
+and text width depends on font rendering which varies across systems.
+
+\`\`\`js
+// CORRECT — auto-layout centers everything automatically
+var card = await figma.create({
+  type: "FRAME", name: "card", parentId: parent.id,
+  x: 20, y: 100, width: 108, height: 108,
+  fill: "#0D1229", cornerRadius: 18,
+  layoutMode: "VERTICAL",
+  primaryAxisAlignItems: "CENTER",   // vertical center
+  counterAxisAlignItems: "CENTER",   // horizontal center
+  paddingTop: 16, paddingBottom: 14, itemSpacing: 8
+});
+// Children auto-center — no x/y needed
+await figma.create({ type: "FRAME", parentId: card.id, width: 40, height: 40, ... });
+await figma.create({ type: "TEXT", parentId: card.id, content: "Label", ... });
+
+// WRONG — manual x/y math for centering
+var card = await figma.create({
+  type: "FRAME", width: 108, height: 108, ...
+  // NO layoutMode!
+});
+await figma.create({ type: "FRAME", parentId: card.id, x: 34, y: 16, width: 40, ... });
+await figma.create({ type: "TEXT", parentId: card.id, x: 0, y: 66, width: 108, textAlign: "CENTER", ... });
+// ↑ Text x:0 with hugged width → NOT centered! textAlign only aligns WITHIN text bounds.
+\`\`\`
+
+**When to use auto-layout vs manual positioning:**
+| Scenario | Use |
+|----------|-----|
+| Icon + text centered in card | Auto-layout VERTICAL + CENTER/CENTER |
+| Button with centered label | Auto-layout HORIZONTAL + CENTER/CENTER |
+| Grid of equally-sized cards | Manual x/y for card positions, auto-layout INSIDE each card |
+| Overlapping elements (progress bar) | Manual (no-layout wrapper frame) |
+| Absolute badge on card corner | Manual x/y on parent frame |
+
+---
+
+## ILLUSTRATION CENTERING + LAYER ORDER RULE (MANDATORY)
+When creating illustrations with concentric elements (rings, glows, icons), two problems occur:
+
+**Problem 1 — Layer order:** In Figma, LAST child renders ON TOP. If you create background rings
+AFTER the center icon, they cover it.
+
+**Problem 2 — Centering:** Concentric elements must share the same mathematical center point.
+
+\`\`\`js
+// CORRECT — draw order: background → rings → center icon (last = on top)
+var area = await figma.create({ type: "FRAME", width: 280, height: 260, ... });
+var centerX = 140, centerY = 130; // center point of area
+
+// 1. Background rings FIRST (bottom layers)
+await figma.create({ type: "ELLIPSE", parentId: area.id,
+  x: centerX - 110, y: centerY - 110, width: 220, height: 220, ... }); // outer ring
+await figma.create({ type: "ELLIPSE", parentId: area.id,
+  x: centerX - 80, y: centerY - 80, width: 160, height: 160, ... });  // inner ring
+
+// 2. Floating badges (middle layers)
+await figma.create({ ..., x: 20, y: 60, ... }); // positioned around center
+
+// 3. Center icon LAST (top layer — visible above rings)
+var centerIcon = await figma.create({ type: "FRAME", parentId: area.id,
+  x: centerX - 50, y: centerY - 50, width: 100, height: 100, ... });
+
+// WRONG — center icon created FIRST, rings cover it
+var centerIcon = await figma.create({ ... }); // ← drawn first = bottom layer
+await figma.create({ type: "ELLIPSE", ... });  // ← drawn last = covers icon!
+\`\`\`
+
+**Centering formula for concentric elements:**
+\`\`\`
+element_x = centerX - (element_width / 2)
+element_y = centerY - (element_height / 2)
+\`\`\`
+
+**Avoid clipping:** Floating elements near edges must have margin ≥ element_size/2 from container border.
+
+---
+
+## TEXT ALIGN vs LAYOUT ALIGN RULE (MANDATORY)
+\`layoutAlign\` and \`textAlign\` are TWO SEPARATE concerns. Both must be set correctly.
+
+- **\`layoutAlign: "STRETCH"\`** → text BOX fills parent width (controls bounding box size)
+- **\`textAlign: "CENTER"\`** → text CONTENT centers within its bounding box (controls alignment)
+
+**Setting one does NOT set the other.** A stretched text box with LEFT align = text hugs left edge.
+
+\`\`\`js
+// CORRECT — text box fills width AND content is centered
+await figma.create({
+  type: "TEXT", parentId: card.id,
+  content: "Centered quote text",
+  fontSize: 18, fill: "#FFFFFF",
+  textAlign: "CENTER",        // ← content alignment
+  layoutAlign: "STRETCH",     // ← box fills parent width
+  lineHeight: 26
+});
+
+// WRONG — text box fills width but content is LEFT aligned (default)
+await figma.create({
+  type: "TEXT", parentId: card.id,
+  content: "Should be centered but isn't",
+  layoutAlign: "STRETCH"      // ← box stretches, but text stays LEFT!
+});
+\`\`\`
+
+**When to use each combination:**
+| Visual result | layoutAlign | textAlign |
+|--------------|-------------|-----------|
+| Left-aligned paragraph (default) | STRETCH | LEFT (default) |
+| Centered heading/quote | STRETCH | CENTER |
+| Right-aligned label | STRETCH | RIGHT |
+| Short label, no wrapping needed | omit | any |
+
+**Also: auto-layout containers with \`primaryAxisAlignItems: "CENTER"\` center children as blocks,
+but do NOT center text content inside each text node.** You must set \`textAlign: "CENTER"\` separately.
+
+---
+
+## TEXT WRAPPING IN AUTO-LAYOUT RULE (MANDATORY)
+When placing text inside an auto-layout frame, the text will **overflow and not wrap** unless
+its width is constrained by the parent.
+
+**FIX: Always use \`layoutAlign: "STRETCH"\` on text nodes that should wrap within their parent.**
+
+\`\`\`js
+// CORRECT — text wraps within parent width
+var textFrame = await figma.create({
+  type: "FRAME", parentId: card.id,
+  layoutMode: "VERTICAL", itemSpacing: 4,
+  primaryAxisSizingMode: "AUTO", counterAxisSizingMode: "AUTO",
+  layoutGrow: 1   // fill available width in parent
+});
+await figma.create({
+  type: "TEXT", parentId: textFrame.id,
+  content: "Long text that needs to wrap...",
+  fontSize: 13, fill: "#E0E6F0", lineHeight: 18,
+  layoutAlign: "STRETCH"  // ← CRITICAL: constrains width to parent, enables wrapping
+});
+
+// WRONG — text overflows parent
+await figma.create({
+  type: "TEXT", parentId: textFrame.id,
+  content: "Long text...", fontSize: 13,
+  width: 260  // ← explicit width may not match parent, or gets ignored by textAutoResize
+});
+// ↑ Text renders at its natural width (367px), overflows parent (278px)
+\`\`\`
+
+**When to use \`layoutAlign: "STRETCH"\` on text:**
+| Scenario | layoutAlign | Why |
+|----------|------------|-----|
+| Multi-line description in card | STRETCH | Must wrap within card width |
+| Single-line label (known short) | omit | No wrapping needed |
+| Text inside \`layoutGrow: 1\` parent | STRETCH | Parent width is dynamic |
+| Paragraph/quote text | STRETCH | Always needs wrapping |
+
+**Rule: If text content could ever exceed its parent width, use \`layoutAlign: "STRETCH"\`.**
+
+---
+
+## HEADER TITLE CENTERING RULE (MANDATORY)
+When creating a header bar with pattern **[Left action] [Title] [Right action]** using \`SPACE_BETWEEN\`,
+the title text will NOT be visually centered if left/right elements have different widths.
+
+**FIX: Title must use \`layoutGrow: 1\` + \`textAlign: "CENTER"\`**
+
+\`\`\`js
+// CORRECT — title grows to fill space, text centers within it
+var header = await figma.create({
+  type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER", ...
+});
+// Left action (32px)
+await figma.create({ type: "FRAME", parentId: header.id, width: 32, height: 32, ... });
+// Title — MUST grow + center
+await figma.create({ type: "TEXT", parentId: header.id, content: "Title",
+  fontSize: 17, fontWeight: "Bold", fill: "#FFFFFF",
+  textAlign: "CENTER", layoutGrow: 1   // ← CRITICAL: both are needed
+});
+// Right action (77px)
+await figma.create({ type: "FRAME", parentId: header.id, ... });
+
+// WRONG — title has fixed width, off-center because side elements differ
+await figma.create({ type: "TEXT", parentId: header.id, content: "Title", ... });
+// ↑ Without layoutGrow, SPACE_BETWEEN places it between items but NOT screen-centered
+\`\`\`
+
+**This applies to:** modal headers, sheet headers, nav bars, any [action] [title] [action] pattern.
+
+---
+
+## COMPONENT REUSE RULE (MANDATORY — CRITICAL)
+Repeated UI elements MUST be created as **Figma Components** and reused via **instances (clone)**.
+Never recreate the same element from scratch across multiple screens.
+
+### Workflow — Component-First Design
+**Before drawing ANY screen:**
+1. Check if a \`⚙️ Components\` frame exists on the current page via \`get_page_nodes\`
+2. If not → create it as the FIRST step, positioned away from screens (e.g. x: -600)
+3. Create master components inside it using \`figma.createComponent()\`
+4. On each screen, use \`figma.clone({ id: componentId })\` to place instances
+
+### What MUST be a component
+| Element | Component name | Why |
+|---------|---------------|-----|
+| Bottom nav bar | \`nav/bottom-bar\` | Identical across every screen |
+| App header (logo + avatar) | \`nav/app-header\` | Same on every screen |
+| Status bar | \`nav/status-bar\` | Same on every screen |
+| CTA button variants | \`btn/primary\`, \`btn/ghost\` | Reused with different labels |
+| Idea card | \`card/idea\` | Repeated in lists |
+| Category badge | \`badge/category\` | Repeated in cards |
+| Icon containers | \`icon/circle-bg\` | Repeated pattern |
+| Home indicator | \`nav/home-indicator\` | Same on every screen |
+
+### Creating components (two-step: create frame → convert to component)
+\`\`\`js
+// 1. Create Components frame (once per project)
+var compFrame = await figma.create({
+  type: "FRAME", name: "⚙️ Components", x: -600, y: 0,
+  width: 500, height: 800, fill: "#1A1A2E",
+  layoutMode: "VERTICAL", itemSpacing: 40,
+  paddingTop: 40, paddingLeft: 24, paddingRight: 24, paddingBottom: 40,
+  primaryAxisSizingMode: "AUTO", counterAxisSizingMode: "FIXED"
+});
+
+// 2. Build the element as a normal FRAME first
+var navFrame = await figma.create({
+  type: "FRAME", name: "nav/bottom-bar",
+  parentId: compFrame.id,
+  width: 350, height: 64,
+  fill: "#0A0F24", cornerRadius: 22,
+  layoutMode: "HORIZONTAL", primaryAxisAlignItems: "SPACE_BETWEEN",
+  counterAxisAlignItems: "CENTER",
+  paddingLeft: 28, paddingRight: 28
+});
+// ... add children (icons, text, etc.) to navFrame ...
+
+// 3. Convert FRAME → COMPONENT (returns component with .id and .key)
+var navComp = await figma.createComponent({ nodeId: navFrame.id, name: "nav/bottom-bar" });
+// navComp.id is now the master component ID
+
+// 4. Use instances on screens via clone
+var navInstance = await figma.clone({
+  id: navComp.id,
+  parentId: screenFrame.id,
+  x: 20, y: 746
+});
+// Cloning a component creates an INSTANCE — changes to master auto-propagate
+\`\`\`
+
+### Rules
+- **NEVER** duplicate full elements (nav, header) by recreating them with \`figma.create()\` on each screen
+- **ALWAYS** check \`get_page_nodes\` for existing \`⚙️ Components\` frame before starting
+- **ALWAYS** check existing components with \`get_local_components\` before creating new ones
+- When a component needs different content (e.g. button label), clone first then \`figma.modify()\` the text child
+- Component frame should be positioned **outside visible screens** (negative x or far right)
+- Name components with **slash notation** for organization: \`nav/bottom-bar\`, \`btn/primary\`, \`card/idea\`
+
+---
+
 ## Images & Icons (Server-side helpers — NO bash/curl needed)
 
 ### figma.loadImage(url, opts) — Download image and place on canvas

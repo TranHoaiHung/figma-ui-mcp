@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.9.3] — 2026-03-28
+
+### Fixed — Plugin bugs
+- **`fill: "NONE"` crash**: `solidFill()` now returns `[]` when hex is `"NONE"` or invalid — no more NaN color validation errors
+- **`search_nodes` crash**: added `figma.loadAllPagesAsync()` before `findOne()` calls — fixes `documentAccess: dynamic-page` error
+- **`batch` empty operations**: handler now accepts both `figma.batch([...])` array and `{ operations: [...] }` format
+- **`modify` missing text properties**: added `textAlign`, `textAlignVertical`, `lineHeight` support with auto font loading
+
+### Added — Design rules in API docs (`figma_docs`)
+9 new mandatory rules for consistent, bug-free designs:
+- **Mobile Bottom Anchoring** — calculate y from frameHeight, not hardcode
+- **HUG vs STRETCH Conflict** — HORIZONTAL frames needing stretch must keep `primaryAxisSizingMode: "FIXED"`
+- **Centered Content Must Use Auto-Layout** — no manual x/y math for centering
+- **Illustration Centering + Layer Order** — draw background first, center icon last (top layer)
+- **Text Align vs Layout Align** — `layoutAlign: "STRETCH"` ≠ `textAlign: "CENTER"`, both needed
+- **Text Wrapping in Auto-Layout** — use `layoutAlign: "STRETCH"` on text that should wrap
+- **Header Title Centering** — `layoutGrow: 1` + `textAlign: "CENTER"` for [action][title][action] pattern
+- **Component Reuse** — create master components, use `clone` for instances across screens
+- **MANDATORY workflow**: components frame → create frame → convert to component → clone instances
+
+### Improved — README
+- Added step-by-step usage guide: connect → prompt → iterate
+- Added 6 prompt examples with expected results
+- Added tips for better AI design results
+- Added workflow conversation example
+
+---
+
 ## [1.9.2] — 2026-03-23
 
 ### Fixed — Text wrapping in mobile UI
