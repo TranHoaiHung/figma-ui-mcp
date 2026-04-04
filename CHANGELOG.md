@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.9.4] — 2026-04-04
+
+### Fixed — Multi-session stability (`server/index.js`, `server/bridge-server.js`)
+- **Proxy-first startup**: sessions now check for an existing healthy bridge on port 38451 *before* starting `BridgeServer` — if one is found, the session attaches as HTTP proxy immediately and never creates a redundant local bridge
+- **Redundant bridge cleanup**: if `BridgeServer.start()` falls back to a non-primary port, it is stopped and the session switches to HTTP proxy — prevents sibling sessions from accumulating bridges on 38452+
+- **Safe stale-bridge detection**: `killStaleBridges` now only targets the primary port, and only kills processes that return invalid JSON (zombie/foreign). Bridges that return a valid health payload — even with `pluginConnected: false` — are live sibling sessions and are never killed. Fixes `Transport closed` errors in multi-session environments (Codex App, etc.)
+
+### Fixed — Instance node missing source component reference (`plugin/code.js`)
+- `get_selection`, `get_design`, and `get_node_detail` now all expose `componentId` and `componentName` for `INSTANCE` nodes — previously `get_node_detail` was missing these fields
+
+### Fixed — Node data missing applied style references (`plugin/code.js`)
+- All read operations now expose style IDs when a node has applied local styles: `textStyleId`, `fillStyleId`, `strokeStyleId`, `effectStyleId`, `gridStyleId`
+- Cross-reference these with `get_styles()` results to map nodes to design system styles
+
+### Fixed — Component instance missing property values (`plugin/code.js`)
+- `INSTANCE` nodes now expose `componentPropertyValues`: a map of property key → `{type, value}` for the explicit property assignments on that instance
+- `COMPONENT` and `COMPONENT_SET` nodes now expose `componentPropertyDefinitions`: a map of property key → `{type, defaultValue}`
+
+---
+
 ## [1.9.3] — 2026-03-28
 
 ### Fixed — Plugin bugs

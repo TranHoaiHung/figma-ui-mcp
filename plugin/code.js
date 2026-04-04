@@ -56,13 +56,19 @@ const FONT_STYLE_MAP = {
 };
 
 function findNodeById(id) {
-  return figma.currentPage.findOne(n => n.id === id)
-      || figma.root.findOne(n => n.id === id);
+  // Check page-level nodes first to avoid root.findOne() which requires loadAllPagesAsync
+  if (figma.currentPage.id === id) return figma.currentPage;
+  if (figma.root.id === id) return figma.root;
+  var node = figma.currentPage.findOne(n => n.id === id);
+  if (node) return node;
+  // Use getNodeById as a safe cross-page fallback (no loadAllPagesAsync needed for current page)
+  try { var n2 = figma.getNodeById(id); if (n2) return n2; } catch(e) {}
+  return null;
 }
 
 function findNodeByName(name) {
-  return figma.currentPage.findOne(n => n.name === name)
-      || figma.root.findOne(n => n.name === name);
+  if (figma.currentPage.name === name) return figma.currentPage;
+  return figma.currentPage.findOne(n => n.name === name);
 }
 
 function resolveNode(params) {
@@ -417,16 +423,54 @@ function extractDesignTree(node, depth, maxDepth, detailLevel) {
     }
   } catch(e) {}
 
+  // ── Applied style references (Issue #3: expose textStyleId / fillStyleId) ──
+  try { if (node.textStyleId && typeof node.textStyleId === "string") info.textStyleId = node.textStyleId; } catch(e) {}
+  try { if (node.fillStyleId && typeof node.fillStyleId === "string") info.fillStyleId = node.fillStyleId; } catch(e) {}
+  try { if (node.strokeStyleId && typeof node.strokeStyleId === "string") info.strokeStyleId = node.strokeStyleId; } catch(e) {}
+  try { if (node.effectStyleId && typeof node.effectStyleId === "string") info.effectStyleId = node.effectStyleId; } catch(e) {}
+  try { if (node.gridStyleId && typeof node.gridStyleId === "string") info.gridStyleId = node.gridStyleId; } catch(e) {}
+
   // ── Component-specific info ──
   if (node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
     try { info.description = node.description; } catch(e) {}
+    // Expose component property definitions for COMPONENT/COMPONENT_SET
+    try {
+      if (node.componentPropertyDefinitions) {
+        var defs = node.componentPropertyDefinitions;
+        var defKeys = Object.keys(defs);
+        if (defKeys.length > 0) {
+          info.componentPropertyDefinitions = {};
+          for (var di = 0; di < defKeys.length; di++) {
+            var dk = defKeys[di];
+            var d = defs[dk];
+            info.componentPropertyDefinitions[dk] = { type: d.type, defaultValue: d.defaultValue };
+          }
+        }
+      }
+    } catch(e) {}
   }
   if (node.type === "INSTANCE") {
+    // Issue #2: expose source component reference
     try {
       var mainComp = node.mainComponent;
       if (mainComp) { info.componentName = mainComp.name; info.componentId = mainComp.id; }
     } catch(e) {}
     try { if (node.overrides && node.overrides.length) info.overrideCount = node.overrides.length; } catch(e) {}
+    // Issue #4: expose explicit component property values on this instance
+    try {
+      if (node.componentProperties) {
+        var props = node.componentProperties;
+        var propKeys = Object.keys(props);
+        if (propKeys.length > 0) {
+          info.componentPropertyValues = {};
+          for (var pi = 0; pi < propKeys.length; pi++) {
+            var pk = propKeys[pi];
+            var pv = props[pk];
+            info.componentPropertyValues[pk] = { type: pv.type, value: pv.value };
+          }
+        }
+      }
+    } catch(e) {}
   }
 
   // ── VECTOR / BOOLEAN_OPERATION ──
@@ -1690,6 +1734,34 @@ handlers.get_node_detail = async function(params) {
       if (Object.keys(bv).length > 0) detail.boundVariables = bv;
     }
   } catch(e) {}
+
+  // Applied style references (Issue #3: textStyleId / fillStyleId)
+  try { if (node.textStyleId && typeof node.textStyleId === "string") detail.textStyleId = node.textStyleId; } catch(e) {}
+  try { if (node.fillStyleId && typeof node.fillStyleId === "string") detail.fillStyleId = node.fillStyleId; } catch(e) {}
+  try { if (node.strokeStyleId && typeof node.strokeStyleId === "string") detail.strokeStyleId = node.strokeStyleId; } catch(e) {}
+  try { if (node.effectStyleId && typeof node.effectStyleId === "string") detail.effectStyleId = node.effectStyleId; } catch(e) {}
+
+  // Instance: source component reference (Issue #2) + property values (Issue #4)
+  if (node.type === "INSTANCE") {
+    try {
+      var instComp = node.mainComponent;
+      if (instComp) { detail.componentId = instComp.id; detail.componentName = instComp.name; }
+    } catch(e) {}
+    try {
+      if (node.componentProperties) {
+        var iProps = node.componentProperties;
+        var iPropKeys = Object.keys(iProps);
+        if (iPropKeys.length > 0) {
+          detail.componentPropertyValues = {};
+          for (var ipi = 0; ipi < iPropKeys.length; ipi++) {
+            var ipk = iPropKeys[ipi];
+            var ipv = iProps[ipk];
+            detail.componentPropertyValues[ipk] = { type: ipv.type, value: ipv.value };
+          }
+        }
+      }
+    } catch(e) {}
+  }
 
   // Children count + text content summary
   if ("children" in node) {

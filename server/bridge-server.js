@@ -96,7 +96,7 @@ export class BridgeServer {
       res.writeHead(200);
       res.end(JSON.stringify({
         server: "figma-ui-mcp",
-        version: "1.8.3",
+        version: "1.9.4",
         port: this.#actualPort,
         pluginConnected: this.isPluginConnected(),
         lastPollAgoMs: this.#lastPollAt ? Date.now() - this.#lastPollAt : null,
@@ -171,44 +171,47 @@ export class BridgeServer {
   get port() { return this.#actualPort; }
   #actualPort = CONFIG.PORT;
 
-  // Kill stale bridge processes on all ports in range before starting
+  // Reclaim the primary port if it is held by a dead/zombie process (no HTTP response).
+  // IMPORTANT: Never kill a port that responds with a valid figma-ui-mcp health payload —
+  // that process is a live sibling session and killing it would cause "Transport closed".
   async #killStaleBridges() {
     var killed = 0;
-    for (var port = CONFIG.PORT; port < CONFIG.PORT + CONFIG.PORT_RANGE; port++) {
-      try {
-        // Check if port is a figma-ui-mcp bridge by hitting /health
-        var isOurs = await new Promise((resolve) => {
-          var req = http.get({ hostname: "127.0.0.1", port, path: "/health", timeout: 500 }, (res) => {
-            var data = "";
-            res.on("data", (c) => { data += c; });
-            res.on("end", () => {
-              try {
-                var j = JSON.parse(data);
-                // If it has pluginConnected field and plugin is NOT connected, it's stale
-                resolve(j.pluginConnected !== undefined && !j.pluginConnected);
-              } catch { resolve(false); }
-            });
-          });
-          req.on("error", () => resolve(false));
-          req.on("timeout", () => { req.destroy(); resolve(false); });
-        });
-        if (isOurs) {
-          // Try to gracefully close by connecting and letting it fail
-          // Find and kill the process holding this port
-          try {
-            var { execSync } = await import("node:child_process");
-            var pid = execSync("lsof -ti tcp:" + port + " 2>/dev/null", { encoding: "utf8" }).trim();
-            if (pid) {
-              execSync("kill " + pid + " 2>/dev/null");
-              killed++;
-              process.stderr.write("[figma-ui-mcp] Killed stale bridge on port " + port + " (PID " + pid + ")\n");
-              // Wait briefly for port to free up
-              await new Promise((r) => setTimeout(r, 200));
+    // Only attempt to reclaim the primary port, not fallback ports.
+    // Fallback-port bridges belong to sibling MCP sessions — leave them alone.
+    var port = CONFIG.PORT;
+    try {
+      var isZombie = await new Promise((resolve) => {
+        var req = http.get({ hostname: "127.0.0.1", port, path: "/health", timeout: 800 }, (res) => {
+          var data = "";
+          res.on("data", (c) => { data += c; });
+          res.on("end", () => {
+            try {
+              var j = JSON.parse(data);
+              // Port responds with a valid health payload → live bridge, do NOT kill.
+              resolve(j.pluginConnected === undefined);
+            } catch {
+              // Invalid JSON on the primary port → zombie/foreign process, safe to kill.
+              resolve(true);
             }
-          } catch { /* ignore kill errors */ }
-        }
-      } catch { /* ignore */ }
-    }
+          });
+        });
+        // Connection refused or timeout → port is free or held by a dead process.
+        req.on("error", () => resolve(false));
+        req.on("timeout", () => { req.destroy(); resolve(false); });
+      });
+      if (isZombie) {
+        try {
+          var { execSync } = await import("node:child_process");
+          var pid = execSync("lsof -ti tcp:" + port + " 2>/dev/null", { encoding: "utf8" }).trim();
+          if (pid) {
+            execSync("kill " + pid + " 2>/dev/null");
+            killed++;
+            process.stderr.write("[figma-ui-mcp] Killed zombie process on port " + port + " (PID " + pid + ")\n");
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        } catch { /* ignore kill errors */ }
+      }
+    } catch { /* ignore */ }
     return killed;
   }
 

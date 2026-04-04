@@ -66,30 +66,43 @@ const httpProxy = {
   },
 };
 
-// Try starting own bridge; if port taken, use HTTP proxy
-try {
-  bridge = await new BridgeServer().start();
-  process.stderr.write("[figma-ui-mcp] Bridge started on port " + bridge.port + "\n");
-} catch (e) {
+// Check for an existing healthy bridge BEFORE starting our own.
+// If one already exists and has the plugin connected, use HTTP proxy immediately.
+// This prevents fallback sessions from starting unnecessary local bridges that
+// #killStaleBridges() in later sessions might misclassify and kill.
+const existingHealth = await httpProxy.checkHealth();
+if (existingHealth.pluginConnected) {
   useHttpProxy = true;
   bridge = httpProxy;
-  process.stderr.write("[figma-ui-mcp] Bridge failed, connecting to existing bridge on port " + CONFIG.PORT + "\n");
-}
-
-// Also check: if bridge started but the "error" event fired (EADDRINUSE), switch to proxy
-// The BridgeServer.start() doesn't throw on EADDRINUSE, it logs to stderr. So we check health.
-if (!useHttpProxy) {
-  const health = await httpProxy.checkHealth();
-  if (health.pluginConnected && !bridge.isPluginConnected()) {
-    // Another bridge is running and connected to plugin, but ours isn't
+  process.stderr.write("[figma-ui-mcp] Existing bridge detected with plugin connected, using HTTP proxy\n");
+} else {
+  // No healthy primary bridge — try to start our own
+  try {
+    bridge = await new BridgeServer().start();
+    process.stderr.write("[figma-ui-mcp] Bridge started on port " + bridge.port + "\n");
+  } catch (e) {
     useHttpProxy = true;
     bridge = httpProxy;
-    process.stderr.write("[figma-ui-mcp] Existing bridge detected with plugin connected, using HTTP proxy\n");
+    process.stderr.write("[figma-ui-mcp] Bridge failed, connecting to existing bridge on port " + CONFIG.PORT + "\n");
+  }
+
+  // BridgeServer.start() never throws on EADDRINUSE (retries next port).
+  // If it ended up on a fallback port but primary port has a live bridge, switch to proxy.
+  if (!useHttpProxy && bridge.port !== CONFIG.PORT) {
+    const primaryHealth = await httpProxy.checkHealth();
+    if (primaryHealth.pluginConnected !== undefined) {
+      // A figma-ui-mcp bridge already owns the primary port — we are a redundant session.
+      // Stop our local bridge and use HTTP proxy to avoid being killed as "stale".
+      bridge.stop();
+      useHttpProxy = true;
+      bridge = httpProxy;
+      process.stderr.write("[figma-ui-mcp] Primary bridge exists on port " + CONFIG.PORT + ", switching to HTTP proxy\n");
+    }
   }
 }
 
 const server = new Server(
-  { name: "figma-ui-mcp", version: "1.9.2" },
+  { name: "figma-ui-mcp", version: "1.9.4" },
   { capabilities: { tools: {} } }
 );
 
