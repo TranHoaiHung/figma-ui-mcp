@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.9.5] — 2026-04-05
+
+### Fixed — `figma.getNodeById` removed from Figma Plugin API (`plugin/code.js`)
+- Replaced deprecated sync `figma.getNodeById()` (removed by Figma) with `findNodeByIdAsync()` using `figma.getNodeByIdAsync()` as cross-page fallback
+- Added `findNodeByIdAsync` as a new async helper alongside the existing sync `findNodeById` (current-page only)
+- Updated all 21+ call sites across every handler: `modify`, `delete`, `create`, `clone`, `group`, `set_selection`, `get_selection`, `get_design`, `scan_design`, `search_nodes`, `export_svg`, `export_image`, `get_node_detail`, `set_viewport`, `apply_variable`, `createComponent`, `append`, `instantiate`, `query`, `flatten`, `resize`, `ungroup`
+- `resolveNode` is now `async` and uses `findNodeByIdAsync` internally
+
+### Fixed — `[dispatch:delete] not a function` (`plugin/code.js`)
+- `handlers.delete` used dot notation on a JS reserved keyword — reassigned via `handlers["delete"]` (bracket notation) to prevent engine parse ambiguity in Figma plugin sandbox
+
+### Fixed — `[dispatch:search_nodes] invalid 'in' operand` (`plugin/code.js`)
+- Figma API can return `null`/`undefined` slots in `node.children` arrays — all tree-walking functions now guard with `!node || typeof node !== "object"` before any `in` operator usage
+- Added `Array.isArray(node.children)` checks alongside all `"children" in node` expressions
+- Functions fixed: `walkAndMatch`, `walkCount`, `countAssets`, `collectTextContent` (inner walk), `collectIconNames` (inner walk), `extractDesignTree`
+
+---
+
 ## [1.9.4] — 2026-04-04
 
 ### Fixed — Multi-session stability (`server/index.js`, `server/bridge-server.js`)

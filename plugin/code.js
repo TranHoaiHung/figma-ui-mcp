@@ -61,8 +61,17 @@ function findNodeById(id) {
   if (figma.root.id === id) return figma.root;
   var node = figma.currentPage.findOne(n => n.id === id);
   if (node) return node;
-  // Use getNodeById as a safe cross-page fallback (no loadAllPagesAsync needed for current page)
-  try { var n2 = figma.getNodeById(id); if (n2) return n2; } catch(e) {}
+  // figma.getNodeById was removed — no sync cross-page fallback available
+  return null;
+}
+
+async function findNodeByIdAsync(id) {
+  if (figma.currentPage.id === id) return figma.currentPage;
+  if (figma.root.id === id) return figma.root;
+  var node = figma.currentPage.findOne(n => n.id === id);
+  if (node) return node;
+  // Use async API as cross-page fallback (Figma removed the sync getNodeById)
+  try { var n2 = await figma.getNodeByIdAsync(id); if (n2) return n2; } catch(e) {}
   return null;
 }
 
@@ -71,8 +80,8 @@ function findNodeByName(name) {
   return figma.currentPage.findOne(n => n.name === name);
 }
 
-function resolveNode(params) {
-  if (params.id)   return findNodeById(params.id);
+async function resolveNode(params) {
+  if (params.id)   return await findNodeByIdAsync(params.id);
   if (params.name) return findNodeByName(params.name);
   return null;
 }
@@ -136,12 +145,13 @@ function collectTextContent(node, maxItems) {
   if (!maxItems) maxItems = 10;
   var texts = [];
   function walk(n) {
+    if (!n || typeof n !== "object") return;
     if (texts.length >= maxItems) return;
     if (n.type === "TEXT") {
       var t = n.characters;
       if (t && t.trim()) texts.push(t.trim().substring(0, 60));
     }
-    if ("children" in n) {
+    if ("children" in n && Array.isArray(n.children)) {
       for (var i = 0; i < n.children.length; i++) walk(n.children[i]);
     }
   }
@@ -154,9 +164,10 @@ function collectIconNames(node, maxItems) {
   if (!maxItems) maxItems = 10;
   var icons = [];
   function walk(n) {
+    if (!n || typeof n !== "object") return;
     if (icons.length >= maxItems) return;
     if (isLikelyIcon(n)) icons.push(n.name);
-    if ("children" in n) {
+    if ("children" in n && Array.isArray(n.children)) {
       for (var i = 0; i < n.children.length; i++) walk(n.children[i]);
     }
   }
@@ -169,6 +180,7 @@ function collectIconNames(node, maxItems) {
 // compact: + fill, stroke, cornerRadius, layout, text content — ~30% token cost
 // full:    + effects, segments, gradient details, boundVariables, inline SVG — 100% token cost
 function extractDesignTree(node, depth, maxDepth, detailLevel) {
+  if (!node || typeof node !== "object") return null;
   if (depth === undefined) depth = 0;
   if (maxDepth === undefined) maxDepth = 15;
   if (!detailLevel) detailLevel = "full";
@@ -491,7 +503,7 @@ function extractDesignTree(node, depth, maxDepth, detailLevel) {
   }
 
   // ── Children ──
-  if ("children" in node && node.children.length) {
+  if (node && typeof node === "object" && "children" in node && Array.isArray(node.children) && node.children.length) {
     if (depth >= maxDepth) {
       // At depth limit: summarize instead of truncating to empty []
       info.childCount = node.children.length;
@@ -565,7 +577,7 @@ handlers.createPage = async ({ name }) => {
 
 handlers.query = async ({ type, name, id }) => {
   if (id) {
-    const n = findNodeById(id);
+    const n = await findNodeByIdAsync(id);
     return n ? [nodeToInfo(n)] : [];
   }
   const results = figma.currentPage.findAll(n => {
@@ -588,7 +600,7 @@ handlers.create = async (params) => {
 
   let parent = figma.currentPage;
   if (parentId) {
-    const p = findNodeById(parentId) || findNodeByName(parentId);
+    const p = (await findNodeByIdAsync(parentId)) || findNodeByName(parentId);
     if (p) parent = p;
   }
 
@@ -838,7 +850,7 @@ handlers.create = async (params) => {
 };
 
 handlers.modify = async (params) => {
-  const node = resolveNode(params);
+  const node = await resolveNode(params);
   if (!node) throw new Error(`Node not found: ${JSON.stringify(params)}`);
 
   if (params.fill     !== undefined && "fills"   in node) node.fills   = solidFill(params.fill, params.fillOpacity);
@@ -911,8 +923,9 @@ handlers.modify = async (params) => {
   return nodeToInfo(node);
 };
 
-handlers.delete = async (params) => {
-  const node = resolveNode(params);
+// "delete" is a JS reserved keyword — assign via bracket notation to avoid engine quirks
+handlers["delete"] = async (params) => {
+  const node = await resolveNode(params);
   if (!node) throw new Error(`Node not found: ${JSON.stringify(params)}`);
   const info = nodeToInfo(node);
   node.remove();
@@ -924,8 +937,8 @@ handlers.append = async function(params) {
   var parentName = params.parentName || null;
   var childId = params.childId || null;
   var childName = params.childName || null;
-  var parent = parentId ? findNodeById(parentId) : (parentName ? findNodeByName(parentName) : null);
-  var child = childId ? findNodeById(childId) : (childName ? findNodeByName(childName) : null);
+  var parent = parentId ? (await findNodeByIdAsync(parentId)) : (parentName ? findNodeByName(parentName) : null);
+  var child = childId ? (await findNodeByIdAsync(childId)) : (childName ? findNodeByName(childName) : null);
   if (!parent || !child) throw new Error("Parent or child not found");
   parent.appendChild(child);
   return { parentId: parent.id, childId: child.id };
@@ -953,7 +966,7 @@ handlers.instantiate = async function(params) {
   if (!comp) throw new Error("Component " + (componentId || componentName) + " not found");
   var inst = comp.createInstance();
   inst.x = x; inst.y = y;
-  var parent = parentId ? findNodeById(parentId) : (parentName ? findNodeByName(parentName) : null);
+  var parent = parentId ? (await findNodeByIdAsync(parentId)) : (parentName ? findNodeByName(parentName) : null);
   if (parent) parent.appendChild(inst);
   return nodeToInfo(inst);
 };
@@ -1094,7 +1107,7 @@ handlers.get_selection = async function(params) {
   var nodeName = params ? params.name : null;
   var nodes;
   if (id) {
-    nodes = [findNodeById(id)].filter(Boolean);
+    nodes = [await findNodeByIdAsync(id)].filter(Boolean);
   } else if (nodeName) {
     nodes = [findNodeByName(nodeName)].filter(Boolean);
   } else {
@@ -1120,7 +1133,7 @@ handlers.get_design = async function(params) {
   var detailLevel = p.detail || "full"; // "minimal" | "compact" | "full"
 
   var root;
-  if (id)   root = findNodeById(id);
+  if (id)   root = await findNodeByIdAsync(id);
   else if (name) root = findNodeByName(name);
   else      root = figma.currentPage;
 
@@ -1139,7 +1152,7 @@ handlers.get_design = async function(params) {
       if (!node) return;
       if (node.isIcon && node.id && iconCount < 20) {
         try {
-          var figNode = findNodeById(node.id);
+          var figNode = await findNodeByIdAsync(node.id);
           if (figNode) {
             var svg = await exportNodeSvg(figNode);
             if (svg && svg.length < 5000) {
@@ -1174,7 +1187,7 @@ handlers.scan_design = async function(params) {
   var p = params || {};
   var id = p.id, name = p.name;
   var root;
-  if (id) root = findNodeById(id);
+  if (id) root = await findNodeByIdAsync(id);
   else if (name) root = findNodeByName(name);
   else root = figma.currentPage;
   if (!root) throw new Error("Node not found");
@@ -1196,6 +1209,7 @@ handlers.scan_design = async function(params) {
   };
 
   function walkCount(node) {
+    if (!node || typeof node !== "object") return;
     summary.totalNodes++;
 
     // Collect text
@@ -1261,7 +1275,7 @@ handlers.scan_design = async function(params) {
     }
 
     // Recurse
-    if ("children" in node) {
+    if ("children" in node && Array.isArray(node.children)) {
       for (var i = 0; i < node.children.length; i++) walkCount(node.children[i]);
     }
   }
@@ -1283,9 +1297,10 @@ handlers.scan_design = async function(params) {
       section.imageCount = 0;
       // Quick count icons/images in section
       function countAssets(n) {
+        if (!n || typeof n !== "object") return;
         if (isLikelyIcon(n)) section.iconCount++;
         if (hasImageFill(n)) section.imageCount++;
-        if ("children" in n) { for (var i = 0; i < n.children.length; i++) countAssets(n.children[i]); }
+        if ("children" in n && Array.isArray(n.children)) { for (var i = 0; i < n.children.length; i++) countAssets(n.children[i]); }
       }
       countAssets(child);
       summary.sections.push(section);
@@ -1371,6 +1386,8 @@ handlers.search_nodes = async function(params) {
   }
 
   function walkAndMatch(node) {
+    // Guard: 'in' operator requires a non-null object — null/undefined/primitives crash here
+    if (!node || typeof node !== "object") return;
     if (results.length >= maxResults) return;
     try {
       if (matchNode(node)) {
@@ -1399,7 +1416,7 @@ handlers.search_nodes = async function(params) {
         results.push(info);
       }
     } catch(e) { /* skip inaccessible nodes */ }
-    if ("children" in node) {
+    if (node && typeof node === "object" && "children" in node && Array.isArray(node.children)) {
       for (var i = 0; i < node.children.length; i++) {
         if (results.length >= maxResults) return;
         walkAndMatch(node.children[i]);
@@ -1412,7 +1429,7 @@ handlers.search_nodes = async function(params) {
 
   // Search scope: specific node or entire page
   var root;
-  if (p.id) root = findNodeById(p.id);
+  if (p.id) root = await findNodeByIdAsync(p.id);
   else if (p.name) root = findNodeByName(p.name);
   else root = figma.currentPage;
 
@@ -1547,7 +1564,7 @@ handlers.export_svg = async function(params) {
   var id = params ? params.id : null;
   var nodeName = params ? params.name : null;
   var node = null;
-  if (id) node = findNodeById(id);
+  if (id) node = await findNodeByIdAsync(id);
   if (!node && nodeName) {
     node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
   }
@@ -1567,7 +1584,7 @@ handlers.export_image = async function(params) {
   if (format !== "PNG" && format !== "JPG") format = "PNG";
 
   var node = null;
-  if (id) node = findNodeById(id);
+  if (id) node = await findNodeByIdAsync(id);
   if (!node && nodeName) {
     node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
   }
@@ -1609,7 +1626,7 @@ handlers.get_node_detail = async function(params) {
   var id = params ? params.id : null;
   var nodeName = params ? params.name : null;
   var node = null;
-  if (id) node = findNodeById(id);
+  if (id) node = await findNodeByIdAsync(id);
   if (!node && nodeName) node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
   if (!node) throw new Error("Node not found");
 
@@ -1764,7 +1781,7 @@ handlers.get_node_detail = async function(params) {
   }
 
   // Children count + text content summary
-  if ("children" in node) {
+  if (node && typeof node === "object" && "children" in node && Array.isArray(node.children)) {
     detail.childCount = node.children.length;
     var texts = collectTextContent(node, 20);
     if (texts.length) detail.textContent = texts;
@@ -1870,7 +1887,7 @@ handlers.get_viewport = async function() {
 handlers.set_viewport = async function(params) {
   if (params.nodeId || params.nodeName) {
     // Zoom to fit a specific node
-    var node = params.nodeId ? findNodeById(params.nodeId) : findNodeByName(params.nodeName);
+    var node = params.nodeId ? (await findNodeByIdAsync(params.nodeId)) : findNodeByName(params.nodeName);
     if (!node) throw new Error("Node not found for viewport navigation");
     figma.viewport.scrollAndZoomIntoView([node]);
     return { scrolledTo: node.id, name: node.name };
@@ -1996,7 +2013,7 @@ handlers.applyVariable = async function(params) {
   if (!nodeId) throw new Error("nodeId is required");
   if (!variableId && !variableName) throw new Error("variableId or variableName is required");
 
-  var node = findNodeById(nodeId);
+  var node = await findNodeByIdAsync(nodeId);
   if (!node) throw new Error("Node not found: " + nodeId);
 
   // Find variable by ID or name
@@ -2138,7 +2155,7 @@ handlers.createComponent = async function(params) {
 
   if (!nodeId) throw new Error("nodeId of the frame to convert is required");
 
-  var node = findNodeById(nodeId);
+  var node = await findNodeByIdAsync(nodeId);
   if (!node) throw new Error("Node not found: " + nodeId);
 
   var component;
@@ -2291,14 +2308,14 @@ handlers.setupDesignTokens = async function(params) {
 
 // clone — duplicate a node
 handlers.clone = async function(params) {
-  var node = resolveNode(params);
+  var node = await resolveNode(params);
   if (!node) throw new Error("Node not found for cloning");
   var clone = node.clone();
   if (params.x !== undefined) clone.x = params.x;
   if (params.y !== undefined) clone.y = params.y;
   if (params.name) clone.name = params.name;
   if (params.parentId) {
-    var parent = findNodeById(params.parentId);
+    var parent = await findNodeByIdAsync(params.parentId);
     if (parent) parent.appendChild(clone);
   }
   return nodeToInfo(clone);
@@ -2309,7 +2326,7 @@ handlers.group = async function(params) {
   var nodeIds = params.nodeIds || [];
   var nodes = [];
   for (var i = 0; i < nodeIds.length; i++) {
-    var n = findNodeById(nodeIds[i]);
+    var n = await findNodeByIdAsync(nodeIds[i]);
     if (n) nodes.push(n);
   }
   if (nodes.length < 1) throw new Error("Need at least 1 node to group");
@@ -2321,7 +2338,7 @@ handlers.group = async function(params) {
 
 // ungroup — ungroup a group node
 handlers.ungroup = async function(params) {
-  var node = resolveNode(params);
+  var node = await resolveNode(params);
   if (!node) throw new Error("Node not found for ungrouping");
   if (node.type !== "GROUP" && node.type !== "FRAME") throw new Error("Node must be GROUP or FRAME to ungroup");
   var children = [];
@@ -2337,7 +2354,7 @@ handlers.ungroup = async function(params) {
 
 // flatten — flatten a node (merge vectors)
 handlers.flatten = async function(params) {
-  var node = resolveNode(params);
+  var node = await resolveNode(params);
   if (!node) throw new Error("Node not found for flatten");
   var flat = figma.flatten([node]);
   return nodeToInfo(flat);
@@ -2345,7 +2362,7 @@ handlers.flatten = async function(params) {
 
 // resize — resize a node with constraints
 handlers.resize = async function(params) {
-  var node = resolveNode(params);
+  var node = await resolveNode(params);
   if (!node) throw new Error("Node not found for resize");
   if (!("resize" in node)) throw new Error("Node type does not support resize");
   var w = params.width !== undefined ? params.width : node.width;
@@ -2359,7 +2376,7 @@ handlers.set_selection = async function(params) {
   var nodeIds = params.nodeIds || [];
   var nodes = [];
   for (var i = 0; i < nodeIds.length; i++) {
-    var n = findNodeById(nodeIds[i]);
+    var n = await findNodeByIdAsync(nodeIds[i]);
     if (n) nodes.push(n);
   }
   figma.currentPage.selection = nodes;
