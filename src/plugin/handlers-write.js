@@ -14,9 +14,16 @@ handlers.status = async () => ({
 handlers.listPages = async () =>
   figma.root.children.map(p => ({ id: p.id, name: p.name }));
 
-handlers.setPage = async ({ name }) => {
-  const page = figma.root.children.find(p => p.name === name);
-  if (!page) throw new Error(`Page "${name}" not found`);
+handlers.setPage = async (params) => {
+  // Accept name, pageName, page (string), or id/pageId
+  var name = params.name || params.pageName || params.page;
+  var id   = params.id   || params.pageId;
+  var page = null;
+  if (id)   page = figma.root.children.find(function(p) { return p.id === id; });
+  if (!page && name) page = figma.root.children.find(function(p) { return p.name === name; });
+  // If only 1 page exists, switch to it regardless of the name passed
+  if (!page && figma.root.children.length === 1) page = figma.root.children[0];
+  if (!page) throw new Error("Page not found: \"" + (name || id) + "\". Available: " + figma.root.children.map(function(p) { return p.name; }).join(", "));
   await figma.setCurrentPageAsync(page);
   return { id: page.id, name: page.name };
 };
