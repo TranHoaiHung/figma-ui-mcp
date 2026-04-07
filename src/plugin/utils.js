@@ -76,9 +76,11 @@ function findNodeByName(name) {
 }
 
 async function resolveNode(params) {
-  if (params.id)   return await findNodeByIdAsync(params.id);
-  if (params.name) return findNodeByName(params.name);
-  return null;
+  // Try ID first, then fall back to name (handles stale IDs after delete+recreate)
+  var node = null;
+  if (params.id) node = await findNodeByIdAsync(params.id);
+  if (!node && params.name) node = findNodeByName(params.name);
+  return node;
 }
 
 function nodeToInfo(node) {

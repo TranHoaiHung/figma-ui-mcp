@@ -2,12 +2,13 @@
 
 // get_node_detail — CSS-like properties for a single node (no tree traversal)
 handlers.get_node_detail = async function(params) {
-  var id = params ? params.id : null;
-  var nodeName = params ? params.name : null;
+  // Accept id, nodeId, name, nodeName — try ID first then name fallback
+  var id = params ? (params.id || params.nodeId) : null;
+  var nodeName = params ? (params.name || params.nodeName) : null;
   var node = null;
   if (id) node = await findNodeByIdAsync(id);
   if (!node && nodeName) node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
-  if (!node) throw new Error("Node not found");
+  if (!node) throw new Error("Node not found: " + (id || nodeName || "no id/name given") + ". Use figma_read get_page_nodes to get current node IDs.");
 
   var detail = {
     id: node.id, name: node.name, type: node.type,

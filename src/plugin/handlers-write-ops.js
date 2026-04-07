@@ -34,7 +34,12 @@ handlers.group = async function(params) {
 handlers.ungroup = async function(params) {
   var node = await resolveNode(params);
   if (!node) throw new Error("Node not found for ungrouping");
+  if (node.removed) throw new Error("Node was already deleted");
   if (node.type !== "GROUP" && node.type !== "FRAME") throw new Error("Node must be GROUP or FRAME to ungroup");
+  if (!node.children || node.children.length === 0) {
+    node.remove();
+    return { ungrouped: [] };
+  }
   var children = [];
   var parent = node.parent || figma.currentPage;
   var nodeChildren = [].concat(node.children);

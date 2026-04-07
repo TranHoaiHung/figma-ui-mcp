@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.0.0] — 2026-04-07
+
+### Fixed — Stale node IDs and parameter naming inconsistencies (`src/plugin/`)
+
+- **`resolveNode`** — now falls back to name lookup when ID not found (handles stale IDs after delete+recreate in same session)
+- **`modify`** — clearer error message: tells AI the node was deleted and to use current IDs
+- **`get_node_detail`** — now accepts `nodeId` and `nodeName` in addition to `id`/`name`; error message now instructs AI to call `get_page_nodes` to refresh IDs
+- **`applyVariable`** — now accepts `nodeId`, `id`, `targetId`, or `node` object (any of the 4 common param names AI uses)
+- **`ungroup`** — null guard for empty/missing `children`; handles already-deleted nodes
+- **`create`** — guard for deleted parent node in batch operations (stale `parentId`)
+- **`lineHeight`** — accepts both number (pixels) and pre-formed `{ value, unit }` object in both `create` and `modify`
+
+### Other
+- Split `plugin/code.js` → `src/plugin/` modules with concat build pipeline (`npm run build:plugin`)
+
+---
+
 ## [1.9.9] — 2026-04-07
 
 ### Fixed — Read operations miss gradient angles, blur effects, multiple strokes, rotation (`plugin/code.js`)

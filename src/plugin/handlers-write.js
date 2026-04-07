@@ -133,7 +133,11 @@ handlers.create = async (params) => {
     node.fontSize = fontSize;
     node.characters = content;
     if (fill) node.fills = solidFill(fill);
-    if (lineHeight) node.lineHeight = { value: lineHeight, unit: "PIXELS" };
+    // Accept lineHeight as number (pixels) or pre-formed object { value, unit }
+    if (lineHeight) {
+      if (typeof lineHeight === "object" && lineHeight.unit) node.lineHeight = lineHeight;
+      else node.lineHeight = { value: lineHeight, unit: "PIXELS" };
+    }
     // Text alignment
     if (params.textAlignHorizontal) node.textAlignHorizontal = params.textAlignHorizontal;
     if (params.textAlignVertical) node.textAlignVertical = params.textAlignVertical;
@@ -281,6 +285,11 @@ handlers.create = async (params) => {
   if (visible !== undefined) node.visible = visible;
 
   if (parent !== figma.currentPage) {
+    // Guard: parent may have been deleted in a prior batch step
+    if (!parent || parent.removed) {
+      node.remove();
+      throw new Error("Parent node no longer exists (was it deleted?): " + (params.parentId || params.parentName));
+    }
     parent.appendChild(node);
 
     // Auto-set child layout properties when parent uses auto-layout
@@ -305,7 +314,8 @@ handlers.create = async (params) => {
 
 handlers.modify = async (params) => {
   const node = await resolveNode(params);
-  if (!node) throw new Error(`Node not found: ${JSON.stringify(params)}`);
+  if (!node) throw new Error("Node not found: " + (params.id || params.name) + " (may have been deleted)");
+  if (node.removed) throw new Error("Node was deleted: " + (params.id || params.name));
 
   if (params.fill     !== undefined && "fills"   in node) node.fills   = solidFill(params.fill, params.fillOpacity);
   if (params.fillOpacity !== undefined && params.fill === undefined && "fills" in node && node.fills && node.fills.length) {
@@ -343,7 +353,10 @@ handlers.modify = async (params) => {
       await figma.loadFontAsync(node.fontName);
       if (params.textAlign !== undefined) node.textAlignHorizontal = params.textAlign.toUpperCase();
       if (params.textAlignVertical !== undefined) node.textAlignVertical = params.textAlignVertical.toUpperCase();
-      if (params.lineHeight !== undefined) node.lineHeight = { value: params.lineHeight, unit: "PIXELS" };
+      if (params.lineHeight !== undefined) {
+        if (typeof params.lineHeight === "object" && params.lineHeight.unit) node.lineHeight = params.lineHeight;
+        else node.lineHeight = { value: params.lineHeight, unit: "PIXELS" };
+      }
     }
   }
 

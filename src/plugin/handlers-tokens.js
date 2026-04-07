@@ -284,12 +284,14 @@ handlers.clearFrameVariableMode = async function(params) {
 
 // applyVariable — bind a variable to a node property (fill, stroke, etc.)
 handlers.applyVariable = async function(params) {
-  var nodeId = params.nodeId || params.id;
+  // Accept nodeId, id, node (object with .id), or targetId
+  var nodeId = params.nodeId || params.id || params.targetId
+    || (params.node && (typeof params.node === "string" ? params.node : params.node.id));
   var variableId = params.variableId;
   var variableName = params.variableName;
   var field = params.field || "fill"; // fill, stroke, opacity, cornerRadius, etc.
 
-  if (!nodeId) throw new Error("nodeId is required");
+  if (!nodeId) throw new Error("nodeId is required — pass nodeId, id, or targetId");
   if (!variableId && !variableName) throw new Error("variableId or variableName is required");
 
   var node = await findNodeByIdAsync(nodeId);
