@@ -1540,6 +1540,81 @@ var spaceMd = await figma.createVariable({
 // → { id: "VariableID:456", name: "bg-base", resolvedType: "COLOR", collectionId: "..." }
 \`\`\`
 
+#### addVariableMode — add a mode to a collection (e.g. Light / Dark)
+\`\`\`js
+// Collections start with 1 default mode ("Mode 1"). Add more here.
+var darkMode = await figma.addVariableMode({ collectionId: colors.id, modeName: "Dark" });
+// → { modeId: "...", modeName: "Dark", collectionId: "...", modes: [{id, name}, ...] }
+
+// Rename the auto-created default mode
+await figma.renameVariableMode({ collectionId: colors.id, modeId: colors.modes[0].id, newName: "Light" });
+\`\`\`
+
+#### renameVariableMode — rename an existing mode
+\`\`\`js
+await figma.renameVariableMode({
+  collectionId: colors.id,
+  modeId: "123:0",           // modeId from collection.modes
+  newName: "Light"
+});
+// → { modeId: "123:0", modeName: "Light", modes: [...] }
+\`\`\`
+
+#### removeVariableMode — delete a mode from a collection
+\`\`\`js
+await figma.removeVariableMode({
+  collectionId: colors.id,
+  modeId: darkMode.modeId
+});
+// → { removedModeId: "...", modes: [...remaining modes] }
+\`\`\`
+
+#### setVariableValue — set variable value for a specific mode
+\`\`\`js
+// By modeId (fast)
+await figma.setVariableValue({
+  variableId: bgBase.id,
+  modeId: darkMode.modeId,
+  value: "#0F1117"           // hex auto-converts for COLOR variables
+});
+
+// By name (convenient)
+await figma.setVariableValue({
+  variableName: "bg-base",
+  collectionId: colors.id,   // optional, speeds up search
+  modeName: "Dark",
+  value: "#0F1117"
+});
+
+// FLOAT / STRING / BOOLEAN
+await figma.setVariableValue({ variableName: "radius-md", modeName: "Compact", value: 6 });
+await figma.setVariableValue({ variableName: "show-border", modeName: "Dark", value: true });
+\`\`\`
+
+#### Multi-mode Light/Dark full workflow
+\`\`\`js
+// 1. Create collection
+var colors = await figma.createVariableCollection({ name: "Colors" });
+
+// 2. Rename default mode → "Light", add "Dark"
+await figma.renameVariableMode({ collectionId: colors.id, modeId: colors.modes[0].id, newName: "Light" });
+var dark = await figma.addVariableMode({ collectionId: colors.id, modeName: "Dark" });
+
+// 3. Create variables (value in createVariable sets the FIRST / Light mode)
+var bgBase = await figma.createVariable({ name: "bg-base",      collectionId: colors.id, resolvedType: "COLOR", value: "#FFFFFF" });
+var accent  = await figma.createVariable({ name: "accent",       collectionId: colors.id, resolvedType: "COLOR", value: "#3B82F6" });
+var txtPrim = await figma.createVariable({ name: "text-primary", collectionId: colors.id, resolvedType: "COLOR", value: "#111827" });
+
+// 4. Set Dark mode values
+await figma.setVariableValue({ variableId: bgBase.id,  modeId: dark.modeId, value: "#0F1117" });
+await figma.setVariableValue({ variableId: accent.id,  modeId: dark.modeId, value: "#60A5FA" });
+await figma.setVariableValue({ variableId: txtPrim.id, modeId: dark.modeId, value: "#F9FAFB" });
+
+// 5. Bind variables to nodes as usual
+await figma.applyVariable({ nodeId: card.id, field: "fill", variableId: bgBase.id });
+// → Switching Figma mode (Light ↔ Dark) now updates all bound nodes automatically
+\`\`\`
+
 #### applyVariable — bind variable to a node property
 \`\`\`js
 // Bind fill color to variable — change variable later → all bound nodes update

@@ -14,9 +14,11 @@ const WRITE_OPS = [
   "query", "create", "modify", "delete", "append",
   "listComponents", "instantiate",
   "ensure_library", "get_library_tokens",
-  // Design token operations (v1.7.0)
+  // Design token operations (v1.7.0+)
   "createVariableCollection", "createVariable", "applyVariable",
   "modifyVariable", "setupDesignTokens",
+  // Variable multi-mode (v1.9.6)
+  "addVariableMode", "renameVariableMode", "removeVariableMode", "setVariableValue",
   "createPaintStyle", "createTextStyle", "createComponent",
   // Node operations
   "clone", "group", "ungroup", "flatten", "resize",

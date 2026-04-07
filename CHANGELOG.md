@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.9.6] — 2026-04-07
+
+### Added — Figma Variables multi-mode support (`plugin/code.js`, `server/api-docs.js`)
+
+4 new handlers for full Light/Dark/Brand mode workflows:
+
+- **`addVariableMode`** — add a new mode to a collection (`collection.addMode(name)`) → returns `{ modeId, modeName, modes }`
+- **`renameVariableMode`** — rename an existing mode (`collection.renameMode(modeId, newName)`) → returns updated modes list
+- **`removeVariableMode`** — delete a mode (`collection.removeMode(modeId)`) → returns remaining modes
+- **`setVariableValue`** — set a variable's value for any specific mode; accepts `modeId` or `modeName`, auto-converts hex for COLOR variables
+
+`tool-definitions.js` description updated to list all new operations.
+`api-docs.js` updated with individual examples + complete Light/Dark multi-mode workflow.
+
+---
+
 ## [1.9.5] — 2026-04-05
 
 ### Fixed — `figma.getNodeById` removed from Figma Plugin API (`plugin/code.js`)

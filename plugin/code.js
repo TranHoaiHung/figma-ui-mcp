@@ -2003,6 +2003,144 @@ handlers.createVariable = async function(params) {
   };
 };
 
+// addVariableMode — add a new mode to an existing variable collection
+handlers.addVariableMode = async function(params) {
+  var collectionId = params.collectionId;
+  var modeName = params.modeName || params.name;
+  if (!collectionId) throw new Error("collectionId is required");
+  if (!modeName) throw new Error("modeName is required");
+
+  var collections = await figma.variables.getLocalVariableCollectionsAsync();
+  var collection = null;
+  for (var i = 0; i < collections.length; i++) {
+    if (collections[i].id === collectionId || collections[i].name === collectionId) {
+      collection = collections[i]; break;
+    }
+  }
+  if (!collection) throw new Error("Collection not found: " + collectionId);
+
+  var modeId = collection.addMode(modeName);
+  return {
+    modeId: modeId,
+    modeName: modeName,
+    collectionId: collection.id,
+    modes: collection.modes.map(function(m) { return { id: m.modeId, name: m.name }; }),
+  };
+};
+
+// renameVariableMode — rename an existing mode in a variable collection
+handlers.renameVariableMode = async function(params) {
+  var collectionId = params.collectionId;
+  var modeId = params.modeId;
+  var newName = params.newName || params.name;
+  if (!collectionId) throw new Error("collectionId is required");
+  if (!modeId) throw new Error("modeId is required");
+  if (!newName) throw new Error("newName is required");
+
+  var collections = await figma.variables.getLocalVariableCollectionsAsync();
+  var collection = null;
+  for (var i = 0; i < collections.length; i++) {
+    if (collections[i].id === collectionId || collections[i].name === collectionId) {
+      collection = collections[i]; break;
+    }
+  }
+  if (!collection) throw new Error("Collection not found: " + collectionId);
+
+  collection.renameMode(modeId, newName);
+  return {
+    modeId: modeId,
+    modeName: newName,
+    collectionId: collection.id,
+    modes: collection.modes.map(function(m) { return { id: m.modeId, name: m.name }; }),
+  };
+};
+
+// removeVariableMode — delete a mode from a variable collection
+handlers.removeVariableMode = async function(params) {
+  var collectionId = params.collectionId;
+  var modeId = params.modeId;
+  if (!collectionId) throw new Error("collectionId is required");
+  if (!modeId) throw new Error("modeId is required");
+
+  var collections = await figma.variables.getLocalVariableCollectionsAsync();
+  var collection = null;
+  for (var i = 0; i < collections.length; i++) {
+    if (collections[i].id === collectionId || collections[i].name === collectionId) {
+      collection = collections[i]; break;
+    }
+  }
+  if (!collection) throw new Error("Collection not found: " + collectionId);
+
+  collection.removeMode(modeId);
+  return {
+    removedModeId: modeId,
+    collectionId: collection.id,
+    modes: collection.modes.map(function(m) { return { id: m.modeId, name: m.name }; }),
+  };
+};
+
+// setVariableValue — set a variable's value for a specific mode
+// Enables true multi-mode: Light/Dark/Brand/any mode independently
+handlers.setVariableValue = async function(params) {
+  var variableId = params.variableId;
+  var variableName = params.variableName;
+  var collectionId = params.collectionId;
+  var modeId = params.modeId;
+  var modeName = params.modeName;
+  var value = params.value;
+
+  if (!variableId && !variableName) throw new Error("variableId or variableName is required");
+  if (!modeId && !modeName) throw new Error("modeId or modeName is required");
+  if (value === undefined) throw new Error("value is required");
+
+  // Resolve variable by id or name
+  var variable = null;
+  if (variableId) {
+    variable = await figma.variables.getVariableByIdAsync(variableId);
+  }
+  if (!variable && variableName) {
+    var allCols = await figma.variables.getLocalVariableCollectionsAsync();
+    for (var ci = 0; ci < allCols.length && !variable; ci++) {
+      var col = allCols[ci];
+      if (collectionId && col.id !== collectionId && col.name !== collectionId) continue;
+      for (var vi = 0; vi < col.variableIds.length && !variable; vi++) {
+        var v = await figma.variables.getVariableByIdAsync(col.variableIds[vi]);
+        if (v && v.name === variableName) variable = v;
+      }
+    }
+  }
+  if (!variable) throw new Error("Variable not found: " + (variableId || variableName));
+
+  // Resolve modeId from modeName if needed
+  var resolvedModeId = modeId;
+  if (!resolvedModeId && modeName) {
+    var parentCol = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+    if (parentCol) {
+      for (var mi = 0; mi < parentCol.modes.length; mi++) {
+        if (parentCol.modes[mi].name === modeName) {
+          resolvedModeId = parentCol.modes[mi].modeId; break;
+        }
+      }
+    }
+    if (!resolvedModeId) throw new Error("Mode not found: " + modeName);
+  }
+
+  // Auto-convert hex string for COLOR variables
+  if (variable.resolvedType === "COLOR" && typeof value === "string") {
+    var rgb = hexToRgb(value);
+    variable.setValueForMode(resolvedModeId, { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 });
+  } else {
+    variable.setValueForMode(resolvedModeId, value);
+  }
+
+  return {
+    variableId: variable.id,
+    variableName: variable.name,
+    modeId: resolvedModeId,
+    value: value,
+  };
+};
+
 // applyVariable — bind a variable to a node property (fill, stroke, etc.)
 handlers.applyVariable = async function(params) {
   var nodeId = params.nodeId || params.id;

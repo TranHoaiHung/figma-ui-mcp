@@ -14,7 +14,8 @@ export const TOOLS = [
       "Use the `figma` proxy object — all methods return Promises, use async/await. " +
       "Operations: create, modify, delete, clone, group, ungroup, flatten, resize, " +
       "set_selection, set_viewport, batch (multiple ops in one call). " +
-      "Design Tokens: createVariableCollection, createVariable, applyVariable, " +
+      "Design Tokens: createVariableCollection, createVariable, setVariableValue, " +
+      "addVariableMode, renameVariableMode, removeVariableMode, applyVariable, " +
       "createPaintStyle, createTextStyle, createComponent. " +
       "Call figma_docs first to see all available operations and examples. " +
       "The code runs in a sandboxed VM: no access to require, process, fs, fetch, or network.",
