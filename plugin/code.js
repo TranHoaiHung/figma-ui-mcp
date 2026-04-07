@@ -233,6 +233,14 @@ function extractDesignTree(node, depth, maxDepth, detailLevel) {
             fd.gradientStops = f.gradientStops ? f.gradientStops.map(function(gs) {
               return { color: rgbToHex(gs.color), position: Math.round(gs.position * 100) / 100 };
             }) : [];
+            // Extract gradient angle from gradientTransform matrix
+            try {
+              if (f.gradientTransform && f.type === "GRADIENT_LINEAR") {
+                var gt = f.gradientTransform;
+                var angle = Math.round(Math.atan2(gt[1][0], gt[0][0]) * 180 / Math.PI);
+                fd.gradientAngle = ((angle % 360) + 360) % 360;
+              }
+            } catch(e2) {}
           } else if (f.type === "IMAGE") {
             fd.scaleMode = f.scaleMode || "FILL";
             fd.imageHash = f.imageHash || null;
@@ -243,12 +251,24 @@ function extractDesignTree(node, depth, maxDepth, detailLevel) {
     }
   } catch(e) { /* skip fills */ }
 
-  // ── Stroke ──
+  // ── Stroke (all strokes, not just first solid) ──
   try {
     if ("strokes" in node && node.strokes && node.strokes.length) {
-      info.stroke = getStrokeHex(node);
-      if (node.strokeWeight) info.strokeWeight = node.strokeWeight;
-      if (node.strokeAlign) info.strokeAlign = node.strokeAlign;
+      var strokes = node.strokes;
+      if (strokes.length === 1 && strokes[0].type === "SOLID") {
+        info.stroke = rgbToHex(strokes[0].color);
+        if (node.strokeWeight) info.strokeWeight = node.strokeWeight;
+        if (node.strokeAlign) info.strokeAlign = node.strokeAlign;
+      } else {
+        info.strokes = strokes.map(function(s) {
+          var sd = { type: s.type };
+          if (s.type === "SOLID") sd.color = rgbToHex(s.color);
+          if (s.opacity !== undefined && s.opacity !== 1) sd.opacity = Math.round(s.opacity * 100) / 100;
+          return sd;
+        });
+        if (node.strokeWeight) info.strokeWeight = node.strokeWeight;
+        if (node.strokeAlign) info.strokeAlign = node.strokeAlign;
+      }
     }
   } catch(e) { /* skip strokes */ }
 
@@ -265,6 +285,9 @@ function extractDesignTree(node, depth, maxDepth, detailLevel) {
       }
     }
   } catch(e) {}
+
+  // ── Rotation ──
+  try { if ("rotation" in node && node.rotation !== 0) info.rotation = Math.round(node.rotation * 100) / 100; } catch(e) {}
 
   // ── Opacity, visibility, blend mode, clip ──
   try { if ("opacity" in node && node.opacity !== 1) info.opacity = Math.round(node.opacity * 100) / 100; } catch(e) {}
@@ -1651,6 +1674,14 @@ handlers.get_node_detail = async function(params) {
           fd.gradientStops = f.gradientStops ? f.gradientStops.map(function(gs) {
             return { color: rgbToHex(gs.color), position: Math.round(gs.position * 100) / 100 };
           }) : [];
+          // Extract gradient angle from gradientTransform matrix
+          try {
+            if (f.gradientTransform && f.type === "GRADIENT_LINEAR") {
+              var gt = f.gradientTransform;
+              var angle = Math.round(Math.atan2(gt[1][0], gt[0][0]) * 180 / Math.PI);
+              fd.gradientAngle = ((angle % 360) + 360) % 360;
+            }
+          } catch(e2) {}
         } else if (f.type === "IMAGE") {
           fd.scaleMode = f.scaleMode || "FILL";
         }
@@ -1659,10 +1690,19 @@ handlers.get_node_detail = async function(params) {
     }
   } catch(e) {}
 
-  // Stroke
+  // Stroke (all strokes)
   try {
     if (node.strokes && node.strokes.length) {
-      detail.stroke = getStrokeHex(node);
+      var dStrokes = node.strokes;
+      if (dStrokes.length === 1 && dStrokes[0].type === "SOLID") {
+        detail.stroke = rgbToHex(dStrokes[0].color);
+      } else {
+        detail.strokes = dStrokes.map(function(s) {
+          var sd = { type: s.type };
+          if (s.type === "SOLID") sd.color = rgbToHex(s.color);
+          return sd;
+        });
+      }
       detail.strokeWeight = node.strokeWeight;
       detail.strokeAlign = node.strokeAlign;
     }
@@ -1679,15 +1719,19 @@ handlers.get_node_detail = async function(params) {
     }
   } catch(e) {}
 
+  // Rotation
+  try { if ("rotation" in node && node.rotation !== 0) detail.rotation = Math.round(node.rotation * 100) / 100; } catch(e) {}
+
   // Opacity, blendMode, visible
   try { if (node.opacity !== undefined && node.opacity !== 1) detail.opacity = Math.round(node.opacity * 100) / 100; } catch(e) {}
   try { if (node.blendMode && node.blendMode !== "NORMAL" && node.blendMode !== "PASS_THROUGH") detail.blendMode = node.blendMode; } catch(e) {}
   try { if ("visible" in node && !node.visible) detail.visible = false; } catch(e) {}
 
-  // Effects → CSS boxShadow
+  // Effects → CSS boxShadow + filter (blur)
   try {
     if (node.effects && node.effects.length) {
       var shadows = [];
+      var blurValues = [];
       for (var ei = 0; ei < node.effects.length; ei++) {
         var eff = node.effects[ei];
         if (eff.visible === false) continue;
@@ -1696,9 +1740,14 @@ handlers.get_node_detail = async function(params) {
           var rgba = "rgba(" + Math.round(c.r * 255) + "," + Math.round(c.g * 255) + "," + Math.round(c.b * 255) + "," + (c.a !== undefined ? Math.round(c.a * 100) / 100 : 1) + ")";
           var prefix = eff.type === "INNER_SHADOW" ? "inset " : "";
           shadows.push(prefix + (eff.offset ? eff.offset.x : 0) + "px " + (eff.offset ? eff.offset.y : 0) + "px " + (eff.radius || 0) + "px " + (eff.spread || 0) + "px " + rgba);
+        } else if (eff.type === "LAYER_BLUR") {
+          blurValues.push("blur(" + (eff.radius || 0) + "px)");
+        } else if (eff.type === "BACKGROUND_BLUR") {
+          detail.backdropFilter = "blur(" + (eff.radius || 0) + "px)";
         }
       }
       if (shadows.length) detail.boxShadow = shadows.join(", ");
+      if (blurValues.length) detail.filter = blurValues.join(" ");
     }
   } catch(e) {}
 

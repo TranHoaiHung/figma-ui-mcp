@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.9] — 2026-04-07
+
+### Fixed — Read operations miss gradient angles, blur effects, multiple strokes, rotation (`plugin/code.js`)
+
+Improvements to `extractDesignTree` (used by `get_design`, `get_selection`) and `get_node_detail`:
+
+- **Gradient angle** — `gradientAngle` (degrees) now extracted from `gradientTransform` matrix for `GRADIENT_LINEAR` fills; available in both `extractDesignTree` and `get_node_detail`
+- **Multiple strokes** — when a node has >1 stroke or non-SOLID strokes, all are returned as `strokes[]` array instead of only the first solid; applies to both read paths
+- **Blur effects** — `get_node_detail` now outputs `filter: "blur(Xpx)"` for `LAYER_BLUR` and `backdropFilter: "blur(Xpx)"` for `BACKGROUND_BLUR` (previously silently dropped)
+- **Rotation** — `rotation` (degrees) now included in both `extractDesignTree` and `get_node_detail` when non-zero
+
+---
+
 ## [1.9.8] — 2026-04-07
 
 ### Fixed — UI quality degrades when installed via npm in a new project
