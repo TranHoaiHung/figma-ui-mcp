@@ -711,6 +711,71 @@ text_x = button_x + (button_w - text_w_estimate) / 2
 
 ---
 
+## CARD / SCREEN LAYOUT RULE (MANDATORY — prevents misalignment)
+
+**NEVER build a card or screen using absolute x/y for every child.** This causes misalignment when the container resizes and makes the design impossible to maintain.
+
+### Rule 1 — Card container MUST use VERTICAL auto-layout
+\`\`\`js
+// CORRECT: card uses VERTICAL auto-layout with uniform padding
+await figma.create({
+  type: "FRAME", name: "Card",
+  x: 0, y: 0, width: 480, height: 610,
+  layoutMode: "VERTICAL",
+  primaryAxisAlignItems: "MIN",
+  counterAxisAlignItems: "STRETCH",   // ← children stretch to full width automatically
+  paddingTop: 48, paddingBottom: 48,
+  paddingLeft: 48, paddingRight: 48,
+  itemSpacing: 16,
+  primaryAxisSizingMode: "FIXED",
+  counterAxisSizingMode: "FIXED",
+});
+
+// WRONG: no layoutMode → children use manual x/y → misalignment guaranteed
+await figma.create({ type: "FRAME", name: "Card", width: 480, height: 610 });
+// then manually: x: 48, y: 52, width: 384 for every child ← NEVER do this
+\`\`\`
+
+### Rule 2 — Full-width children use layoutAlign: "STRETCH", NOT hardcoded width
+\`\`\`js
+// CORRECT: input/button stretches to card width minus padding automatically
+await figma.create({
+  type: "FRAME", name: "EmailInput", parentId: card.id,
+  height: 52, layoutAlign: "STRETCH",   // ← width auto = cardWidth - paddingLeft - paddingRight
+  layoutMode: "HORIZONTAL", counterAxisAlignItems: "CENTER",
+  paddingLeft: 20, paddingRight: 20,
+});
+
+// WRONG: hardcoded width breaks when card width changes
+await figma.create({ type: "FRAME", name: "EmailInput", parentId: card.id, width: 384, height: 52 });
+\`\`\`
+
+### Rule 3 — "or" divider row uses HORIZONTAL + SPACE_BETWEEN
+\`\`\`js
+// CORRECT: divider auto-centers regardless of card width
+var dividerRow = await figma.create({
+  type: "FRAME", name: "Divider", parentId: card.id,
+  height: 20, layoutAlign: "STRETCH",
+  layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "SPACE_BETWEEN",
+  counterAxisAlignItems: "CENTER",
+});
+await figma.create({ type: "RECTANGLE", parentId: dividerRow.id, height: 1, layoutGrow: 1, fill: "#E0E0E0" });
+await figma.create({ type: "TEXT", parentId: dividerRow.id, content: "or", fontSize: 12, fill: "#888" });
+await figma.create({ type: "RECTANGLE", parentId: dividerRow.id, height: 1, layoutGrow: 1, fill: "#E0E0E0" });
+
+// WRONG: 3 manually positioned elements with x/y coordinates → always off-center
+\`\`\`
+
+### Summary — Card build order:
+1. Create card frame with VERTICAL auto-layout + padding
+2. Add children without x/y — let auto-layout position them
+3. Full-width children: \`layoutAlign: "STRETCH"\` (no width needed)
+4. Growing spacers: \`layoutGrow: 1\`
+5. NEVER set x/y on direct children of an auto-layout frame
+
+---
+
 ## DOT + TEXT / ICON + TEXT ROW ALIGNMENT RULE (MANDATORY)
 When placing a small element (dot, icon, bullet) next to text in a horizontal row:
 
