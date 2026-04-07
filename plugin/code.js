@@ -2141,6 +2141,95 @@ handlers.setVariableValue = async function(params) {
   };
 };
 
+// setFrameVariableMode — set explicit variable mode on a frame/group node
+// Equivalent to Figma REST PATCH explicitVariableModes, but via Plugin API
+// node.setExplicitVariableModeForCollection(collection, modeId)
+handlers.setFrameVariableMode = async function(params) {
+  var nodeId = params.nodeId || params.id;
+  var collectionId = params.collectionId;
+  var modeId = params.modeId;
+  var modeName = params.modeName;
+
+  if (!nodeId) throw new Error("nodeId is required");
+  if (!collectionId) throw new Error("collectionId is required");
+  if (!modeId && !modeName) throw new Error("modeId or modeName is required");
+
+  var node = await findNodeByIdAsync(nodeId);
+  if (!node) throw new Error("Node not found: " + nodeId);
+  if (!node.setExplicitVariableModeForCollection) {
+    throw new Error("Node type does not support explicit variable modes (must be FRAME, GROUP, or SECTION)");
+  }
+
+  // Resolve collection
+  var collections = await figma.variables.getLocalVariableCollectionsAsync();
+  var collection = null;
+  for (var i = 0; i < collections.length; i++) {
+    if (collections[i].id === collectionId || collections[i].name === collectionId) {
+      collection = collections[i]; break;
+    }
+  }
+  if (!collection) throw new Error("Collection not found: " + collectionId);
+
+  // Resolve modeId from modeName if needed
+  var resolvedModeId = modeId;
+  if (!resolvedModeId && modeName) {
+    for (var mi = 0; mi < collection.modes.length; mi++) {
+      if (collection.modes[mi].name === modeName) {
+        resolvedModeId = collection.modes[mi].modeId; break;
+      }
+    }
+    if (!resolvedModeId) throw new Error("Mode not found: " + modeName);
+  }
+
+  node.setExplicitVariableModeForCollection(collection, resolvedModeId);
+
+  return {
+    nodeId: node.id,
+    nodeName: node.name,
+    collectionId: collection.id,
+    collectionName: collection.name,
+    modeId: resolvedModeId,
+    modeName: collection.modes.find(function(m) { return m.modeId === resolvedModeId; }).name,
+    explicitVariableModes: node.explicitVariableModes || {},
+  };
+};
+
+// clearFrameVariableMode — remove explicit mode override from a frame
+// Reverts to inheriting the mode from the parent frame or document default
+handlers.clearFrameVariableMode = async function(params) {
+  var nodeId = params.nodeId || params.id;
+  var collectionId = params.collectionId;
+
+  if (!nodeId) throw new Error("nodeId is required");
+  if (!collectionId) throw new Error("collectionId is required");
+
+  var node = await findNodeByIdAsync(nodeId);
+  if (!node) throw new Error("Node not found: " + nodeId);
+  if (!node.clearExplicitVariableModeForCollection) {
+    throw new Error("Node type does not support explicit variable modes (must be FRAME, GROUP, or SECTION)");
+  }
+
+  // Resolve collection
+  var collections = await figma.variables.getLocalVariableCollectionsAsync();
+  var collection = null;
+  for (var i = 0; i < collections.length; i++) {
+    if (collections[i].id === collectionId || collections[i].name === collectionId) {
+      collection = collections[i]; break;
+    }
+  }
+  if (!collection) throw new Error("Collection not found: " + collectionId);
+
+  node.clearExplicitVariableModeForCollection(collection);
+
+  return {
+    nodeId: node.id,
+    nodeName: node.name,
+    collectionId: collection.id,
+    collectionName: collection.name,
+    explicitVariableModes: node.explicitVariableModes || {},
+  };
+};
+
 // applyVariable — bind a variable to a node property (fill, stroke, etc.)
 handlers.applyVariable = async function(params) {
   var nodeId = params.nodeId || params.id;

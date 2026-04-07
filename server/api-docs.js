@@ -1632,6 +1632,32 @@ await figma.applyVariable({
 });
 \`\`\`
 
+#### setFrameVariableMode — pin a frame to a specific variable mode
+\`\`\`js
+// Force a frame to always render in "Dark" mode regardless of document default
+await figma.setFrameVariableMode({
+  nodeId: darkFrame.id,
+  collectionId: colors.id,   // or collection name: "Colors"
+  modeName: "Dark"           // or modeId: "123:1"
+});
+// → { nodeId, nodeName, collectionId, collectionName, modeId, modeName, explicitVariableModes }
+
+// Useful for export workflows: set Light on one frame, Dark on another, then export both
+var lightFrame = await figma.create({ type: "FRAME", name: "Preview/Light", ... });
+var darkFrame  = await figma.create({ type: "FRAME", name: "Preview/Dark",  ... });
+await figma.setFrameVariableMode({ nodeId: lightFrame.id, collectionId: colors.id, modeName: "Light" });
+await figma.setFrameVariableMode({ nodeId: darkFrame.id,  collectionId: colors.id, modeName: "Dark"  });
+\`\`\`
+
+#### clearFrameVariableMode — remove explicit mode override, revert to parent/document default
+\`\`\`js
+await figma.clearFrameVariableMode({
+  nodeId: frame.id,
+  collectionId: colors.id   // or collection name
+});
+// → { nodeId, nodeName, collectionId, collectionName, explicitVariableModes }
+\`\`\`
+
 #### createPaintStyle — create reusable paint style
 \`\`\`js
 var primaryStyle = await figma.createPaintStyle({

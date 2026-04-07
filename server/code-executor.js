@@ -19,6 +19,8 @@ const WRITE_OPS = [
   "modifyVariable", "setupDesignTokens",
   // Variable multi-mode (v1.9.6)
   "addVariableMode", "renameVariableMode", "removeVariableMode", "setVariableValue",
+  // Frame variable mode override (v1.9.7)
+  "setFrameVariableMode", "clearFrameVariableMode",
   "createPaintStyle", "createTextStyle", "createComponent",
   // Node operations
   "clone", "group", "ungroup", "flatten", "resize",

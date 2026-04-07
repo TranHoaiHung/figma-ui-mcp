@@ -16,6 +16,7 @@ export const TOOLS = [
       "set_selection, set_viewport, batch (multiple ops in one call). " +
       "Design Tokens: createVariableCollection, createVariable, setVariableValue, " +
       "addVariableMode, renameVariableMode, removeVariableMode, applyVariable, " +
+      "setFrameVariableMode, clearFrameVariableMode, " +
       "createPaintStyle, createTextStyle, createComponent. " +
       "Call figma_docs first to see all available operations and examples. " +
       "The code runs in a sandboxed VM: no access to require, process, fs, fetch, or network.",

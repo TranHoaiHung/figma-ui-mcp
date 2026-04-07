@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.7] — 2026-04-07
+
+### Added — Frame variable mode override (`plugin/code.js`, `server/code-executor.js`)
+
+2 new handlers replacing the need for Figma REST API `PATCH /v1/files/:key/nodes` `explicitVariableModes`:
+
+- **`setFrameVariableMode`** — pin a frame/group/section to a specific variable mode via `node.setExplicitVariableModeForCollection(collection, modeId)`. Accepts `collectionId` (or name) + `modeId` or `modeName`. Returns `explicitVariableModes` map.
+- **`clearFrameVariableMode`** — remove the explicit mode override from a frame via `node.clearExplicitVariableModeForCollection(collection)`, reverting to parent/document default.
+
+Typical use case: set Light mode on one frame, Dark on another, then export both — all in one script without any REST calls.
+
+---
+
 ## [1.9.6] — 2026-04-07
 
 ### Added — Figma Variables multi-mode support (`plugin/code.js`, `server/api-docs.js`)

@@ -102,7 +102,7 @@ if (existingHealth.pluginConnected) {
 }
 
 const server = new Server(
-  { name: "figma-ui-mcp", version: "1.9.6" },
+  { name: "figma-ui-mcp", version: "1.9.7" },
   { capabilities: { tools: {} } }
 );
 
