@@ -6,3 +6,4 @@ node_modules/
 .mcpregistry_*
 docs/*
 CLAUDE.md
+DEVELOPER.md
