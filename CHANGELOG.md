@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.0.1] — 2026-04-07
+
+### Fixed / Docs
+- `counterAxisAlignItems: "STRETCH"` is invalid — corrected to `"MIN"` in all docs + examples
+- Added **BUTTON/INPUT CONSTRUCTION RULE**: never use RECTANGLE+TEXT siblings — always use FRAME with auto-layout
+- Added **CARD/SCREEN LAYOUT RULE**: card container must use VERTICAL auto-layout, full-width children use `layoutAlign: "STRETCH"`
+- `setPage` now accepts `pageName`, `page`, `pageId` params (not just `name`)
+- `resolveNode` accepts `nodeId`, `targetId`, `nodeName` in addition to `id`/`name`
+- `delete` is now idempotent — returns success if node already gone
+- `modify` dumps received param keys in error to help diagnose AI param mismatches
+- `lineHeight` accepts both number and pre-formed `{ value, unit }` object
+- Split `plugin/code.js` → `src/plugin/` modules with concat build pipeline
+
+---
+
 ## [2.0.0] — 2026-04-07
 
 ### Fixed — Stale node IDs and parameter naming inconsistencies (`src/plugin/`)
