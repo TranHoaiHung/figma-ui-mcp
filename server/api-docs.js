@@ -675,7 +675,9 @@ layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems
 layoutMode: "HORIZONTAL", primaryAxisAlignItems: "MIN", counterAxisAlignItems: "CENTER", paddingLeft: 16, itemSpacing: 12
 
 // Vertical stack (title + subtitle + button):
-layoutMode: "VERTICAL", primaryAxisAlignItems: "MIN", counterAxisAlignItems: "STRETCH", itemSpacing: 8
+// NOTE: counterAxisAlignItems does NOT support "STRETCH" — use "MIN" then set layoutAlign: "STRETCH" on each child
+layoutMode: "VERTICAL", primaryAxisAlignItems: "MIN", counterAxisAlignItems: "MIN", itemSpacing: 8
+// then each child: layoutAlign: "STRETCH"
 
 // Centered icon in a circle/square:
 layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER"
@@ -723,7 +725,7 @@ await figma.create({
   x: 0, y: 0, width: 480, height: 610,
   layoutMode: "VERTICAL",
   primaryAxisAlignItems: "MIN",
-  counterAxisAlignItems: "STRETCH",   // ← children stretch to full width automatically
+  counterAxisAlignItems: "MIN",       // ← "STRETCH" is INVALID. Use "MIN" here, then set layoutAlign: "STRETCH" on each child
   paddingTop: 48, paddingBottom: 48,
   paddingLeft: 48, paddingRight: 48,
   itemSpacing: 16,
