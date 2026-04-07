@@ -51,6 +51,11 @@ handlers.query = async ({ type, name, id }) => {
 };
 
 handlers.create = async (params) => {
+  // Guard: type must be provided — dump keys to help diagnose missing field
+  if (!params || !params.type) {
+    var keys = Object.keys(params || {});
+    throw new Error("create: 'type' is required. Received keys: [" + keys.join(", ") + "]. Use type: FRAME|RECTANGLE|ELLIPSE|LINE|TEXT|SVG|VECTOR|IMAGE");
+  }
   const {
     type, parentId, name,
     x = 0, y = 0, width = 100, height = 100,
