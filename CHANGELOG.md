@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2] — 2026-04-07
+
+### Fixed
+- `handlers.create`: guard missing `type` early — dumps received param keys in error message so AI can self-diagnose instead of guessing API changed
+
+---
+
 ## [2.0.1] — 2026-04-07
 
 ### Fixed / Docs
