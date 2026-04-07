@@ -713,6 +713,39 @@ text_x = button_x + (button_w - text_w_estimate) / 2
 
 ---
 
+## BUTTON / INPUT CONSTRUCTION RULE (MANDATORY — prevents text misalignment)
+
+**NEVER use RECTANGLE + TEXT as separate siblings to build a button or input field.**
+This causes text to be manually offset with x/y and NEVER truly centered.
+
+### WRONG pattern (causes misalignment):
+\`\`\`js
+// ✗ Rectangle as background + floating TEXT — text centering is fake/manual
+await figma.create({ type: "RECTANGLE", parentId: frame.id, x: 56, y: 808, width: 488, height: 58, fill: "#00C896", cornerRadius: 30 });
+await figma.create({ type: "TEXT", parentId: frame.id, x: 180, y: 827, content: "Capture new idea", fill: "#fff" });
+// ↑ text appears centered only at this exact size — breaks on any resize
+\`\`\`
+
+### CORRECT pattern — FRAME with auto-layout:
+\`\`\`js
+// ✓ FRAME handles fill + centering — text is always truly centered
+var btn = await figma.create({
+  type: "FRAME", name: "BtnCapture", parentId: frame.id,
+  x: 56, y: 808, width: 488, height: 58,
+  fill: "#00C896", cornerRadius: 30,
+  layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "CENTER",
+  counterAxisAlignItems: "CENTER",
+});
+await figma.create({ type: "TEXT", parentId: btn.id, content: "Capture new idea", fill: "#fff", fontSize: 16, fontWeight: "Bold" });
+// ↑ text is mathematically centered — works at any size
+\`\`\`
+
+**This rule applies to ALL interactive elements:** buttons, input fields, tabs, chips, badges, nav items, list rows.
+Use FRAME with \`layoutMode\` for EVERY element that has a background + content inside it.
+
+---
+
 ## CARD / SCREEN LAYOUT RULE (MANDATORY — prevents misalignment)
 
 **NEVER build a card or screen using absolute x/y for every child.** This causes misalignment when the container resizes and makes the design impossible to maintain.
