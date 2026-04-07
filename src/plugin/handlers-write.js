@@ -321,8 +321,12 @@ handlers.create = async (params) => {
 
 handlers.modify = async (params) => {
   const node = await resolveNode(params);
-  var nodeRef = params.id || params.nodeId || params.name || params.nodeName;
-  if (!node) throw new Error("Node not found: " + nodeRef + ". Call get_page_nodes to get current IDs.");
+  var nodeRef = params.id || params.nodeId || params.targetId || params.name || params.nodeName;
+  if (!node) {
+    // Dump all keys received so we can see what the AI actually passed
+    var keys = Object.keys(params || {});
+    throw new Error("Node not found: " + nodeRef + ". Received params keys: [" + keys.join(", ") + "]. Use id or name field.");
+  }
   if (node.removed) throw new Error("Node was deleted: " + nodeRef);
 
   if (params.fill     !== undefined && "fills"   in node) node.fills   = solidFill(params.fill, params.fillOpacity);
