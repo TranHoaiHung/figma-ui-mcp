@@ -20,7 +20,9 @@
     "plugin/icon32.png"
   ],
   "scripts": {
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "build:plugin": "node scripts/build-plugin.js",
+    "dev": "node --watch scripts/build-plugin.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4"
