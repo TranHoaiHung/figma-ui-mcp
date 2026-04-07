@@ -321,8 +321,9 @@ handlers.create = async (params) => {
 
 handlers.modify = async (params) => {
   const node = await resolveNode(params);
-  if (!node) throw new Error("Node not found: " + (params.id || params.name) + " (may have been deleted)");
-  if (node.removed) throw new Error("Node was deleted: " + (params.id || params.name));
+  var nodeRef = params.id || params.nodeId || params.name || params.nodeName;
+  if (!node) throw new Error("Node not found: " + nodeRef + ". Call get_page_nodes to get current IDs.");
+  if (node.removed) throw new Error("Node was deleted: " + nodeRef);
 
   if (params.fill     !== undefined && "fills"   in node) node.fills   = solidFill(params.fill, params.fillOpacity);
   if (params.fillOpacity !== undefined && params.fill === undefined && "fills" in node && node.fills && node.fills.length) {
@@ -400,7 +401,11 @@ handlers.modify = async (params) => {
 // "delete" is a JS reserved keyword — assign via bracket notation to avoid engine quirks
 handlers["delete"] = async (params) => {
   const node = await resolveNode(params);
-  if (!node) throw new Error(`Node not found: ${JSON.stringify(params)}`);
+  // Treat already-deleted/not-found as success — idempotent delete
+  if (!node || node.removed) {
+    var ref = params.id || params.nodeId || params.name || params.nodeName;
+    return { deleted: true, alreadyGone: true, ref: ref };
+  }
   const info = nodeToInfo(node);
   node.remove();
   return Object.assign({ deleted: true }, info);

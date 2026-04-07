@@ -76,10 +76,12 @@ function findNodeByName(name) {
 }
 
 async function resolveNode(params) {
-  // Try ID first, then fall back to name (handles stale IDs after delete+recreate)
+  // Accept id, nodeId, targetId — then fall back to name/nodeName
+  var id   = params.id || params.nodeId || params.targetId;
+  var name = params.name || params.nodeName;
   var node = null;
-  if (params.id) node = await findNodeByIdAsync(params.id);
-  if (!node && params.name) node = findNodeByName(params.name);
+  if (id)   node = await findNodeByIdAsync(id);
+  if (!node && name) node = findNodeByName(name);
   return node;
 }
 
