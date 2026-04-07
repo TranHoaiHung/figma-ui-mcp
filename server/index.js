@@ -102,7 +102,7 @@ if (existingHealth.pluginConnected) {
 }
 
 const server = new Server(
-  { name: "figma-ui-mcp", version: "1.9.7" },
+  { name: "figma-ui-mcp", version: "1.9.8" },
   { capabilities: { tools: {} } }
 );
 
@@ -138,7 +138,7 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
           queueLength:     healthData.queueLength || bridge.queueLength,
           lastPollAgoMs:   healthData.lastPollAgoMs || (bridge.lastPollAt ? Date.now() - bridge.lastPollAt : null),
           hint: connected
-            ? "Ready. Use figma_write to draw or figma_read to extract design."
+            ? "CONNECTED. BEFORE drawing anything: call figma_docs to load mandatory design rules (token system, component-first, icon sizing, layer order). Skipping figma_docs causes incorrect, hardcoded, low-quality UI."
             : "Plugin not connected. In Figma Desktop: Plugins → Development → Figma UI MCP Bridge → Run",
         }, null, 2),
       }],

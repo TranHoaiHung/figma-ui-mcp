@@ -11,6 +11,7 @@ export const TOOLS = [
     name: "figma_write",
     description:
       "Execute JavaScript code to CREATE or MODIFY designs in Figma. " +
+      "⚠️ MANDATORY: Call figma_docs BEFORE writing any design code. Skipping figma_docs causes hardcoded colors, wrong sizing, broken layouts, and low-quality UI. " +
       "Use the `figma` proxy object — all methods return Promises, use async/await. " +
       "Operations: create, modify, delete, clone, group, ungroup, flatten, resize, " +
       "set_selection, set_viewport, batch (multiple ops in one call). " +
@@ -18,7 +19,6 @@ export const TOOLS = [
       "addVariableMode, renameVariableMode, removeVariableMode, applyVariable, " +
       "setFrameVariableMode, clearFrameVariableMode, " +
       "createPaintStyle, createTextStyle, createComponent. " +
-      "Call figma_docs first to see all available operations and examples. " +
       "The code runs in a sandboxed VM: no access to require, process, fs, fetch, or network.",
     inputSchema: {
       type: "object",

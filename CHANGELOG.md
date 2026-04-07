@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.9.8] — 2026-04-07
+
+### Fixed — UI quality degrades when installed via npm in a new project
+
+Root cause: AI skips `figma_docs` when there is no local `CLAUDE.md`, resulting in hardcoded colors, wrong icon sizes, broken layer order, and missing Design Library setup.
+
+Three-point enforcement fix:
+
+- **`figma_write` description** (`server/tool-definitions.js`): added `⚠️ MANDATORY: Call figma_docs BEFORE writing any design code` with explicit consequence warning — AI reads tool descriptions before every call
+- **`figma_status` hint** (`server/index.js`): changed from generic "Ready" to `CONNECTED. BEFORE drawing anything: call figma_docs` — AI reads the status response before proceeding
+- **`figma_docs` quick-start checklist** (`server/api-docs.js`): added `🚨 CRITICAL QUICK-START CHECKLIST` at the very top (before all other rules) with the exact 3-step bootstrap sequence + 7 non-negotiable rules in compact bullet form — ensures critical rules are seen immediately, not buried in 1700 lines
+
+---
+
 ## [1.9.7] — 2026-04-07
 
 ### Added — Frame variable mode override (`plugin/code.js`, `server/code-executor.js`)

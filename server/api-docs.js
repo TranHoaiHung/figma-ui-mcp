@@ -3,6 +3,48 @@ export const DOCS = `
 
 ---
 
+## 🚨 CRITICAL QUICK-START CHECKLIST (follow EVERY time, no exceptions)
+
+Before writing a single line of figma_write code, run this exact sequence:
+
+\`\`\`js
+// STEP 1 — Bootstrap design tokens (idempotent, safe to call every session)
+var tokens = await figma.setupDesignTokens({
+  collectionName: "Design Tokens",
+  colors: {
+    "accent": "#3B82F6", "accent-dim": "#1D4ED8",
+    "bg-base": "#08090E", "bg-surface": "#0F1117", "bg-card": "#111318",
+    "bg-elevated": "#0D0F14", "border": "#1E2030",
+    "text-primary": "#F0F2F5", "text-secondary": "#8B8FA3", "text-muted": "#555872",
+    "positive": "#00DC82", "negative": "#FF4757", "warning": "#FFB547",
+  },
+  numbers: { "radius-sm": 8, "radius-md": 12, "radius-lg": 16, "spacing-xs": 4, "spacing-sm": 8, "spacing-md": 16, "spacing-lg": 24 }
+});
+
+// STEP 2 — Build variable lookup map
+var vars = await figma.get_variables();
+var varMap = {};
+for (var ci = 0; ci < vars.collections.length; ci++)
+  for (var vi = 0; vi < vars.collections[ci].variables.length; vi++) {
+    var v = vars.collections[ci].variables[vi];
+    varMap[v.name] = v.id;
+  }
+
+// STEP 3 — Ensure Design Library frame
+await figma.ensure_library();
+\`\`\`
+
+**Non-negotiable rules:**
+- ❌ NEVER hardcode hex in \`fill\`/\`stroke\` — always use \`applyVariable\` after create
+- ❌ NEVER use emoji as icons — use \`figma.loadIcon(name, {size, fill})\` (SVG)
+- ❌ NEVER set icon size >= container size — icon = container × 0.5
+- ❌ NEVER draw background image AFTER other elements — background/image FIRST, content on top
+- ❌ NEVER put two overlapping rectangles inside auto-layout (progress bars, etc.) — use a non-auto-layout wrapper
+- ✅ ALWAYS use auto-layout with counterAxisAlignItems: "CENTER" for icon+text rows
+- ✅ ALWAYS draw background first (bottom layer), then overlays, then content
+
+---
+
 ## ⚑ MANDATORY DESIGN SYSTEM RULES (read before every design task)
 
 ### Rule 0 — Token-First Workflow (HIGHEST PRIORITY — NON-NEGOTIABLE)
