@@ -116,6 +116,7 @@ handlers.scan_design = async function(params) {
 
   function walkCount(node) {
     if (!node || typeof node !== "object") return;
+    if (FILTER_INVISIBLE && "visible" in node && node.visible === false) return;
     summary.totalNodes++;
 
     // Collect text
@@ -189,6 +190,7 @@ handlers.scan_design = async function(params) {
   // Build sections from top-level children
   function countAssets(n, sec) {
     if (!n || typeof n !== "object") return;
+    if (FILTER_INVISIBLE && "visible" in n && n.visible === false) return;
     if (isLikelyIcon(n)) sec.iconCount++;
     if (hasImageFill(n)) sec.imageCount++;
     if ("children" in n && Array.isArray(n.children)) { for (var i = 0; i < n.children.length; i++) countAssets(n.children[i], sec); }
@@ -197,6 +199,7 @@ handlers.scan_design = async function(params) {
   if ("children" in root) {
     for (var ci = 0; ci < root.children.length; ci++) {
       var child = root.children[ci];
+      if (FILTER_INVISIBLE && child.visible === false) continue;
       var section = {
         id: child.id, name: child.name, type: child.type,
         x: Math.round(child.x), y: Math.round(child.y),
@@ -295,6 +298,7 @@ handlers.search_nodes = async function(params) {
   function walkAndMatch(node) {
     // Guard: 'in' operator requires a non-null object — null/undefined/primitives crash here
     if (!node || typeof node !== "object") return;
+    if (FILTER_INVISIBLE && "visible" in node && node.visible === false) return;
     if (results.length >= maxResults) return;
     try {
       if (matchNode(node)) {
@@ -350,9 +354,11 @@ handlers.search_nodes = async function(params) {
 // get_page_nodes — shallow list of top-level frames on current page
 handlers.get_page_nodes = async () => {
   const page = figma.currentPage;
+  var nodes = page.children;
+  if (FILTER_INVISIBLE) nodes = nodes.filter(function(n) { return n.visible !== false; });
   return {
     page: page.name,
-    nodes: page.children.map(function(n) {
+    nodes: nodes.map(function(n) {
       return Object.assign(nodeToInfo(n), { childCount: "children" in n ? n.children.length : 0 });
     }),
   };

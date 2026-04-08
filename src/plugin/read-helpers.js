@@ -1,5 +1,7 @@
 // ─── READ HELPERS ─────────────────────────────────────────────────────────────
 
+var FILTER_INVISIBLE = false;
+
 // Detect if a node is likely an icon (small vector/group/instance)
 function isLikelyIcon(node) {
   if (!node || !("width" in node)) return false;
@@ -78,6 +80,8 @@ function collectIconNames(node, maxItems) {
 // full:    + effects, segments, gradient details, boundVariables, inline SVG — 100% token cost
 function extractDesignTree(node, depth, maxDepth, detailLevel) {
   if (!node || typeof node !== "object") return null;
+  if (FILTER_INVISIBLE && "visible" in node && node.visible === false) return null;
+  
   if (depth === undefined) depth = 0;
   if (maxDepth === undefined) maxDepth = 15;
   if (!detailLevel) detailLevel = "full";

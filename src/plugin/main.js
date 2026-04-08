@@ -30,6 +30,14 @@ function sanitizeForPostMessage(obj) {
 
 figma.ui.onmessage = async (request) => {
   const { id, operation, params } = request;
+  
+  if (operation === "set_config") {
+    if (params && params.filterInvisible !== undefined) {
+      FILTER_INVISIBLE = params.filterInvisible;
+    }
+    return;
+  }
+  
   const handler = handlers[operation];
 
   if (!handler) {

@@ -154,6 +154,11 @@
     <div class="log" id="log"></div>
   </div>
 
+  <div class="settings-row" style="display: flex; gap: 8px; margin-bottom: 10px; font-size: 11px; align-items: center; flex-shrink: 0;">
+    <input type="checkbox" id="filter-invisible" onchange="toggleFilterInvisible(this.checked)" style="cursor: pointer;">
+    <label for="filter-invisible" style="color: #c0c4e0; cursor: pointer; user-select: none;">Filter invisible elements (read)</label>
+  </div>
+
   <div class="btn-row">
     <button onclick="clearLog()">Clear</button>
     <button onclick="autoDetectPort()">Auto-detect</button>
@@ -309,6 +314,10 @@
       }
       await sendResponse(msg.id, msg.success, msg.data, msg.error);
     };
+
+    function toggleFilterInvisible(val) {
+      parent.postMessage({ pluginMessage: { operation: "set_config", params: { filterInvisible: val } } }, "*");
+    }
 
     poll();
   </script>
