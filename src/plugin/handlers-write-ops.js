@@ -42,6 +42,7 @@ handlers.ungroup = async function(params) {
   }
   var children = [];
   var parent = node.parent || figma.currentPage;
+  if (parent.removed) parent = figma.currentPage;
   var nodeChildren = [].concat(node.children);
   for (var i = 0; i < nodeChildren.length; i++) {
     parent.appendChild(nodeChildren[i]);

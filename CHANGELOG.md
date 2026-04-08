@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.1.0] — 2026-04-08
+
+### Fixed — Comprehensive code review (2 critical, 5 high, 4 medium)
+
+**Critical:**
+- `setFrameVariableMode` — null dereference when modeId doesn't match collection modes
+- `httpFetch` — unbounded redirect loop → now limited to 3 redirects
+
+**High:**
+- Base64 image decode — padding check on raw data instead of cleaned data → corrupt images
+- `modifyVariable` / `setupDesignTokens` — inline hex parse bypassed `normalizeHex()` → NaN on CSS color names. Now uses `hexToRgb()`
+- `httpProxy` missing `.port` property → fragile fallback
+- `search_nodes` — removed unnecessary `loadAllPagesAsync()` that blocked UI on large files
+- `countAssets` function declared inside loop → hoisted outside with section parameter
+
+**Medium:**
+- Version strings unified to 2.1.0 across `package.json`, `server/index.js`, `bridge-server.js`, plugin status handler
+- `modify` handler now supports `paddingHorizontal` / `paddingVertical` shorthand (matches `create`)
+- `ui.html` READ_OPS updated — added `get_node_detail`, `export_image`, `search_nodes`, `scan_design`; removed stale `to_code`
+- `ungroup` — added `parent.removed` guard, falls back to currentPage
+
+**Performance:**
+- `get_selection` — eliminated double `extractDesignTree` call (reuses computed tree for tokens)
+- `get_design` — SVG inline time budget 5s + max 10 icons (prevents timeout on heavy files)
+- Bridge `OP_TIMEOUT_MS` raised 30s → 60s for heavy files
+
+---
+
 ## [2.0.3] — 2026-04-08
 
 ### Fixed — `fills: NaN color` error (`src/plugin/utils.js`)

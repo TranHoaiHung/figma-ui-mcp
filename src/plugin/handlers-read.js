@@ -17,9 +17,11 @@ handlers.get_selection = async function(params) {
 
   var maxDepth = (params && params.depth !== undefined) ? (params.depth === "full" ? 50 : Number(params.depth)) : 15;
   var detailLevel = (params && params.detail) || "full";
+  var trees = nodes.map(function(n) { return extractDesignTree(n, 0, maxDepth, detailLevel); });
   return {
-    nodes: nodes.map(function(n) { return extractDesignTree(n, 0, maxDepth, detailLevel); }),
-    tokens: detailLevel !== "minimal" && nodes.length === 1 ? extractTokens(extractDesignTree(nodes[0], 0, maxDepth, detailLevel)) : null,
+    nodes: trees,
+    // Reuse already-computed tree instead of calling extractDesignTree twice
+    tokens: detailLevel !== "minimal" && trees.length === 1 ? extractTokens(trees[0]) : null,
   };
 };
 
@@ -44,12 +46,16 @@ handlers.get_design = async function(params) {
   try {
     var tree = extractDesignTree(root, 0, maxDepth, detailLevel);
 
-    // Post-process: inline SVG for icon nodes (full mode only, max 20)
+    // Post-process: inline SVG for icon nodes (full mode only, max 10, with time budget)
     var iconCount = 0;
+    var svgStartTime = Date.now();
+    var SVG_TIME_BUDGET_MS = 5000; // max 5s for SVG inlining — prevent timeout on heavy files
+    var SVG_MAX_ICONS = 10;
     if (detailLevel !== "full") iconCount = 999; // skip inline SVG for non-full modes
     async function inlineSvgForIcons(node) {
       if (!node) return;
-      if (node.isIcon && node.id && iconCount < 20) {
+      if (iconCount >= SVG_MAX_ICONS || (Date.now() - svgStartTime) > SVG_TIME_BUDGET_MS) return;
+      if (node.isIcon && node.id) {
         try {
           var figNode = await findNodeByIdAsync(node.id);
           if (figNode) {
@@ -64,6 +70,7 @@ handlers.get_design = async function(params) {
       }
       if (node.children) {
         for (var i = 0; i < node.children.length; i++) {
+          if ((Date.now() - svgStartTime) > SVG_TIME_BUDGET_MS) break;
           await inlineSvgForIcons(node.children[i]);
         }
       }
@@ -180,6 +187,13 @@ handlers.scan_design = async function(params) {
   }
 
   // Build sections from top-level children
+  function countAssets(n, sec) {
+    if (!n || typeof n !== "object") return;
+    if (isLikelyIcon(n)) sec.iconCount++;
+    if (hasImageFill(n)) sec.imageCount++;
+    if ("children" in n && Array.isArray(n.children)) { for (var i = 0; i < n.children.length; i++) countAssets(n.children[i], sec); }
+  }
+
   if ("children" in root) {
     for (var ci = 0; ci < root.children.length; ci++) {
       var child = root.children[ci];
@@ -195,13 +209,7 @@ handlers.scan_design = async function(params) {
       section.iconCount = 0;
       section.imageCount = 0;
       // Quick count icons/images in section
-      function countAssets(n) {
-        if (!n || typeof n !== "object") return;
-        if (isLikelyIcon(n)) section.iconCount++;
-        if (hasImageFill(n)) section.imageCount++;
-        if ("children" in n && Array.isArray(n.children)) { for (var i = 0; i < n.children.length; i++) countAssets(n.children[i]); }
-      }
-      countAssets(child);
+      countAssets(child, section);
       summary.sections.push(section);
     }
   }
@@ -323,10 +331,7 @@ handlers.search_nodes = async function(params) {
     }
   }
 
-  // Ensure all pages are loaded for findOne() calls
-  await figma.loadAllPagesAsync();
-
-  // Search scope: specific node or entire page
+  // Search scope: specific node or current page (no cross-page load — too slow on large files)
   var root;
   if (p.id) root = await findNodeByIdAsync(p.id);
   else if (p.name) root = findNodeByName(p.name);

@@ -1,6 +1,6 @@
 {
   "name": "figma-ui-mcp",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "description": "Claude Code to Figma — Bidirectional MCP bridge. AI draws UI on Figma canvas, reads designs back. Works with Claude, Cursor, VS Code, Windsurf, Antigravity. No API key needed.",
   "mcpName": "io.github.TranHoaiHung/figma-ui-mcp",
   "type": "module",

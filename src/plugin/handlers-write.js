@@ -4,7 +4,7 @@ const handlers = {};
 
 handlers.status = async () => ({
   connected:   true,
-  version:     "1.9.1",
+  version:     "2.1.0",
   fileName:    figma.root.name,
   currentPage: figma.currentPage.name,
   pageCount:   figma.root.children.length,
@@ -257,10 +257,10 @@ handlers.create = async (params) => {
     var lookup = {};
     for (var li = 0; li < B64CHARS.length; li++) { lookup[B64CHARS[li]] = li; }
 
-    var cleanData = imgData.replace(/[^A-Za-z0-9+/]/g, "");
-    var outLen = Math.floor(cleanData.length * 3 / 4);
-    if (imgData.endsWith("==")) outLen -= 2;
-    else if (imgData.endsWith("=")) outLen -= 1;
+    // Strip data URI prefix if present, then remove non-base64 chars except padding
+    var strippedData = imgData.indexOf(",") !== -1 ? imgData.substring(imgData.indexOf(",") + 1) : imgData;
+    var cleanData = strippedData.replace(/[^A-Za-z0-9+/=]/g, "");
+    var outLen = Math.floor(cleanData.replace(/=/g, "").length * 3 / 4);
 
     var raw = new Uint8Array(outLen);
     var j = 0;
@@ -389,6 +389,14 @@ handlers.modify = async (params) => {
       node.paddingBottom = params.padding;
       node.paddingLeft = params.padding;
       node.paddingRight = params.padding;
+    }
+    if (params.paddingHorizontal !== undefined) {
+      node.paddingLeft = params.paddingHorizontal;
+      node.paddingRight = params.paddingHorizontal;
+    }
+    if (params.paddingVertical !== undefined) {
+      node.paddingTop = params.paddingVertical;
+      node.paddingBottom = params.paddingVertical;
     }
     if (params.paddingTop !== undefined) node.paddingTop = params.paddingTop;
     if (params.paddingBottom !== undefined) node.paddingBottom = params.paddingBottom;

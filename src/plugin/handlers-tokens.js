@@ -241,7 +241,7 @@ handlers.setFrameVariableMode = async function(params) {
     collectionId: collection.id,
     collectionName: collection.name,
     modeId: resolvedModeId,
-    modeName: collection.modes.find(function(m) { return m.modeId === resolvedModeId; }).name,
+    modeName: (collection.modes.find(function(m) { return m.modeId === resolvedModeId; }) || {}).name || resolvedModeId,
     explicitVariableModes: node.explicitVariableModes || {},
   };
 };
@@ -489,11 +489,8 @@ handlers.modifyVariable = async function(params) {
 
   // Set value based on type
   if (variable.resolvedType === "COLOR") {
-    var hex = value.replace("#", "");
-    var r = parseInt(hex.substring(0, 2), 16) / 255;
-    var g = parseInt(hex.substring(2, 4), 16) / 255;
-    var b = parseInt(hex.substring(4, 6), 16) / 255;
-    variable.setValueForMode(modeId, { r: r, g: g, b: b, a: 1 });
+    var rgb = hexToRgb(value);
+    variable.setValueForMode(modeId, { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 });
   } else if (variable.resolvedType === "FLOAT") {
     variable.setValueForMode(modeId, Number(value));
   } else if (variable.resolvedType === "STRING") {
@@ -546,18 +543,15 @@ handlers.setupDesignTokens = async function(params) {
   var colorNames = Object.keys(colors);
   for (var i = 0; i < colorNames.length; i++) {
     var name = colorNames[i];
-    var hex = colors[name].replace("#", "");
-    var r = parseInt(hex.substring(0, 2), 16) / 255;
-    var g = parseInt(hex.substring(2, 4), 16) / 255;
-    var b = parseInt(hex.substring(4, 6), 16) / 255;
+    var rgb = hexToRgb(colors[name]);
 
     if (existing[name]) {
       // Update existing variable value
-      existing[name].setValueForMode(modeId, { r: r, g: g, b: b, a: 1 });
+      existing[name].setValueForMode(modeId, { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 });
       skipped.push(name);
     } else {
       var cv = figma.variables.createVariable(name, collection, "COLOR");
-      cv.setValueForMode(modeId, { r: r, g: g, b: b, a: 1 });
+      cv.setValueForMode(modeId, { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 });
       created.push({ name: name, id: cv.id, type: "COLOR" });
     }
   }

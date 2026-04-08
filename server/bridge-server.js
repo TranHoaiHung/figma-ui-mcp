@@ -5,7 +5,7 @@ export const CONFIG = {
   PORT: parseInt(process.env.FIGMA_MCP_PORT || "38451", 10),
   PORT_RANGE: 10,           // try up to 10 ports (38451-38460)
   HOST: null,               // null = Node.js binds :: (dual-stack IPv4+IPv6), accepts localhost on both
-  OP_TIMEOUT_MS: 30_000,    // per-operation timeout (was 10s, too short for first-run font loading + large exports)
+  OP_TIMEOUT_MS: 60_000,    // per-operation timeout (was 30s, raised for heavy files with many nodes/icons)
   MAX_BODY_BYTES: 5_000_000,  // 5MB to support image payloads
   MAX_QUEUE: 50,
   HEALTH_TTL_MS: 60_000,    // plugin considered offline after 60s without poll (was 30s, plugin may be busy processing)
@@ -96,7 +96,7 @@ export class BridgeServer {
       res.writeHead(200);
       res.end(JSON.stringify({
         server: "figma-ui-mcp",
-        version: "1.9.8",
+        version: "2.1.0",
         port: this.#actualPort,
         pluginConnected: this.isPluginConnected(),
         lastPollAgoMs: this.#lastPollAt ? Date.now() - this.#lastPollAt : null,

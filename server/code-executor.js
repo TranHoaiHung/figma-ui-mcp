@@ -45,13 +45,14 @@ const ICON_LIBRARIES = [
 ];
 
 // ─── HTTP fetch helper (server-side, NOT in sandbox) ──────────────────────────
-function httpFetch(url, maxBytes = 10_000_000) {
+function httpFetch(url, maxBytes = 10_000_000, redirectsLeft = 3) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith("https") ? https : http;
     const req = client.get(url, { timeout: 15000 }, (res) => {
       // Follow redirects (up to 3)
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return httpFetch(res.headers.location, maxBytes).then(resolve).catch(reject);
+        if (redirectsLeft <= 0) { res.resume(); return reject(new Error("Too many redirects")); }
+        return httpFetch(res.headers.location, maxBytes, redirectsLeft - 1).then(resolve).catch(reject);
       }
       if (res.statusCode !== 200) {
         res.resume();

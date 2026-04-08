@@ -20,6 +20,7 @@ let useHttpProxy = false;
 
 // HTTP proxy: forwards operations to existing bridge via /exec endpoint
 const httpProxy = {
+  port: CONFIG.PORT,
   isPluginConnected() { return true; }, // delegate health check to actual call
   get queueLength()  { return 0; },
   get lastPollAt()   { return Date.now(); },
@@ -102,7 +103,7 @@ if (existingHealth.pluginConnected) {
 }
 
 const server = new Server(
-  { name: "figma-ui-mcp", version: "2.0.3" },
+  { name: "figma-ui-mcp", version: "2.1.0" },
   { capabilities: { tools: {} } }
 );
 
