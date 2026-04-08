@@ -43,6 +43,15 @@ await figma.ensure_library();
 - ✅ ALWAYS use auto-layout with counterAxisAlignItems: "CENTER" for icon+text rows
 - ✅ ALWAYS draw background first (bottom layer), then overlays, then content
 
+**Reading hidden layers:**
+When the user says "hidden layer", "invisible element", "hidden elements", "ẩn", "không thấy layer", "phần tử ẩn", "layer bị ẩn", "要隐藏的元素", "非表示レイヤー", or asks about elements that don't appear in read results — pass \`includeHidden: true\` to any read operation:
+\`\`\`js
+figma_read({ operation: "get_design", nodeId: "1:2", includeHidden: true })
+figma_read({ operation: "get_selection", includeHidden: true })
+figma_read({ operation: "search_nodes", type: "TEXT", includeHidden: true })
+\`\`\`
+Default is \`false\` — hidden nodes are skipped to reduce noise.
+
 ---
 
 ## ⚑ MANDATORY DESIGN SYSTEM RULES (read before every design task)
