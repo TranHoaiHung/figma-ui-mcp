@@ -17,7 +17,8 @@ handlers.get_selection = async function(params) {
 
   var maxDepth = (params && params.depth !== undefined) ? (params.depth === "full" ? 50 : Number(params.depth)) : 15;
   var detailLevel = (params && params.detail) || "full";
-  var trees = nodes.map(function(n) { return extractDesignTree(n, 0, maxDepth, detailLevel); });
+  var filterInvisible = !(params && params.includeHidden === true);
+  var trees = nodes.map(function(n) { return extractDesignTree(n, 0, maxDepth, detailLevel, filterInvisible); });
   return {
     nodes: trees,
     // Reuse already-computed tree instead of calling extractDesignTree twice
@@ -32,6 +33,7 @@ handlers.get_design = async function(params) {
   var id = p.id, name = p.name;
   var depthParam = p.depth !== undefined ? p.depth : 10;
   var detailLevel = p.detail || "full"; // "minimal" | "compact" | "full"
+  var filterInvisible = !(p.includeHidden === true);
 
   var root;
   if (id)   root = await findNodeByIdAsync(id);
@@ -44,7 +46,7 @@ handlers.get_design = async function(params) {
   if (isNaN(maxDepth) || maxDepth < 1) maxDepth = 10;
 
   try {
-    var tree = extractDesignTree(root, 0, maxDepth, detailLevel);
+    var tree = extractDesignTree(root, 0, maxDepth, detailLevel, filterInvisible);
 
     // Post-process: inline SVG for icon nodes (full mode only, max 10, with time budget)
     var iconCount = 0;
@@ -114,8 +116,10 @@ handlers.scan_design = async function(params) {
     components: [],    // component instances with names
   };
 
+  var scanIncludeHidden = !!(p.includeHidden);
   function walkCount(node) {
     if (!node || typeof node !== "object") return;
+    if (!scanIncludeHidden && node.visible === false) return;
     summary.totalNodes++;
 
     // Collect text
@@ -246,6 +250,7 @@ handlers.search_nodes = async function(params) {
     fontSize: p.fontSize || null,        // 14
     hasImage: p.hasImage || false,       // true = nodes with image fills
     hasIcon: p.hasIcon || false,         // true = likely icon nodes
+    includeHidden: p.includeHidden || false, // false = skip visible:false nodes (default)
     minWidth: p.minWidth || null,
     maxWidth: p.maxWidth || null,
     minHeight: p.minHeight || null,
@@ -295,6 +300,8 @@ handlers.search_nodes = async function(params) {
   function walkAndMatch(node) {
     // Guard: 'in' operator requires a non-null object — null/undefined/primitives crash here
     if (!node || typeof node !== "object") return;
+    // Skip invisible nodes unless caller explicitly requests hidden elements
+    if (!criteria.includeHidden && node.visible === false) return;
     if (results.length >= maxResults) return;
     try {
       if (matchNode(node)) {

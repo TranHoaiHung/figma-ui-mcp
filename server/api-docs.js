@@ -1592,6 +1592,18 @@ const vp = await figma.get_viewport();
 // Read Figma local variables (Design Tokens)
 const vars = await figma.get_variables();
 // → { collections: [{id, name, modes, variables: [{id, name, resolvedType, values, description}]}] }
+
+// Get design tree with control over hidden layers (default: invisible nodes are SKIPPED)
+const { nodes } = await figma.get_selection();                      // hidden children excluded
+const { nodes: all } = await figma.get_selection({ includeHidden: true }); // include visible:false
+
+// get_design also supports includeHidden
+const { tree } = await figma.get_design({ id: "1:2", includeHidden: false }); // default
+const { tree: full } = await figma.get_design({ id: "1:2", includeHidden: true }); // all layers
+
+// search_nodes also skips hidden by default
+const { results } = await figma.search_nodes({ type: "TEXT" });              // visible only
+const { results: allText } = await figma.search_nodes({ type: "TEXT", includeHidden: true }); // + hidden
 \`\`\`
 
 ---

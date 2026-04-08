@@ -96,7 +96,7 @@ export class BridgeServer {
       res.writeHead(200);
       res.end(JSON.stringify({
         server: "figma-ui-mcp",
-        version: "2.1.0",
+        version: "2.1.1",
         port: this.#actualPort,
         pluginConnected: this.isPluginConnected(),
         lastPollAgoMs: this.#lastPollAt ? Date.now() - this.#lastPollAt : null,

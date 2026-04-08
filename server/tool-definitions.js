@@ -70,6 +70,7 @@ export const TOOLS = [
         depth:    { type: "string", description: "Tree depth for get_design/get_selection. Number (default 10) or 'full' for unlimited. Higher = more detail but larger output." },
         format:   { type: "string", description: "Image format for export_image: 'png' (default) or 'jpg'." },
         detail:   { type: "string", description: "Detail level for get_design/get_selection: 'minimal' (~5% tokens), 'compact' (~30%), 'full' (default, 100%). Use minimal for large files." },
+        includeHidden: { type: "boolean", description: "Include invisible nodes (visible:false) in results. Default false — hidden layers are skipped to reduce noise." },
       },
       required: ["operation"],
     },

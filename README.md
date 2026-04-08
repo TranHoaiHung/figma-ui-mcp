@@ -407,6 +407,10 @@ figma-ui-mcp/
 | `get_local_components` | Component listing with descriptions + variant properties |
 | `get_viewport` | Current viewport position, zoom, bounds |
 | `get_variables` | Local variables (Design Tokens) — collections, modes, values |
+| `search_nodes` | Find nodes by type, name, fill color, font, size — supports `includeHidden` |
+| `scan_design` | Progressive scan for large files — all text, colors, fonts, images, icons |
+
+**`includeHidden` param** (boolean, default `false`) — available on `get_selection`, `get_design`, `search_nodes`, `scan_design`. When `false` (default), nodes with `visible: false` are skipped. Pass `true` to include hidden layers.
 
 ---
 

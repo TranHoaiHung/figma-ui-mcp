@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.1] — 2026-04-08
+
+### Fixed — GitHub Issue #5: Filter invisible elements from read operations
+
+- `get_design`, `get_selection`, `search_nodes`, `scan_design` — now skip nodes with `visible: false` by default
+- New `includeHidden` param (boolean, default `false`) on all four operations — set `true` to include hidden layers
+- `extractDesignTree` updated with `filterInvisible` flag, propagated through full recursion
+- `search_nodes` criteria object now includes `includeHidden` for consistent behavior
+- `figma_read` MCP tool schema updated with `includeHidden` property documentation
+
+---
+
 ## [2.1.0] — 2026-04-08
 
 ### Fixed — Comprehensive code review (2 critical, 5 high, 4 medium)

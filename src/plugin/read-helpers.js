@@ -76,12 +76,17 @@ function collectIconNames(node, maxItems) {
 // minimal: id, name, type, position, size, childCount — ~5% token cost
 // compact: + fill, stroke, cornerRadius, layout, text content — ~30% token cost
 // full:    + effects, segments, gradient details, boundVariables, inline SVG — 100% token cost
-function extractDesignTree(node, depth, maxDepth, detailLevel) {
+// filterInvisible: true (default) = skip nodes with visible:false | false = include all nodes
+function extractDesignTree(node, depth, maxDepth, detailLevel, filterInvisible) {
   if (!node || typeof node !== "object") return null;
   if (depth === undefined) depth = 0;
   if (maxDepth === undefined) maxDepth = 15;
   if (!detailLevel) detailLevel = "full";
+  if (filterInvisible === undefined) filterInvisible = true;
   if (depth > maxDepth) return null;
+
+  // Skip invisible nodes when filtering is enabled (depth > 0 = non-root nodes)
+  if (filterInvisible && depth > 0 && node.visible === false) return null;
 
   var isMinimal = (detailLevel === "minimal");
   var isCompact = (detailLevel === "compact");
@@ -103,7 +108,7 @@ function extractDesignTree(node, depth, maxDepth, detailLevel) {
       info.childCount = node.children.length;
       if (node.type === "TEXT") { try { info.content = node.characters; } catch(e) {} }
       info.children = node.children
-        .map(function(c) { return extractDesignTree(c, depth + 1, maxDepth, detailLevel); })
+        .map(function(c) { return extractDesignTree(c, depth + 1, maxDepth, detailLevel, filterInvisible); })
         .filter(Boolean);
     }
     return info;
@@ -433,7 +438,7 @@ function extractDesignTree(node, depth, maxDepth, detailLevel) {
       if (icons.length) info.iconNames = icons;
     } else {
       info.children = node.children
-        .map(function(c) { return extractDesignTree(c, depth + 1, maxDepth, detailLevel); })
+        .map(function(c) { return extractDesignTree(c, depth + 1, maxDepth, detailLevel, filterInvisible); })
         .filter(Boolean);
     }
   }
