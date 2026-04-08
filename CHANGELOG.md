@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.3] — 2026-04-08
+
+### Fixed — `fills: NaN color` error (`src/plugin/utils.js`)
+
+- **`hexToRgb`** — `parseInt` was returning `NaN` when AI passed invalid color values (CSS names, `"transparent"`, `"var(--color)"`, short hex without expansion)
+- Added `normalizeHex()`: validates hex, expands 3-char shorthand, maps common CSS color names (`white`, `black`, `teal`, `red`, etc.) to hex, treats `transparent`/`none` as no-fill
+- **`solidFill` / `solidStroke`** — both now return `[]` for transparent/none instead of crashing
+- Throws clear error for truly invalid values: `Invalid color value: "var(--x)". Use 6-digit hex like #FF0000`
+
+---
+
 ## [2.0.2] — 2026-04-07
 
 ### Fixed
