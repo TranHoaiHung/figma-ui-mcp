@@ -30,9 +30,9 @@ Claude ◀─figma_read──── MCP Server ◀──HTTP (localhost:38451)�
 
 ### How the localhost bridge works
 
-The MCP server starts a small HTTP server bound to `localhost:38451`. The Figma plugin (running inside Figma Desktop) polls this server every 500 ms to pick up queued operations and post results back. All traffic stays on your machine — nothing is sent to any external server.
+The MCP server starts a small HTTP server bound to `localhost:38451`. The Figma plugin (running inside Figma Desktop) uses **long polling** — the server holds requests up to 25s until work arrives, delivering near-realtime latency. All traffic stays on your machine — nothing is sent to any external server.
 
-This approach is necessary because Figma plugins run in a sandboxed iframe and cannot use stdio or WebSocket to talk to a local process directly. HTTP polling over localhost is the only supported method for a Figma plugin to communicate with a local tool.
+**Multi-instance support (v2.3.0+):** Multiple Figma files/tabs can connect simultaneously. Each plugin instance sends a `sessionId`, and the bridge routes operations to the correct session. Use the optional `sessionId` param in `figma_write`/`figma_read` to target a specific file.
 
 ---
 
@@ -40,10 +40,21 @@ This approach is necessary because Figma plugins run in a sandboxed iframe and c
 
 | Direction | Tool | What it does |
 |-----------|------|-------------|
-| Write | `figma_write` | Draw frames, shapes, text on any page via JS code |
+| Write | `figma_write` | Draw frames, shapes, text, prototypes via JS code |
 | Read  | `figma_read`  | Extract node trees, colors, typography, screenshots |
-| Info  | `figma_status`| Check plugin connection status |
+| Info  | `figma_status`| Check plugin connection + active sessions |
 | Docs  | `figma_docs`  | Get full API reference + examples |
+
+### What's new in v2.4.0
+
+| Feature | Description |
+|---------|-------------|
+| **Prototyping** | `setReactions` — click/hover/press → navigate/overlay/swap with Smart Animate |
+| **Scroll** | `setScrollBehavior` — HORIZONTAL / VERTICAL / BOTH overflow |
+| **Variants** | `setComponentProperties` / `swapComponent` — variant + instance swap |
+| **Multi-instance** | Multiple Figma tabs connect simultaneously via sessions |
+| **Long polling** | Near-realtime latency (was 900ms polling) |
+| **MCP Registry** | Listed on glama.ai + smithery.ai |
 
 ---
 
@@ -189,7 +200,7 @@ Tell your AI assistant to connect:
 The AI will call `figma_status` and confirm:
 
 ```
-✅ Connected — File: "My Project", Page: "Page 1", Plugin v1.9.2
+✅ Connected — File: "My Project", Page: "Page 1", Plugin v2.4.0
 ```
 
 > If you see "Plugin not connected", make sure the Figma plugin is running (Step 2).
@@ -327,10 +338,11 @@ figma-ui-mcp/
 | Layer | Protection |
 |-------|-----------|
 | VM sandbox | `vm.runInContext()` — blocks `require`, `process`, `fs`, `fetch` |
-| Localhost only | Bridge binds `127.0.0.1:38451`, never exposed to network |
-| Operation allowlist | Only 20 predefined operations accepted |
-| Timeout | 10s VM execution + 10s per plugin operation |
-| Body size limit | 500 KB max per request |
+| Localhost only | Bridge binds `localhost:38451`, never exposed to network |
+| Operation allowlist | 50+ predefined operations accepted (WRITE_OPS + READ_OPS) |
+| Timeout | 30s VM execution + 60-90s per plugin operation (adaptive by op type) |
+| Body size limit | 5 MB max per request |
+| Session isolation | Multi-instance sessions scoped by Figma file ID |
 
 ---
 
@@ -380,6 +392,12 @@ figma-ui-mcp/
 | `figma.applyVariable({ nodeId, field, variableName })` | Bind variable to node fill/stroke/opacity |
 | `figma.createPaintStyle({ name, color })` | Create reusable paint style |
 | `figma.createTextStyle({ name, fontFamily, fontSize, ... })` | Create reusable text style |
+| `figma.addVariableMode({ collectionId, modeName })` | Add mode (e.g. dark, vi, ja) to collection |
+| `figma.renameVariableMode({ collectionId, modeId, newName })` | Rename existing mode |
+| `figma.removeVariableMode({ collectionId, modeId })` | Remove mode from collection |
+| `figma.setVariableValue({ variableId, modeId, value })` | Set per-mode value |
+| `figma.setFrameVariableMode({ nodeId, collectionId, modeName })` | Switch variable mode on a frame (all children follow) |
+| `figma.clearFrameVariableMode({ nodeId, collectionId })` | Reset frame to default mode |
 | `figma.modifyVariable({ variableName, value })` | Change variable value — all bound nodes update instantly |
 | `figma.setupDesignTokens({ colors, numbers })` | Bootstrap complete token system in one call (idempotent) |
 | `figma.ensure_library()` | Create/get Design Library frame |
@@ -391,6 +409,28 @@ figma-ui-mcp/
 | `figma.loadImage(url, opts)` | Download image → place on canvas |
 | `figma.loadIcon(name, opts)` | Fetch SVG icon (auto fallback: Fluent → Bootstrap → Phosphor → Lucide) |
 | `figma.loadIconIn(name, opts)` | Icon inside centered circle background |
+
+### Prototyping & Interactions (v2.4.0)
+| Operation | Description |
+|-----------|-------------|
+| `figma.setReactions({ id, reactions })` | Add prototype interactions (ON_CLICK/ON_HOVER/ON_PRESS → NAVIGATE/OVERLAY/SWAP) |
+| `figma.getReactions({ id })` | Read all prototype interactions from a node |
+| `figma.removeReactions({ id })` | Clear all interactions from a node |
+
+Supported transitions: `SMART_ANIMATE`, `DISSOLVE`, `MOVE_IN`, `MOVE_OUT`, `PUSH`, `SLIDE_IN`, `SLIDE_OUT`, `INSTANT`
+Supported easings: `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_AND_OUT`, `CUSTOM_BEZIER`
+
+### Scroll Behavior (v2.4.0)
+| Operation | Description |
+|-----------|-------------|
+| `figma.setScrollBehavior({ id, overflowDirection })` | Set overflow scrolling: `NONE` / `HORIZONTAL` / `VERTICAL` / `BOTH` |
+
+### Variant & Component Swapping (v2.4.0)
+| Operation | Description |
+|-----------|-------------|
+| `figma.setComponentProperties({ id, properties })` | Set variant, boolean, text, or instance swap properties on an INSTANCE |
+| `figma.swapComponent({ id, componentId })` | Swap the main component of an instance |
+| `figma.getComponentProperties({ id })` | Read all properties + definitions from component/instance |
 
 ## Available Read Operations (`figma_read`)
 
