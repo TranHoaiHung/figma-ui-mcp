@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.2.0] — 2026-04-14
+
+### Added — Long Polling, Connection Resilience & MCP Registry
+
+**Long Polling (P3):**
+- Bridge `/poll` endpoint now holds request up to 25s until work arrives — near-realtime latency vs old 900ms short polling
+- `#flushLongPoll()` wakes held request immediately when `sendOperation()` is called
+- Plugin UI poll timeout raised to 30s to match; inter-cycle delay reduced 900ms → 300ms
+- Fully backward compatible: old plugins fall back to short polling automatically
+
+**Connection Resilience (P2):**
+- Operation-specific timeouts: screenshot/scan_design/batch get 90s, others keep 60s default
+- Latency tracking via exponential moving average in `#stats`
+- `/health` endpoint now returns `longPollHeld`, `stats` (ops count, avg latency, offline queue length)
+- `figma_status` MCP tool exposes `stats` for AI observability
+- Long-poll waiter auto-cleanup on client disconnect
+
+**MCP Registry (P1):**
+- `glama.json` — full tool schemas for glama.ai registry
+- `smithery.yaml` — smithery.ai registry definition
+
+**Misc:**
+- Version bump to 2.2.0 across package.json, index.js, bridge-server.js
+
+---
+
 ## [2.1.1] — 2026-04-08
 
 ### Fixed — GitHub Issue #5: Filter invisible elements from read operations

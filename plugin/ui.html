@@ -163,8 +163,9 @@
   <script>
     var currentPort = 38451;
     var BRIDGE  = "http://localhost:" + currentPort;
-    var POLL_MS = 900;
-    var POLL_MAX_MS = 5000;
+    var POLL_MS = 300;           // short delay between long-poll cycles
+    var POLL_MAX_MS = 5000;      // max backoff on errors
+    var LONG_POLL_TIMEOUT = 30000; // match server LONG_POLL_MS + buffer
     var consecutiveErrors = 0;
 
     var writeCount = 0, readCount = 0, errCount = 0;
@@ -219,7 +220,7 @@
     async function poll() {
       while (polling) {
         try {
-          var res = await fetch(BRIDGE + "/poll", { signal: AbortSignal.timeout(5000) });
+          var res = await fetch(BRIDGE + "/poll", { signal: AbortSignal.timeout(LONG_POLL_TIMEOUT) });
           if (!res.ok) { setStatus("yellow", "Bridge not responding"); consecutiveErrors++; await sleep(getBackoff()); continue; }
 
           var body = await res.json();

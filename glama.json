@@ -1,0 +1,110 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "name": "figma-ui-mcp",
+  "display_name": "Figma UI MCP",
+  "description": "Bidirectional Figma MCP bridge — AI draws UI on Figma canvas and reads designs back. No API key needed.",
+  "version": "2.1.1",
+  "repository": "https://github.com/TranHoaiHung/figma-ui-mcp",
+  "homepage": "https://github.com/TranHoaiHung/figma-ui-mcp#readme",
+  "license": "MIT",
+  "author": "TranHoaiHung",
+  "categories": ["design", "figma", "ui-generation"],
+  "features": {
+    "tools": true,
+    "prompts": false,
+    "resources": false
+  },
+  "tools": [
+    {
+      "name": "figma_status",
+      "description": "Check whether the Figma plugin bridge is connected. Always call this first to confirm the plugin is running before any other tool.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "figma_write",
+      "description": "Execute JavaScript code to create or modify designs in Figma. Supports create, modify, delete, clone, group, ungroup, flatten, resize, batch operations. Design tokens: createVariableCollection, createVariable, setVariableValue, addVariableMode, renameVariableMode, removeVariableMode, applyVariable, setFrameVariableMode, clearFrameVariableMode, createPaintStyle, createTextStyle, createComponent. Code runs in a sandboxed VM.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "JavaScript using figma.create(), figma.modify(), figma.setPage(), etc."
+          }
+        },
+        "required": ["code"]
+      }
+    },
+    {
+      "name": "figma_read",
+      "description": "Read design data from Figma — extract node trees, colors, typography, spacing, and screenshots. Operations: get_selection, get_design, get_page_nodes, screenshot, export_svg, get_styles, get_local_components, get_viewport, get_variables, get_node_detail, export_image, search_nodes, scan_design.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "get_selection", "get_design", "get_page_nodes", "screenshot",
+              "export_svg", "get_styles", "get_local_components", "get_viewport",
+              "get_variables", "get_node_detail", "export_image", "search_nodes",
+              "scan_design"
+            ],
+            "description": "The read operation to perform."
+          },
+          "nodeId": {
+            "type": "string",
+            "description": "Target node ID (optional — omit to use current selection)."
+          },
+          "nodeName": {
+            "type": "string",
+            "description": "Target node name (alternative to nodeId)."
+          },
+          "scale": {
+            "type": "number",
+            "description": "Export scale for screenshot (default 1)."
+          },
+          "depth": {
+            "type": "string",
+            "description": "Tree depth for get_design/get_selection. Number (default 10) or 'full'."
+          },
+          "format": {
+            "type": "string",
+            "description": "Image format for export_image: 'png' (default) or 'jpg'."
+          },
+          "detail": {
+            "type": "string",
+            "description": "Detail level: 'minimal' (~5% tokens), 'compact' (~30%), 'full' (default)."
+          },
+          "includeHidden": {
+            "type": "boolean",
+            "description": "Include invisible nodes in results. Default false."
+          }
+        },
+        "required": ["operation"]
+      }
+    },
+    {
+      "name": "figma_docs",
+      "description": "Get the full API reference for figma_write — all operations, parameters, and code examples. Always call this before writing non-trivial draw code.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  ],
+  "installation": {
+    "npm": "npx figma-ui-mcp@latest",
+    "config": {
+      "mcpServers": {
+        "figma-ui-mcp": {
+          "command": "npx",
+          "args": ["-y", "figma-ui-mcp@latest"]
+        }
+      }
+    }
+  }
+}

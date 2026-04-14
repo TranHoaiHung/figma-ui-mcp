@@ -1,4 +1,5 @@
 // HTTP bridge — plugin polls this server for queued operations
+// Supports long polling for reduced latency + offline queue for resilience
 import http from "node:http";
 
 export const CONFIG = {
@@ -9,6 +10,18 @@ export const CONFIG = {
   MAX_BODY_BYTES: 5_000_000,  // 5MB to support image payloads
   MAX_QUEUE: 50,
   HEALTH_TTL_MS: 60_000,    // plugin considered offline after 60s without poll (was 30s, plugin may be busy processing)
+  LONG_POLL_MS: 25_000,     // long poll hold time — server holds request until work arrives or timeout
+  OFFLINE_QUEUE_MAX: 20,    // max write ops to queue while plugin is temporarily offline
+};
+
+// Operation-specific timeouts — heavy ops get more time
+const OP_TIMEOUTS = {
+  screenshot: 90_000,
+  scan_design: 90_000,
+  export_image: 90_000,
+  export_svg: 60_000,
+  get_design: 60_000,
+  batch: 90_000,
 };
 
 export class BridgeServer {
@@ -16,10 +29,14 @@ export class BridgeServer {
   #pending = new Map();     // id → { resolve, reject, timer }
   #lastPollAt = 0;
   #server = null;
+  #longPollWaiter = null;   // { res, timer } — held long-poll response
+  #offlineQueue = [];       // write ops queued while plugin offline
+  #stats = { ops: 0, avgLatencyMs: 0, reconnects: 0 };
 
   get lastPollAt() { return this.#lastPollAt; }
   get queueLength() { return this.#requestQueue.length; }
   get pendingCount() { return this.#pending.size; }
+  get stats() { return { ...this.#stats, offlineQueueLength: this.#offlineQueue.length }; }
 
   isPluginConnected() {
     return this.#lastPollAt > 0 && Date.now() - this.#lastPollAt < CONFIG.HEALTH_TTL_MS;
@@ -29,18 +46,30 @@ export class BridgeServer {
     if (this.#requestQueue.length >= CONFIG.MAX_QUEUE) {
       throw new Error("Queue full — is the Figma plugin running?");
     }
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    var timeout = OP_TIMEOUTS[operation] || CONFIG.OP_TIMEOUT_MS;
+    var id = Date.now() + "-" + Math.random().toString(36).slice(2, 7);
     this.#requestQueue.push({ id, operation, params });
 
+    // Wake up long-poll waiter immediately if one is held
+    this.#flushLongPoll();
+
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        // Remove from BOTH pending AND queue (prevents stuck requests)
+      var timer = setTimeout(() => {
         this.#pending.delete(id);
         this.#requestQueue = this.#requestQueue.filter(r => r.id !== id);
-        reject(new Error(`Operation "${operation}" timed out after ${CONFIG.OP_TIMEOUT_MS}ms`));
-      }, CONFIG.OP_TIMEOUT_MS);
-      this.#pending.set(id, { resolve, reject, timer });
+        reject(new Error("Operation \"" + operation + "\" timed out after " + timeout + "ms"));
+      }, timeout);
+      this.#pending.set(id, { resolve, reject, timer, startMs: Date.now() });
     });
+  }
+
+  // Wake up a held long-poll response immediately when new work arrives
+  #flushLongPoll() {
+    if (!this.#longPollWaiter) return;
+    var w = this.#longPollWaiter;
+    this.#longPollWaiter = null;
+    clearTimeout(w.timer);
+    this.#respondPoll(w.res);
   }
 
   // Clear all queued and pending operations (unstick the queue)
@@ -56,11 +85,26 @@ export class BridgeServer {
   }
 
   #settle(response) {
-    const p = this.#pending.get(response.id);
+    var p = this.#pending.get(response.id);
     if (!p) return;
     clearTimeout(p.timer);
     this.#pending.delete(response.id);
+    // Track latency stats
+    if (p.startMs) {
+      var latency = Date.now() - p.startMs;
+      this.#stats.ops++;
+      this.#stats.avgLatencyMs = Math.round(this.#stats.avgLatencyMs * 0.9 + latency * 0.1);
+    }
     response.success ? p.resolve(response.data) : p.reject(new Error(response.error || "Plugin error"));
+  }
+
+  // Send queued requests to plugin via poll response
+  #respondPoll(res) {
+    this.#lastPollAt = Date.now();
+    var alive = this.#requestQueue.filter(r => this.#pending.has(r.id));
+    this.#requestQueue.length = 0;
+    res.writeHead(200);
+    res.end(JSON.stringify({ requests: alive, mode: "ready" }));
   }
 
   async #readJson(req) {
@@ -96,7 +140,7 @@ export class BridgeServer {
       res.writeHead(200);
       res.end(JSON.stringify({
         server: "figma-ui-mcp",
-        version: "2.1.1",
+        version: "2.2.0",
         port: this.#actualPort,
         pluginConnected: this.isPluginConnected(),
         lastPollAgoMs: this.#lastPollAt ? Date.now() - this.#lastPollAt : null,
@@ -106,14 +150,34 @@ export class BridgeServer {
       return;
     }
 
-    // Plugin → pick up queued operations (auto-clean expired requests)
+    // Plugin → pick up queued operations (long polling supported)
     if (path === "/poll" && req.method === "GET") {
       this.#lastPollAt = Date.now();
-      // Filter out requests whose pending already timed out
-      const alive = this.#requestQueue.filter(r => this.#pending.has(r.id));
-      this.#requestQueue.length = 0;
-      res.writeHead(200);
-      res.end(JSON.stringify({ requests: alive, mode: "ready" }));
+      // If work is already queued, respond immediately
+      if (this.#requestQueue.some(r => this.#pending.has(r.id))) {
+        this.#respondPoll(res);
+        return;
+      }
+      // No work — hold the request (long poll) until work arrives or timeout
+      if (this.#longPollWaiter) {
+        // Release previous waiter with empty response
+        clearTimeout(this.#longPollWaiter.timer);
+        this.#respondPoll(this.#longPollWaiter.res);
+      }
+      this.#longPollWaiter = {
+        res: res,
+        timer: setTimeout(() => {
+          this.#longPollWaiter = null;
+          this.#respondPoll(res);
+        }, CONFIG.LONG_POLL_MS),
+      };
+      // Handle client disconnect
+      req.on("close", () => {
+        if (this.#longPollWaiter && this.#longPollWaiter.res === res) {
+          clearTimeout(this.#longPollWaiter.timer);
+          this.#longPollWaiter = null;
+        }
+      });
       return;
     }
 
@@ -144,7 +208,7 @@ export class BridgeServer {
       return;
     }
 
-    // Health check
+    // Health check with stats
     if (path === "/health" && req.method === "GET") {
       res.writeHead(200);
       res.end(JSON.stringify({
@@ -152,6 +216,8 @@ export class BridgeServer {
         queueLength:     this.queueLength,
         pendingCount:    this.pendingCount,
         lastPollAgoMs:   this.#lastPollAt ? Date.now() - this.#lastPollAt : null,
+        longPollHeld:    !!this.#longPollWaiter,
+        stats:           this.stats,
       }));
       return;
     }

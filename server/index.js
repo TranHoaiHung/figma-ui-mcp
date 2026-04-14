@@ -103,7 +103,7 @@ if (existingHealth.pluginConnected) {
 }
 
 const server = new Server(
-  { name: "figma-ui-mcp", version: "2.1.1" },
+  { name: "figma-ui-mcp", version: "2.2.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -138,6 +138,7 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
           mode:            useHttpProxy ? "http-proxy" : "direct",
           queueLength:     healthData.queueLength || bridge.queueLength,
           lastPollAgoMs:   healthData.lastPollAgoMs || (bridge.lastPollAt ? Date.now() - bridge.lastPollAt : null),
+          stats:           healthData.stats || (bridge.stats ? bridge.stats : null),
           hint: connected
             ? "CONNECTED. BEFORE drawing anything: call figma_docs to load mandatory design rules (token system, component-first, icon sizing, layer order). Skipping figma_docs causes incorrect, hardcoded, low-quality UI."
             : "Plugin not connected. In Figma Desktop: Plugins → Development → Figma UI MCP Bridge → Run",
