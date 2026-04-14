@@ -10,7 +10,7 @@ export const CONFIG = {
   MAX_BODY_BYTES: 5_000_000,
   MAX_QUEUE: 50,
   HEALTH_TTL_MS: 60_000,
-  LONG_POLL_MS: 25_000,
+  LONG_POLL_MS: 8_000,       // short for Figma iframe compat (some envs limit fetch ~10s)
   SESSION_EXPIRE_MS: 300_000, // remove idle sessions after 5 min
 };
 
@@ -76,13 +76,26 @@ export class BridgeServer {
     return s;
   }
 
-  // Find best session: prefer given id, fallback to any connected
+  // Find best session: prefer given id, then session with active long-poll,
+  // then most recently polled connected session, finally default
   #resolveSession(sessionId) {
     if (sessionId) {
       var s = this.#sessions.get(sessionId);
       if (s && s.isConnected()) return s;
     }
-    for (var s of this.#sessions.values()) if (s.isConnected()) return s;
+    // Prefer session with active long-poll waiter (ready to receive work NOW)
+    var bestLongPoll = null;
+    var bestConnected = null;
+    for (var s of this.#sessions.values()) {
+      if (s.longPoll && s.isConnected()) {
+        if (!bestLongPoll || s.lastPollAt > bestLongPoll.lastPollAt) bestLongPoll = s;
+      }
+      if (s.isConnected()) {
+        if (!bestConnected || s.lastPollAt > bestConnected.lastPollAt) bestConnected = s;
+      }
+    }
+    if (bestLongPoll) return bestLongPoll;
+    if (bestConnected) return bestConnected;
     return this.#getSession(BridgeServer.DEFAULT_SESSION);
   }
 
@@ -236,7 +249,7 @@ export class BridgeServer {
     if (path === "/" && req.method === "GET") {
       res.writeHead(200);
       res.end(JSON.stringify({
-        server: "figma-ui-mcp", version: "2.4.0", port: this.#actualPort,
+        server: "figma-ui-mcp", version: "2.4.1", port: this.#actualPort,
         pluginConnected: this.isPluginConnected(),
         sessions: this.getSessions(),
         queueLength: this.queueLength,

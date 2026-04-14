@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.1] — 2026-04-14
+
+### Fixed — Long poll timeout causing plugin disconnects
+
+- `LONG_POLL_MS` reduced 25s → 8s — Figma plugin iframe may kill fetch requests >10s
+- Plugin `LONG_POLL_TIMEOUT` reduced 30s → 12s (8s server + buffer)
+- Replaced `AbortSignal.timeout()` with `AbortController` + `setTimeout` fallback (not all Figma iframe envs support `AbortSignal.timeout`)
+- `#resolveSession` now prefers session with active long-poll waiter (ready to receive work immediately), then most recently polled session
+- Fixes "Operation timed out after 60000ms" when plugin was connected but work routed to wrong/empty session
+
+---
+
 ## [2.4.0] — 2026-04-14
 
 ### Added — Prototyping, Scroll Behavior & Variant Swapping

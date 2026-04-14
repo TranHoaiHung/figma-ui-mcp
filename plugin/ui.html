@@ -165,7 +165,7 @@
     var BRIDGE  = "http://localhost:" + currentPort;
     var POLL_MS = 300;
     var POLL_MAX_MS = 5000;
-    var LONG_POLL_TIMEOUT = 30000;
+    var LONG_POLL_TIMEOUT = 12000;  // server holds 8s + network buffer
     var consecutiveErrors = 0;
     var sessionId = null;        // assigned from plugin main thread (fileName-based)
     var fileName = null;
@@ -227,7 +227,12 @@
           if (sessionId) qs.push("sessionId=" + encodeURIComponent(sessionId));
           if (fileName) qs.push("fileName=" + encodeURIComponent(fileName));
           if (qs.length) pollUrl += "?" + qs.join("&");
-          var res = await fetch(pollUrl, { signal: AbortSignal.timeout(LONG_POLL_TIMEOUT) });
+          // AbortSignal.timeout may not exist in all Figma iframe environments
+          var controller = new AbortController();
+          var timeoutId = setTimeout(function() { controller.abort(); }, LONG_POLL_TIMEOUT);
+          var res;
+          try { res = await fetch(pollUrl, { signal: controller.signal }); }
+          finally { clearTimeout(timeoutId); }
           if (!res.ok) { setStatus("yellow", "Bridge not responding"); consecutiveErrors++; await sleep(getBackoff()); continue; }
 
           var body = await res.json();
