@@ -23,8 +23,20 @@ function normalizeHex(hex) {
   if (mapped) s = mapped;
   // Transparent / none
   if (s.toUpperCase() === "NONE" || s.toUpperCase() === "TRANSPARENT") return null;
+  // rgba(r,g,b,a) or rgb(r,g,b) → convert to hex (alpha discarded)
+  var rgbaMatch = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgbaMatch) {
+    var rr = Math.min(255, Math.max(0, parseInt(rgbaMatch[1])));
+    var gg = Math.min(255, Math.max(0, parseInt(rgbaMatch[2])));
+    var bb = Math.min(255, Math.max(0, parseInt(rgbaMatch[3])));
+    s = "#" + ((1 << 24) + (rr << 16) + (gg << 8) + bb).toString(16).slice(1);
+  }
   // Strip #
   s = s.replace(/^#/, "");
+  // 8-char hex with alpha → take first 6 (discard alpha)
+  if (s.length === 8 && /^[0-9a-fA-F]{8}$/.test(s)) s = s.slice(0, 6);
+  // 4-char hex shorthand with alpha → take first 3, expand
+  if (s.length === 4 && /^[0-9a-fA-F]{4}$/.test(s)) s = s.slice(0, 3);
   // Expand 3-char shorthand
   if (s.length === 3) s = s[0]+s[0]+s[1]+s[1]+s[2]+s[2];
   // Must be 6 hex chars now

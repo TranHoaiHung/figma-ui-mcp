@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.4] — 2026-04-14
+
+### Fixed — normalizeHex now accepts rgba(), rgb(), 8-char hex
+
+- `rgba(255,255,255,0.3)` → `#ffffff` (alpha discarded, use `fillOpacity` separately)
+- `rgb(100,200,50)` → `#64c832`
+- `#ff000080` (8-char hex with alpha) → `#ff0000`
+- `#f008` (4-char shorthand with alpha) → `#ff0000`
+- Prevents "Invalid color value" errors from AI-generated CSS colors
+
+---
+
 ## [2.4.3] — 2026-04-14
 
 ### Fixed — CRITICAL: operations never delivered to plugin (long poll race condition)
