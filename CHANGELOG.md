@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.3] — 2026-04-14
+
+### Fixed — CRITICAL: operations never delivered to plugin (long poll race condition)
+
+**Root cause:** `sendOperation` pushed work to queue and flushed long-poll BEFORE setting the pending map entry. `#respondPoll` filters queue by `session.pending.has(r.id)` — since pending wasn't set yet, filter returned empty array → 0 ops delivered → every operation timed out after 60s.
+
+**Fix:** Set `session.pending` BEFORE pushing to queue and flushing long-poll. This ensures `#respondPoll` filter always finds the matching pending entry.
+
+**Verified:** Integration test covers create, get_page_nodes, screenshot, error handling — all 4 pass.
+
+---
+
 ## [2.4.2] — 2026-04-14
 
 ### Fixed — Plugin reconnection too slow after server late start

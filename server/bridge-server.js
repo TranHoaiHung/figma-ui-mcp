@@ -140,12 +140,9 @@ export class BridgeServer {
 
     var timeout = OP_TIMEOUTS[operation] || CONFIG.OP_TIMEOUT_MS;
     var opId = Date.now() + "-" + Math.random().toString(36).slice(2, 7);
-    session.queue.push({ id: opId, operation: operation, params: params || {} });
-    this.#opToSession.set(opId, session.id);
 
-    // Wake up long-poll waiter for this session
-    this.#flushLongPoll(session);
-
+    // CRITICAL: set pending BEFORE queue+flush, so respondPoll filter sees the opId
+    var self = this;
     return new Promise(function(resolve, reject) {
       var timer = setTimeout(function() {
         session.pending.delete(opId);
@@ -153,6 +150,11 @@ export class BridgeServer {
         reject(new Error("Operation \"" + operation + "\" timed out after " + timeout + "ms"));
       }, timeout);
       session.pending.set(opId, { resolve: resolve, reject: reject, timer: timer, startMs: Date.now() });
+
+      // Now push to queue and flush — pending is already set
+      session.queue.push({ id: opId, operation: operation, params: params || {} });
+      self.#opToSession.set(opId, session.id);
+      self.#flushLongPoll(session);
     });
   }
 
@@ -168,13 +170,17 @@ export class BridgeServer {
     session.lastPollAt = Date.now();
     var alive = session.queue.filter(function(r) { return session.pending.has(r.id); });
     session.queue.length = 0;
+    if (alive.length) process.stderr.write("[bridge] poll → session=" + session.id + " delivering " + alive.length + " ops: " + alive.map(function(r) { return r.operation; }).join(",") + "\n");
     res.writeHead(200);
     res.end(JSON.stringify({ requests: alive, mode: "ready", sessionId: session.id }));
   }
 
   #settle(response) {
     var sessionId = this.#opToSession.get(response.id);
-    if (!sessionId) return;
+    if (!sessionId) {
+      process.stderr.write("[bridge] settle ORPHAN response id=" + response.id + " (no matching session)\n");
+      return;
+    }
     this.#opToSession.delete(response.id);
 
     var session = this.#sessions.get(sessionId);
@@ -249,7 +255,7 @@ export class BridgeServer {
     if (path === "/" && req.method === "GET") {
       res.writeHead(200);
       res.end(JSON.stringify({
-        server: "figma-ui-mcp", version: "2.4.2", port: this.#actualPort,
+        server: "figma-ui-mcp", version: "2.4.3", port: this.#actualPort,
         pluginConnected: this.isPluginConnected(),
         sessions: this.getSessions(),
         queueLength: this.queueLength,
