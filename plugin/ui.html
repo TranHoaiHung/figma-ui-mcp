@@ -164,9 +164,11 @@
     var currentPort = 38451;
     var BRIDGE  = "http://localhost:" + currentPort;
     var POLL_MS = 300;
-    var POLL_MAX_MS = 5000;
+    var POLL_MAX_MS = 3000;         // lower cap — recover faster
     var LONG_POLL_TIMEOUT = 12000;  // server holds 8s + network buffer
+    var SHORT_POLL_TIMEOUT = 3000;  // used when reconnecting (no long poll)
     var consecutiveErrors = 0;
+    var everConnected = false;      // track if we ever had a successful connection
     var sessionId = null;        // assigned from plugin main thread (fileName-based)
     var fileName = null;
 
@@ -200,7 +202,8 @@
     function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
     function getBackoff() {
-      return Math.min(POLL_MS * Math.pow(2, consecutiveErrors - 1), POLL_MAX_MS);
+      // Fast retry first 3 attempts (300, 600, 1200ms), then cap at 3s
+      return Math.min(POLL_MS * Math.pow(2, Math.min(consecutiveErrors - 1, 3)), POLL_MAX_MS);
     }
 
     async function sendResponse(id, success, data, error) {
@@ -227,9 +230,10 @@
           if (sessionId) qs.push("sessionId=" + encodeURIComponent(sessionId));
           if (fileName) qs.push("fileName=" + encodeURIComponent(fileName));
           if (qs.length) pollUrl += "?" + qs.join("&");
-          // AbortSignal.timeout may not exist in all Figma iframe environments
+          // Use short timeout when reconnecting, long poll when stable
+          var fetchTimeout = consecutiveErrors > 0 ? SHORT_POLL_TIMEOUT : LONG_POLL_TIMEOUT;
           var controller = new AbortController();
-          var timeoutId = setTimeout(function() { controller.abort(); }, LONG_POLL_TIMEOUT);
+          var timeoutId = setTimeout(function() { controller.abort(); }, fetchTimeout);
           var res;
           try { res = await fetch(pollUrl, { signal: controller.signal }); }
           finally { clearTimeout(timeoutId); }
@@ -240,6 +244,7 @@
           setStatus("green", reqs.length ? reqs.length + " cmd(s)" : "Connected", body.mode || "ready");
 
           consecutiveErrors = 0;
+          everConnected = true;
 
           for (var i = 0; i < reqs.length; i++) {
             var req = reqs[i];

@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.4.2] — 2026-04-14
+
+### Fixed — Plugin reconnection too slow after server late start
+
+- Poll uses short timeout (3s) when reconnecting, long poll (12s) only when stable
+- Backoff capped at 3s (was 5s), exponential stops growing after 3 errors
+- Recovery cycle: ~6s per attempt (was ~17s) — plugin reconnects 3x faster
+- `everConnected` flag tracks if connection was established before
+
+---
+
 ## [2.4.1] — 2026-04-14
 
 ### Fixed — Long poll timeout causing plugin disconnects
