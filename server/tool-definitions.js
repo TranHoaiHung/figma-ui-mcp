@@ -27,6 +27,10 @@ export const TOOLS = [
           type: "string",
           description: "JavaScript using figma.create(), figma.modify(), figma.setPage(), etc.",
         },
+        sessionId: {
+          type: "string",
+          description: "Target a specific Figma file/tab when multiple are connected. Omit to auto-select.",
+        },
       },
       required: ["code"],
     },
@@ -71,6 +75,7 @@ export const TOOLS = [
         format:   { type: "string", description: "Image format for export_image: 'png' (default) or 'jpg'." },
         detail:   { type: "string", description: "Detail level for get_design/get_selection: 'minimal' (~5% tokens), 'compact' (~30%), 'full' (default, 100%). Use minimal for large files." },
         includeHidden: { type: "boolean", description: "Include invisible nodes (visible:false) in results. Default false — hidden layers are skipped to reduce noise." },
+        sessionId: { type: "string", description: "Target a specific Figma file/tab when multiple are connected. Omit to auto-select." },
       },
       required: ["operation"],
     },

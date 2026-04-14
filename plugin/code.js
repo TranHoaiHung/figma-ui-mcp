@@ -2806,6 +2806,17 @@ handlers.batch = async function(params) {
 
 figma.showUI(__html__, { width: 320, height: 420, title: "Figma UI MCP Bridge" });
 
+// ─── SESSION ID ───────────────────────────────────────────────────────────────
+// Send session info to UI so it can identify itself to the bridge server.
+// Uses root node id as unique session key per Figma file.
+function sendSessionInfo() {
+  var fName = figma.root ? figma.root.name : "unknown";
+  var fKey = figma.root ? figma.root.id : "0:0";
+  figma.ui.postMessage({ type: "session-info", sessionId: fKey, fileName: fName });
+}
+sendSessionInfo();
+figma.on("currentpagechange", sendSessionInfo);
+
 // ─── DISPATCHER ───────────────────────────────────────────────────────────────
 
 // Sanitize data before postMessage — remove Symbol values (e.g. figma.mixed)

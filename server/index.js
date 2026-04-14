@@ -103,7 +103,7 @@ if (existingHealth.pluginConnected) {
 }
 
 const server = new Server(
-  { name: "figma-ui-mcp", version: "2.2.0" },
+  { name: "figma-ui-mcp", version: "2.3.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -139,6 +139,7 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
           queueLength:     healthData.queueLength || bridge.queueLength,
           lastPollAgoMs:   healthData.lastPollAgoMs || (bridge.lastPollAt ? Date.now() - bridge.lastPollAt : null),
           stats:           healthData.stats || (bridge.stats ? bridge.stats : null),
+          sessions:        bridge.getSessions ? bridge.getSessions() : [],
           hint: connected
             ? "CONNECTED. BEFORE drawing anything: call figma_docs to load mandatory design rules (token system, component-first, icon sizing, layer order). Skipping figma_docs causes incorrect, hardcoded, low-quality UI."
             : "Plugin not connected. In Figma Desktop: Plugins → Development → Figma UI MCP Bridge → Run",
@@ -155,9 +156,10 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
     } else if (!bridge.isPluginConnected()) return notConnected();
 
     const code = args?.code;
+    const writeSessionId = args?.sessionId;
     if (!code || typeof code !== "string") return err("'code' is required.");
 
-    const { success, result, error, logs } = await executeCode(code, bridge);
+    const { success, result, error, logs } = await executeCode(code, bridge, writeSessionId);
     const parts = [];
     if (logs.length) parts.push(`Logs:\n${logs.join("\n")}`);
     parts.push(success ? `Result: ${JSON.stringify(result, null, 2)}` : `Error: ${error}`);
@@ -172,7 +174,7 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
       if (!health.pluginConnected) return notConnected();
     } else if (!bridge.isPluginConnected()) return notConnected();
 
-    const { operation, nodeId, nodeName, scale, depth, format, detail, includeHidden, ...searchParams } = args || {};
+    const { operation, nodeId, nodeName, scale, depth, format, detail, includeHidden, sessionId: readSessionId, ...searchParams } = args || {};
     if (!operation) return err("'operation' is required.");
 
     const params = {};
@@ -183,11 +185,10 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
     if (format) params.format = format;
     if (detail) params.detail = detail;
     if (includeHidden !== undefined) params.includeHidden = includeHidden;
-    // Pass search_nodes params (type, namePattern, fill, fontFamily, etc.)
     if (operation === "search_nodes") Object.assign(params, searchParams);
 
     try {
-      const data = await bridge.sendOperation(operation, params);
+      const data = await bridge.sendOperation(operation, params, readSessionId);
 
       // Return screenshot as MCP image content (displays inline in Claude Code)
       if (operation === "screenshot" && data && data.dataUrl) {

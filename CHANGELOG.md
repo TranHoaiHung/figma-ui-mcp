@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.3.0] — 2026-04-14
+
+### Added — Multi-Instance Support (P4)
+
+**Multiple Figma tabs/files can now connect simultaneously to one bridge server.**
+
+- `Session` class tracks per-file state (queue, pending ops, long-poll waiter, stats)
+- Plugin sends `sessionId` (root node ID) + `fileName` via `session-info` postMessage
+- `/poll?sessionId=X&fileName=Y` routes work to correct session
+- `/response` auto-routes result back to originating session via `#opToSession` map
+- `/sessions` endpoint lists all connected sessions with status
+- `/health` includes session list
+- `figma_status` returns `sessions` array
+- `figma_write` and `figma_read` accept optional `sessionId` param to target specific file
+- `executeCode` wraps bridge with pinned sessionId for all ops in that execution
+- Idle sessions auto-expire after 5 min (`SESSION_EXPIRE_MS`)
+- Fully backward compatible: omit sessionId = auto-select any connected session
+
+---
+
 ## [2.2.0] — 2026-04-14
 
 ### Added — Long Polling, Connection Resilience & MCP Registry

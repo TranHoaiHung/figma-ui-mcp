@@ -163,10 +163,12 @@
   <script>
     var currentPort = 38451;
     var BRIDGE  = "http://localhost:" + currentPort;
-    var POLL_MS = 300;           // short delay between long-poll cycles
-    var POLL_MAX_MS = 5000;      // max backoff on errors
-    var LONG_POLL_TIMEOUT = 30000; // match server LONG_POLL_MS + buffer
+    var POLL_MS = 300;
+    var POLL_MAX_MS = 5000;
+    var LONG_POLL_TIMEOUT = 30000;
     var consecutiveErrors = 0;
+    var sessionId = null;        // assigned from plugin main thread (fileName-based)
+    var fileName = null;
 
     var writeCount = 0, readCount = 0, errCount = 0;
     var polling = true;
@@ -220,7 +222,12 @@
     async function poll() {
       while (polling) {
         try {
-          var res = await fetch(BRIDGE + "/poll", { signal: AbortSignal.timeout(LONG_POLL_TIMEOUT) });
+          var pollUrl = BRIDGE + "/poll";
+          var qs = [];
+          if (sessionId) qs.push("sessionId=" + encodeURIComponent(sessionId));
+          if (fileName) qs.push("fileName=" + encodeURIComponent(fileName));
+          if (qs.length) pollUrl += "?" + qs.join("&");
+          var res = await fetch(pollUrl, { signal: AbortSignal.timeout(LONG_POLL_TIMEOUT) });
           if (!res.ok) { setStatus("yellow", "Bridge not responding"); consecutiveErrors++; await sleep(getBackoff()); continue; }
 
           var body = await res.json();
@@ -298,6 +305,13 @@
     window.onmessage = async function(event) {
       var msg = event.data.pluginMessage;
       if (!msg) return;
+      // Session info from plugin main thread
+      if (msg.type === "session-info") {
+        sessionId = msg.sessionId || null;
+        fileName = msg.fileName || null;
+        if (sessionId) log("Session: " + sessionId + " (" + fileName + ")", "info");
+        return;
+      }
       var isRead = READ_OPS.indexOf(msg.operation) >= 0;
       if (msg.success) {
         if (isRead) { readCount++; document.getElementById("read-count").textContent = readCount; }

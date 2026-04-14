@@ -194,10 +194,15 @@ function buildConsole(logs) {
 /**
  * @returns {{ success: boolean, result?: unknown, error?: string, logs: string[] }}
  */
-export async function executeCode(code, bridge) {
+export async function executeCode(code, bridge, sessionId) {
+  // Wrap bridge to pin sessionId for all operations in this execution
+  var wrappedBridge = sessionId ? {
+    sendOperation: function(op, params) { return bridge.sendOperation(op, params, sessionId); }
+  } : bridge;
+
   const logs = [];
   const ctx = vm.createContext({
-    figma:   buildFigmaProxy(bridge),
+    figma:   buildFigmaProxy(wrappedBridge),
     console: buildConsole(logs),
     // Safe builtins
     Promise, JSON, Math, Object, Array, String, Number,
