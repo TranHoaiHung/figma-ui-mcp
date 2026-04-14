@@ -25,6 +25,12 @@ const WRITE_OPS = [
   // Node operations
   "clone", "group", "ungroup", "flatten", "resize",
   "set_selection", "set_viewport", "batch",
+  // Prototyping & interactions (v2.4.0)
+  "setReactions", "removeReactions",
+  // Scroll behavior (v2.4.0)
+  "setScrollBehavior",
+  // Component variant swapping (v2.4.0)
+  "setComponentProperties", "swapComponent",
 ];
 
 const READ_OPS = [
@@ -32,6 +38,8 @@ const READ_OPS = [
   "screenshot", "export_svg",
   "get_styles", "get_local_components", "get_viewport", "get_variables",
   "get_node_detail", "export_image", "search_nodes", "scan_design",
+  // Prototyping & component reads (v2.4.0)
+  "getReactions", "getComponentProperties",
 ];
 
 const ALL_OPS = [...WRITE_OPS, ...READ_OPS];

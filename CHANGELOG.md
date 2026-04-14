@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.4.0] — 2026-04-14
+
+### Added — Prototyping, Scroll Behavior & Variant Swapping
+
+**Prototyping / Reactions:**
+- `setReactions` — add prototype interactions (ON_CLICK, ON_HOVER, ON_PRESS, AFTER_TIMEOUT triggers)
+- Supported actions: NAVIGATE, SWAP, OVERLAY, SCROLL_TO, BACK, CLOSE, URL
+- Transition types: DISSOLVE, SMART_ANIMATE, MOVE_IN, MOVE_OUT, PUSH, SLIDE_IN, SLIDE_OUT, INSTANT
+- Easing: LINEAR, EASE_IN, EASE_OUT, EASE_IN_AND_OUT, EASE_IN_BACK, EASE_OUT_BACK, CUSTOM_BEZIER
+- `getReactions` — read all prototype interactions from a node
+- `removeReactions` — clear all interactions from a node
+
+**Scroll Behavior:**
+- `setScrollBehavior` — configure overflow scrolling on frames
+- `overflowDirection`: NONE, HORIZONTAL, VERTICAL, BOTH
+- Auto-pairs with `clipsContent` for proper scroll containers
+
+**Variant / Component Property Swapping:**
+- `setComponentProperties` — set instance properties (variant, boolean, text, instance swap)
+- `swapComponent` — swap the main component of an instance
+- `getComponentProperties` — read all properties + definitions from components/instances
+
+**Misc:**
+- All new ops registered in code-executor.js (WRITE_OPS + READ_OPS)
+- figma_write tool description updated with new operations
+
+---
+
 ## [2.3.0] — 2026-04-14
 
 ### Added — Multi-Instance Support (P4)

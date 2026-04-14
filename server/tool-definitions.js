@@ -19,6 +19,9 @@ export const TOOLS = [
       "addVariableMode, renameVariableMode, removeVariableMode, applyVariable, " +
       "setFrameVariableMode, clearFrameVariableMode, " +
       "createPaintStyle, createTextStyle, createComponent. " +
+      "Prototyping: setReactions, getReactions, removeReactions (click/hover/press → navigate/overlay/swap with Smart Animate transitions). " +
+      "Scroll: setScrollBehavior (overflowDirection: NONE/HORIZONTAL/VERTICAL/BOTH). " +
+      "Variants: setComponentProperties, swapComponent, getComponentProperties. " +
       "The code runs in a sandboxed VM: no access to require, process, fs, fetch, or network.",
     inputSchema: {
       type: "object",

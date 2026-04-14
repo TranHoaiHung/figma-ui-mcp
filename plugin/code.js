@@ -2801,6 +2801,248 @@ handlers.batch = async function(params) {
 };
 
 
+// ─── PROTOTYPING / REACTIONS (v2.4.0) ─────────────────────────────────────────
+
+// setReactions — add prototype interactions to a node
+// reactions: [{ trigger, actions }]
+// trigger: { type: "ON_CLICK"|"ON_HOVER"|"ON_PRESS"|"ON_DRAG"|"MOUSE_ENTER"|"MOUSE_LEAVE"|"MOUSE_UP"|"MOUSE_DOWN"|"AFTER_TIMEOUT", timeout? }
+// actions: [{ type: "NAVIGATE"|"SWAP"|"OVERLAY"|"SCROLL_TO"|"BACK"|"CLOSE"|"URL", destinationId?, url?, transition?, overlayRelativePosition? }]
+// transition: { type: "DISSOLVE"|"SMART_ANIMATE"|"MOVE_IN"|"MOVE_OUT"|"PUSH"|"SLIDE_IN"|"SLIDE_OUT"|"INSTANT", duration?, easing?, direction? }
+// easing: { type: "LINEAR"|"EASE_IN"|"EASE_OUT"|"EASE_IN_AND_OUT"|"EASE_IN_BACK"|"EASE_OUT_BACK"|"EASE_IN_AND_OUT_BACK"|"CUSTOM_BEZIER", easingFunctionCubicBezier? }
+handlers.setReactions = async function(params) {
+  var node = await resolveNode(params);
+  if (!node) throw new Error("Node not found");
+  if (!("reactions" in node)) throw new Error("Node type does not support reactions");
+
+  var reactions = params.reactions;
+  if (!reactions || !Array.isArray(reactions)) throw new Error("reactions array is required");
+
+  var built = [];
+  for (var i = 0; i < reactions.length; i++) {
+    var r = reactions[i];
+    var trigger = r.trigger || { type: "ON_CLICK" };
+    var actions = r.actions || [];
+
+    var builtActions = [];
+    for (var j = 0; j < actions.length; j++) {
+      var a = actions[j];
+      var action = { type: a.type || "NAVIGATE" };
+
+      // Destination
+      if (a.destinationId) {
+        var dest = await findNodeByIdAsync(a.destinationId);
+        if (!dest) throw new Error("Destination node not found: " + a.destinationId);
+        action.destinationId = a.destinationId;
+      }
+
+      // URL action
+      if (a.url) action.url = a.url;
+
+      // Transition
+      if (a.transition) {
+        var t = a.transition;
+        action.transition = {
+          type: t.type || "DISSOLVE",
+          duration: t.duration !== undefined ? t.duration : 0.3,
+        };
+        if (t.easing) {
+          action.transition.easing = { type: t.easing.type || "EASE_IN_AND_OUT" };
+          if (t.easing.easingFunctionCubicBezier) {
+            action.transition.easing.easingFunctionCubicBezier = t.easing.easingFunctionCubicBezier;
+          }
+        } else {
+          action.transition.easing = { type: "EASE_IN_AND_OUT" };
+        }
+        if (t.direction) action.transition.direction = t.direction;
+      }
+
+      // Overlay position
+      if (a.overlayRelativePosition) action.overlayRelativePosition = a.overlayRelativePosition;
+
+      builtActions.push(action);
+    }
+
+    built.push({ trigger: trigger, actions: builtActions });
+  }
+
+  node.reactions = built;
+  return { id: node.id, name: node.name, reactionsCount: built.length };
+};
+
+// getReactions — read prototype interactions from a node
+handlers.getReactions = async function(params) {
+  var node = await resolveNode(params);
+  if (!node) throw new Error("Node not found");
+  if (!("reactions" in node)) return { id: node.id, reactions: [] };
+
+  var reactions = node.reactions || [];
+  var result = [];
+  for (var i = 0; i < reactions.length; i++) {
+    var r = reactions[i];
+    var actions = [];
+    for (var j = 0; j < r.actions.length; j++) {
+      var a = r.actions[j];
+      var act = { type: a.type };
+      if (a.destinationId) act.destinationId = a.destinationId;
+      if (a.url) act.url = a.url;
+      if (a.transition) {
+        act.transition = {
+          type: a.transition.type,
+          duration: a.transition.duration,
+        };
+        if (a.transition.easing) act.transition.easing = { type: a.transition.easing.type };
+        if (a.transition.direction) act.transition.direction = a.transition.direction;
+      }
+      actions.push(act);
+    }
+    result.push({ trigger: r.trigger, actions: actions });
+  }
+  return { id: node.id, name: node.name, reactions: result };
+};
+
+// removeReactions — clear all prototype interactions from a node
+handlers.removeReactions = async function(params) {
+  var node = await resolveNode(params);
+  if (!node) throw new Error("Node not found");
+  if (!("reactions" in node)) throw new Error("Node does not support reactions");
+  var count = node.reactions ? node.reactions.length : 0;
+  node.reactions = [];
+  return { id: node.id, removed: count };
+};
+
+// ─── SCROLL BEHAVIOR (v2.4.0) ────────────────────────────────────────────────
+
+// setScrollBehavior — configure overflow scrolling on a frame
+// overflowDirection: "NONE"|"HORIZONTAL"|"VERTICAL"|"BOTH"
+// scrollOffset: { x, y } — initial scroll position
+handlers.setScrollBehavior = async function(params) {
+  var node = await resolveNode(params);
+  if (!node) throw new Error("Node not found");
+  if (node.type !== "FRAME" && node.type !== "COMPONENT" && node.type !== "COMPONENT_SET") {
+    throw new Error("Only FRAME/COMPONENT nodes support scroll behavior, got: " + node.type);
+  }
+
+  if (params.overflowDirection !== undefined) {
+    node.overflowDirection = params.overflowDirection;
+  }
+
+  if (params.scrollOffset) {
+    // Figma Plugin API: can't set scrollOffset directly on the node
+    // but we can set it via the prototype/scroll settings
+    // For now, store as plugin data
+  }
+
+  // clipsContent usually pairs with scroll
+  if (params.clipsContent !== undefined) {
+    node.clipsContent = params.clipsContent;
+  }
+
+  return {
+    id: node.id, name: node.name,
+    overflowDirection: node.overflowDirection,
+    clipsContent: node.clipsContent,
+  };
+};
+
+// ─── VARIANT / COMPONENT PROPERTY SWAPPING (v2.4.0) ──────────────────────────
+
+// setComponentProperties — set component instance properties (variant, boolean, text, instance swap)
+// properties: { "Property Name": value, ... }
+// For variant: value is the variant option string
+// For boolean: value is true/false
+// For text: value is string
+// For instance swap: value is component nodeId
+handlers.setComponentProperties = async function(params) {
+  var node = await resolveNode(params);
+  if (!node) throw new Error("Node not found");
+  if (node.type !== "INSTANCE") throw new Error("setComponentProperties only works on INSTANCE nodes, got: " + node.type);
+
+  var properties = params.properties;
+  if (!properties || typeof properties !== "object") throw new Error("properties object is required");
+
+  var updated = [];
+  var keys = Object.keys(properties);
+  for (var i = 0; i < keys.length; i++) {
+    var propName = keys[i];
+    var value = properties[propName];
+    try {
+      node.setProperties({ [propName]: value });
+      updated.push(propName);
+    } catch(e) {
+      // Try component property references approach
+      try {
+        var compProps = node.componentProperties;
+        if (compProps && compProps[propName] !== undefined) {
+          node.setProperties({ [propName]: value });
+          updated.push(propName);
+        } else {
+          throw e;
+        }
+      } catch(e2) {
+        throw new Error("Failed to set property \"" + propName + "\": " + e2.message);
+      }
+    }
+  }
+
+  return { id: node.id, name: node.name, updated: updated };
+};
+
+// swapComponent — swap the main component of an instance
+handlers.swapComponent = async function(params) {
+  var node = await resolveNode(params);
+  if (!node) throw new Error("Node not found");
+  if (node.type !== "INSTANCE") throw new Error("swapComponent only works on INSTANCE nodes");
+
+  var componentId = params.componentId || params.targetId;
+  if (!componentId) throw new Error("componentId is required");
+
+  var component = await findNodeByIdAsync(componentId);
+  if (!component) throw new Error("Target component not found: " + componentId);
+  if (component.type !== "COMPONENT") throw new Error("Target must be a COMPONENT, got: " + component.type);
+
+  node.swapComponent(component);
+  return { id: node.id, name: node.name, newComponentId: component.id, newComponentName: component.name };
+};
+
+// getComponentProperties — read all properties from a component instance
+handlers.getComponentProperties = async function(params) {
+  var node = await resolveNode(params);
+  if (!node) throw new Error("Node not found");
+
+  var result = { id: node.id, name: node.name, type: node.type };
+
+  if (node.type === "INSTANCE") {
+    result.componentId = node.mainComponent ? node.mainComponent.id : null;
+    result.componentName = node.mainComponent ? node.mainComponent.name : null;
+    var props = node.componentProperties;
+    if (props) {
+      result.properties = {};
+      var pKeys = Object.keys(props);
+      for (var i = 0; i < pKeys.length; i++) {
+        var p = props[pKeys[i]];
+        result.properties[pKeys[i]] = { type: p.type, value: p.value };
+      }
+    }
+  } else if (node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
+    if (node.componentPropertyDefinitions) {
+      result.propertyDefinitions = {};
+      var dKeys = Object.keys(node.componentPropertyDefinitions);
+      for (var j = 0; j < dKeys.length; j++) {
+        var d = node.componentPropertyDefinitions[dKeys[j]];
+        var def = { type: d.type, defaultValue: d.defaultValue };
+        if (d.variantOptions) def.variantOptions = d.variantOptions;
+        result.propertyDefinitions[dKeys[j]] = def;
+      }
+    }
+    if (node.type === "COMPONENT_SET") {
+      result.variantCount = node.children ? node.children.length : 0;
+    }
+  }
+
+  return result;
+};
+
+
 // ── src/plugin/main.js ──
 // ─── PLUGIN ENTRY POINT ───────────────────────────────────────────────────────
 

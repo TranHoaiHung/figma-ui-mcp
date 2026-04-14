@@ -236,7 +236,7 @@ export class BridgeServer {
     if (path === "/" && req.method === "GET") {
       res.writeHead(200);
       res.end(JSON.stringify({
-        server: "figma-ui-mcp", version: "2.3.0", port: this.#actualPort,
+        server: "figma-ui-mcp", version: "2.4.0", port: this.#actualPort,
         pluginConnected: this.isPluginConnected(),
         sessions: this.getSessions(),
         queueLength: this.queueLength,

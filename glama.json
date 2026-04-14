@@ -3,7 +3,7 @@
   "name": "figma-ui-mcp",
   "display_name": "Figma UI MCP",
   "description": "Bidirectional Figma MCP bridge — AI draws UI on Figma canvas and reads designs back. No API key needed.",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "repository": "https://github.com/TranHoaiHung/figma-ui-mcp",
   "homepage": "https://github.com/TranHoaiHung/figma-ui-mcp#readme",
   "license": "MIT",
