@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.4.5] — 2026-04-15
+
+### Fixed — Issue #7: Multiple artboards stacking on top of each other
+
+- Top-level FRAME/GROUP creation now auto-offsets when user doesn't specify x/y
+- Scans existing page children, places new frame 50px right of the rightmost element
+- Only triggers when parentId is absent and x/y are both unset (explicit x:0 y:0 still works)
+- Regression test: 55/55 operations pass
+
+---
+
 ## [2.4.4] — 2026-04-14
 
 ### Fixed — normalizeHex now accepts rgba(), rgb(), 8-char hex

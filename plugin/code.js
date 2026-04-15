@@ -699,6 +699,19 @@ handlers.create = async (params) => {
     if (p) parent = p;
   }
 
+  // Auto-offset top-level frames to prevent stacking (issue #7)
+  // Only when: parent is the page, type is FRAME, and user did NOT explicitly set x or y
+  var autoX = x, autoY = y;
+  if (!parentId && (type === "FRAME" || type === "GROUP") && params.x === undefined && params.y === undefined) {
+    var maxRight = 0;
+    for (var ci = 0; ci < figma.currentPage.children.length; ci++) {
+      var child = figma.currentPage.children[ci];
+      var right = child.x + child.width;
+      if (right > maxRight) maxRight = right;
+    }
+    if (maxRight > 0) autoX = maxRight + 50;
+  }
+
   let node;
 
   if (type === "FRAME" || type === "GROUP") {
@@ -920,8 +933,8 @@ handlers.create = async (params) => {
   }
 
   if (name)   node.name = name;
-  node.x = x;
-  node.y = y;
+  node.x = autoX !== undefined ? autoX : x;
+  node.y = autoY !== undefined ? autoY : y;
   if (opacity !== undefined) node.opacity = opacity;
   if (visible !== undefined) node.visible = visible;
 
