@@ -180,12 +180,15 @@ npm install
 
 > **⚠️ IMPORTANT: After adding the MCP server, you MUST restart your IDE / AI client (quit and reopen).** The MCP server only loads on startup — simply saving the config file is not enough. This applies to Claude Code, Cursor, VS Code, Windsurf, and Antigravity.
 
-### Step 2 — Run the Figma plugin
+### Step 2 — Install the Figma plugin
 
-1. Open **Figma Desktop** (required — web app cannot access localhost)
-2. Go to **Plugins → Development → Import plugin from manifest...**
-3. Select `plugin/manifest.json` from this repo
-4. Run **Plugins → Development → Figma UI MCP Bridge**
+**[⬇ Download plugin.zip](https://github.com/TranHoaiHung/figma-ui-mcp/raw/main/plugin.zip)** — no git clone needed
+
+1. Download and **unzip** `plugin.zip` anywhere on your machine
+2. Open **Figma Desktop** (required — web app cannot access localhost)
+3. Go to **Plugins → Development → Import plugin from manifest...**
+4. Select `manifest.json` from the unzipped folder
+5. Run **Plugins → Development → Figma UI MCP Bridge**
 
 The plugin UI shows a **green dot** when the MCP server is connected.
 
