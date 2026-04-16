@@ -302,6 +302,18 @@ handlers.create = async (params) => {
       node.remove();
       throw new Error("Parent node no longer exists (was it deleted?): " + (params.parentId || params.parentName));
     }
+
+    // Bug 3 fix: warn when x,y are explicitly set on a child of an auto-layout parent.
+    // Figma ignores absolute position inside auto-layout and places the node sequentially,
+    // which causes silent overlap bugs. Emit a warning so the caller understands why.
+    if (parent.layoutMode && parent.layoutMode !== "NONE" &&
+        params.x !== undefined && params.y !== undefined) {
+      figma.ui.postMessage({
+        type: "log",
+        message: "Warning: node \"" + (name || type) + "\" has explicit x/y but parent \"" + parent.name + "\" uses auto-layout (" + parent.layoutMode + "). Figma ignores x/y inside auto-layout — position is controlled by the parent. Remove x/y from the create() call, or use layoutAlign/layoutGrow to control sizing."
+      });
+    }
+
     parent.appendChild(node);
 
     // Auto-set child layout properties when parent uses auto-layout
@@ -416,7 +428,25 @@ handlers.modify = async (params) => {
 };
 
 // "delete" is a JS reserved keyword — assign via bracket notation to avoid engine quirks
+// Supports: { id } single delete, or { ids: ["1:1","1:2",...] } batch delete
 handlers["delete"] = async (params) => {
+  // Batch delete: { ids: [...] }
+  if (params && Array.isArray(params.ids)) {
+    var results = [];
+    for (var di = 0; di < params.ids.length; di++) {
+      var targetId = params.ids[di];
+      var n = await findNodeByIdAsync(targetId);
+      if (!n || n.removed) {
+        results.push({ deleted: true, alreadyGone: true, ref: targetId });
+      } else {
+        var inf = nodeToInfo(n);
+        n.remove();
+        results.push(Object.assign({ deleted: true }, inf));
+      }
+    }
+    return { deleted: true, count: results.length, results: results };
+  }
+  // Single delete: { id } or { name } or { nodeId }
   const node = await resolveNode(params);
   // Treat already-deleted/not-found as success — idempotent delete
   if (!node || node.removed) {

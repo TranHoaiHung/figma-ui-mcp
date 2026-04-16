@@ -88,6 +88,17 @@ function buildFigmaProxy(bridge) {
     proxy[op] = (params = {}) => bridge.sendOperation(op, params);
   }
 
+  // ── figma.get_page_nodes() — returns nodes array (with .page property) ─
+  // Plugin returns { page, nodes: [...] }. Proxy unwraps to array so that
+  // `for (var i = 0; i < nodes.length; i++)` works directly.
+  proxy.get_page_nodes = async () => {
+    const raw = await bridge.sendOperation("get_page_nodes", {});
+    const arr = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.nodes) ? raw.nodes : []);
+    // Attach .page metadata as a non-enumerable property so array usage still works
+    Object.defineProperty(arr, "page", { value: raw && raw.page ? raw.page : null, enumerable: false });
+    return arr;
+  };
+
   // ── figma.loadImage(url, opts) ──────────────────────────────────────────
   // Downloads image from URL, converts to base64, creates IMAGE node in Figma
   // opts: { parentId, x, y, width, height, cornerRadius, scaleMode, name }
@@ -228,6 +239,12 @@ export async function executeCode(code, bridge, sessionId) {
     });
     return { success: true, result: result ?? null, logs };
   } catch (err) {
-    return { success: false, error: err.message, logs };
+    let msg = err.message;
+    // Bug 5 fix: ReferenceError in sandbox means the variable was defined in a previous
+    // figma_write call. Each call runs in an isolated VM context — variables don't persist.
+    if (err instanceof ReferenceError || (err.name === "ReferenceError")) {
+      msg += "\nNote: Each figma_write call runs in an isolated sandbox — variables from previous calls are not available. Re-query node IDs with figma.get_page_nodes() or figma.query() at the start of each call.";
+    }
+    return { success: false, error: msg, logs };
   }
 }

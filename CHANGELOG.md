@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.5.0] — 2026-04-15
+
+### Fixed — feedback.md bugs: get_page_nodes array, batch delete, auto-layout warning, sandbox error hint
+
+- **Bug 1**: `figma.get_page_nodes()` now returns a plain Array instead of `{ page, nodes: [] }` — `nodes.length`, `for` loops, and array methods all work directly. `.page` is still accessible as a non-enumerable property.
+- **Bug 2**: `figma.delete({ ids: ["1:1", "1:2", ...] })` batch delete added — deletes multiple nodes in one round-trip. Returns `{ deleted, count, results[] }`.
+- **Bug 3**: Creating a node with explicit `x`/`y` inside an auto-layout parent now emits a warning to the plugin UI log explaining that Figma ignores absolute position inside auto-layout, and what to use instead (`layoutAlign`, `layoutGrow`).
+- **Bug 5**: `ReferenceError` inside a `figma_write` sandbox now appends: *"Each figma_write call runs in an isolated sandbox — variables from previous calls are not available. Re-query node IDs with figma.get_page_nodes() or figma.query() at the start of each call."*
+
+---
+
 ## [2.4.5] — 2026-04-15
 
 ### Fixed — Issue #7: Multiple artboards stacking on top of each other
