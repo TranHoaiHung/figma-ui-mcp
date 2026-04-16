@@ -314,25 +314,51 @@ handlers.applyVariable = async function(params) {
   }
   if (!variable) throw new Error("Variable not found: " + (variableId || variableName));
 
-  // Map field names to Figma setBoundVariable fields
+  // Map friendly field aliases → Figma Plugin API setBoundVariable field names
+  // Full list of FLOAT-bindable fields per Figma API spec:
+  // https://www.figma.com/plugin-docs/api/properties/nodes-setboundvariable/
   var fieldMap = {
-    "fill": "fills",
-    "fills": "fills",
-    "stroke": "strokes",
-    "strokes": "strokes",
-    "opacity": "opacity",
-    "cornerRadius": "topLeftRadius",
-    "width": "width",
-    "height": "height",
+    // ── Color ──────────────────────────────────────────────────────────────
+    "fill":             "fills",
+    "fills":            "fills",
+    "stroke":           "strokes",
+    "strokes":          "strokes",
+    // ── Geometry ───────────────────────────────────────────────────────────
+    "opacity":          "opacity",
+    "width":            "width",
+    "height":           "height",
+    // Corner radius — all four corners map to individual fields
+    "cornerRadius":     "topLeftRadius",
+    "topLeftRadius":    "topLeftRadius",
+    "topRightRadius":   "topRightRadius",
+    "bottomLeftRadius": "bottomLeftRadius",
+    "bottomRightRadius":"bottomRightRadius",
+    // ── Auto-layout spacing (FLOAT variables) ──────────────────────────────
+    "itemSpacing":      "itemSpacing",
+    "counterAxisSpacing": "counterAxisSpacing",
+    "padding":          "paddingTop",           // alias for uniform; use specific keys below
+    "paddingTop":       "paddingTop",
+    "paddingBottom":    "paddingBottom",
+    "paddingLeft":      "paddingLeft",
+    "paddingRight":     "paddingRight",
+    // ── Typography (TEXT nodes — FLOAT variables) ──────────────────────────
+    "fontSize":         "fontSize",
+    "letterSpacing":    "letterSpacing",
+    "lineHeight":       "lineHeight",
+    "paragraphSpacing": "paragraphSpacing",
+    "paragraphIndent":  "paragraphIndent",
+    // ── Stroke weight ─────────────────────────────────────────────────────
+    "strokeWeight":     "strokeWeight",
+    // ── Visibility (BOOLEAN variable) ─────────────────────────────────────
+    "visible":          "visible",
   };
 
-  var figmaField = fieldMap[field] || field;
+  var figmaField = fieldMap[field] !== undefined ? fieldMap[field] : field;
 
   if (figmaField === "fills" || figmaField === "strokes") {
-    // For fills/strokes, bind variable to the first solid paint
+    // For fills/strokes, bind variable to the COLOR of the first solid paint
     var currentPaints = figmaField === "fills" ? node.fills : node.strokes;
     if (!currentPaints || currentPaints.length === 0) {
-      // Create a solid fill first so we have something to bind to
       currentPaints = [{ type: "SOLID", color: { r: 0, g: 0, b: 0 } }];
     }
     // Clone paints array (Figma requires setting the full array)
@@ -346,7 +372,20 @@ handlers.applyVariable = async function(params) {
     paintsCopy[0] = figma.variables.setBoundVariableForPaint(paintsCopy[0], "color", variable);
     if (figmaField === "fills") node.fills = paintsCopy;
     else node.strokes = paintsCopy;
+  } else if (figmaField === "letterSpacing" || figmaField === "lineHeight") {
+    // letterSpacing/lineHeight are TEXT style objects, not scalar — bind via setBoundVariable
+    // Figma API expects field name exactly as "letterSpacing" / "lineHeight" on TextNode
+    if (node.type !== "TEXT") throw new Error("field \"" + field + "\" can only be applied to TEXT nodes");
+    node.setBoundVariable(figmaField, variable);
   } else {
+    // All other FLOAT / BOOLEAN fields use setBoundVariable directly
+    if (!(figmaField in node)) {
+      throw new Error(
+        "Field \"" + field + "\" (mapped to \"" + figmaField + "\") is not available on node type " + node.type + ". " +
+        "Supported fields: fill, stroke, opacity, width, height, cornerRadius, " +
+        "paddingTop/Bottom/Left/Right, itemSpacing, fontSize, letterSpacing, lineHeight, strokeWeight, visible."
+      );
+    }
     node.setBoundVariable(figmaField, variable);
   }
 

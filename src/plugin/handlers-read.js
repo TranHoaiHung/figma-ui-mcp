@@ -406,6 +406,11 @@ handlers.screenshot = async function(params) {
     return Promise.reject(new Error("[v1.2.5] No exportable node found. children=" + children.length));
   }
 
+  // BUG-05 fix: nodes created in the current session may not have been rendered yet.
+  // scrollAndZoomIntoView forces the Figma renderer to paint the node before exportAsync,
+  // preventing blank/white PNG output on freshly-created nodes.
+  try { figma.viewport.scrollAndZoomIntoView([node]); } catch(e) { /* non-fatal */ }
+
   try {
     var bytes = await node.exportAsync({ format: "PNG", constraint: { type: "SCALE", value: s } });
   } catch(exportErr) {
@@ -501,6 +506,9 @@ handlers.export_image = async function(params) {
     node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
   }
   if (!node) throw new Error("Node not found for export");
+
+  // BUG-05 fix: same as screenshot — force render before export
+  try { figma.viewport.scrollAndZoomIntoView([node]); } catch(e) { /* non-fatal */ }
 
   var bytes = await node.exportAsync({ format: format, constraint: { type: "SCALE", value: scale } });
   var arr = (typeof Uint8Array !== "undefined" && !(bytes instanceof Uint8Array)) ? new Uint8Array(bytes) : bytes;

@@ -84,6 +84,7 @@ handlers.set_selection = async function(params) {
 };
 
 // batch — execute multiple operations in one call
+// Supported operations: create, modify, delete (single or batch ids), append, clone
 handlers.batch = async function(params) {
   // Support both figma.batch([...]) (array) and figma.batch({ operations: [...] })
   var operations = Array.isArray(params) ? params : (params.operations || []);

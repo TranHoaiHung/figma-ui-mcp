@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.5.1] — 2026-04-16
+
+### Fixed — feedback.md BUG-01, BUG-03, BUG-05 + SUGGEST-01, SUGGEST-04 + applyVariable extended fields
+
+- **BUG-01/BUG-03**: `create()` now throws a descriptive error when `parentId` is given but not found in the scene — no more silent orphan frames at page root. Error message includes a hint to re-query via `get_page_nodes()`.
+- **BUG-05**: `screenshot` and `export_image` called `exportAsync()` on freshly-created nodes before Figma's renderer had painted them, producing blank/white PNG. Fix: `figma.viewport.scrollAndZoomIntoView([node])` is now called before every export to force the renderer to paint the node first.
+- **SUGGEST-01**: `figma.batch()` already routed to `handlers["delete"]` — confirmed working; added explicit comment in source.
+- **SUGGEST-04**: `figma.instantiate()` now accepts an `overrides` map `{ "Layer Name": { text, fill, stroke, opacity, visible, fontSize, cornerRadius } }` — applies property overrides to named child layers after instantiation.
+- **applyVariable extended fields**: `applyVariable` now supports binding FLOAT/BOOLEAN variables to: `paddingTop/Bottom/Left/Right`, `itemSpacing`, `counterAxisSpacing`, `fontSize`, `letterSpacing`, `lineHeight`, `paragraphSpacing`, `paragraphIndent`, `strokeWeight`, `visible`, all four corner radius fields. Adds descriptive error when field is not valid for the node type.
+
+---
+
 ## [2.5.0] — 2026-04-15
 
 ### Fixed — feedback.md bugs: get_page_nodes array, batch delete, auto-layout warning, sandbox error hint

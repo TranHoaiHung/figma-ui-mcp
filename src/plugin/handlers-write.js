@@ -67,7 +67,15 @@ handlers.create = async (params) => {
   let parent = figma.currentPage;
   if (parentId) {
     const p = (await findNodeByIdAsync(parentId)) || findNodeByName(parentId);
-    if (p) parent = p;
+    // BUG-01/BUG-03 fix: throw immediately if parentId was given but not found.
+    // Previously the node was silently placed at page root (x:0,y:0,w:100,h:100),
+    // causing orphan frames that are hard to debug.
+    if (!p) throw new Error(
+      "parentId \"" + parentId + "\" not found in the current scene. " +
+      "If you just created the parent in a previous figma_write call, re-query its ID with " +
+      "figma.get_page_nodes() or figma.query() at the start of this call."
+    );
+    parent = p;
   }
 
   let node;
@@ -483,6 +491,10 @@ handlers.instantiate = async function(params) {
   var parentName = params.parentName || null;
   var x = params.x || 0;
   var y = params.y || 0;
+  // SUGGEST-04: optional overrides applied after instantiation
+  // overrides: { "Layer Name": { text, fill, stroke, opacity, visible, fontSize } }
+  var overrides = params.overrides || null;
+
   var comp = null;
   if (componentId) {
     comp = figma.root.findOne(function(n) { return n.id === componentId && n.type === "COMPONENT"; });
@@ -490,9 +502,53 @@ handlers.instantiate = async function(params) {
     comp = figma.root.findOne(function(n) { return n.name === componentName && n.type === "COMPONENT"; });
   }
   if (!comp) throw new Error("Component " + (componentId || componentName) + " not found");
+
   var inst = comp.createInstance();
   inst.x = x; inst.y = y;
+
   var parent = parentId ? (await findNodeByIdAsync(parentId)) : (parentName ? findNodeByName(parentName) : null);
   if (parent) parent.appendChild(inst);
+
+  // Apply overrides: walk instance children by layer name
+  if (overrides && typeof overrides === "object") {
+    var overrideKeys = Object.keys(overrides);
+    for (var oi = 0; oi < overrideKeys.length; oi++) {
+      var layerName = overrideKeys[oi];
+      var ov = overrides[layerName];
+      // Find child node by name (search entire subtree)
+      var target = inst.findOne(function(n) { return n.name === layerName; });
+      if (!target) continue;
+
+      // Text override
+      if (ov.text !== undefined && target.type === "TEXT") {
+        await figma.loadFontAsync(target.fontName);
+        target.characters = String(ov.text);
+      }
+      // Fill color override
+      if (ov.fill !== undefined) {
+        var fillNorm = normalizeHex(ov.fill);
+        if (fillNorm) target.fills = solidFill(ov.fill);
+      }
+      // Stroke override
+      if (ov.stroke !== undefined) {
+        var strokeNorm = normalizeHex(ov.stroke);
+        if (strokeNorm) target.strokes = solidStroke(ov.stroke);
+      }
+      // Opacity override
+      if (ov.opacity !== undefined) target.opacity = ov.opacity;
+      // Visibility override
+      if (ov.visible !== undefined) target.visible = Boolean(ov.visible);
+      // Font size override (TEXT nodes only)
+      if (ov.fontSize !== undefined && target.type === "TEXT") {
+        await figma.loadFontAsync(target.fontName);
+        target.fontSize = ov.fontSize;
+      }
+      // Corner radius override
+      if (ov.cornerRadius !== undefined && "cornerRadius" in target) {
+        target.cornerRadius = ov.cornerRadius;
+      }
+    }
+  }
+
   return nodeToInfo(inst);
 };
