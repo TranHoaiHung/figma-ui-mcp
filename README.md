@@ -356,7 +356,8 @@ figma-ui-mcp/
 |-----------|-------------|
 | `figma.create({ type, ... })` | Create FRAME / RECTANGLE / ELLIPSE / LINE / TEXT / SVG / IMAGE |
 | `figma.modify({ id, ... })` | Update node properties (fill, size, text, layout, etc.) |
-| `figma.delete({ id })` | Remove a node |
+| `figma.delete({ id })` | Remove a single node |
+| `figma.delete({ ids: [...] })` | **Batch delete** multiple nodes in one call |
 | `figma.query({ type?, name?, id? })` | Find nodes by type, name, or ID |
 | `figma.append({ parentId, childId })` | Move node into parent |
 
@@ -384,27 +385,31 @@ figma-ui-mcp/
 | Operation | Description |
 |-----------|-------------|
 | `figma.listComponents()` | List all components in document |
-| `figma.instantiate({ componentId })` | Create component instance |
 | `figma.createComponent({ nodeId, name? })` | Convert FRAME/GROUP → reusable Component |
+| `figma.instantiate({ componentId/Name, parentId, x, y })` | Create component instance |
+| `figma.instantiate({ ..., overrides: { "LayerName": { text, fill, fontSize, visible, ... } } })` | Instantiate with per-layer overrides |
 
 ### Design Tokens & Styles
 | Operation | Description |
 |-----------|-------------|
+| `figma.setupDesignTokens({ colors, numbers })` | Bootstrap complete token system (idempotent) |
 | `figma.createVariableCollection({ name })` | Create variable collection ("Colors", "Spacing") |
-| `figma.createVariable({ name, collectionId, value })` | Create COLOR/FLOAT/STRING/BOOLEAN variable |
-| `figma.applyVariable({ nodeId, field, variableName })` | Bind variable to node fill/stroke/opacity |
+| `figma.createVariable({ name, collectionId, resolvedType, value })` | Create COLOR/FLOAT/STRING/BOOLEAN variable |
+| `figma.addVariableMode({ collectionId, modeName })` | Add mode (e.g. "dark", "compact") |
+| `figma.renameVariableMode({ collectionId, modeId, newName })` | Rename a mode |
+| `figma.removeVariableMode({ collectionId, modeId })` | Remove a mode |
+| `figma.setVariableValue({ variableId/Name, modeId/Name, value })` | Set per-mode value |
+| `figma.modifyVariable({ variableName, value })` | Change variable value — all bound nodes update |
+| `figma.applyVariable({ nodeId, field, variableId/Name })` | Bind variable to a node property |
+| `figma.setFrameVariableMode({ nodeId, collectionId, modeName })` | Pin frame to a variable mode (Light/Dark) |
+| `figma.clearFrameVariableMode({ nodeId, collectionId })` | Reset frame to document default mode |
 | `figma.createPaintStyle({ name, color })` | Create reusable paint style |
 | `figma.createTextStyle({ name, fontFamily, fontSize, ... })` | Create reusable text style |
-| `figma.addVariableMode({ collectionId, modeName })` | Add mode (e.g. dark, vi, ja) to collection |
-| `figma.renameVariableMode({ collectionId, modeId, newName })` | Rename existing mode |
-| `figma.removeVariableMode({ collectionId, modeId })` | Remove mode from collection |
-| `figma.setVariableValue({ variableId, modeId, value })` | Set per-mode value |
-| `figma.setFrameVariableMode({ nodeId, collectionId, modeName })` | Switch variable mode on a frame (all children follow) |
-| `figma.clearFrameVariableMode({ nodeId, collectionId })` | Reset frame to default mode |
-| `figma.modifyVariable({ variableName, value })` | Change variable value — all bound nodes update instantly |
-| `figma.setupDesignTokens({ colors, numbers })` | Bootstrap complete token system in one call (idempotent) |
 | `figma.ensure_library()` | Create/get Design Library frame |
 | `figma.get_library_tokens()` | Read library color + text tokens |
+
+**`applyVariable` supported fields** — bind any FLOAT/COLOR/BOOLEAN variable to:
+`fill`, `stroke`, `opacity`, `width`, `height`, `cornerRadius` (+ `topLeftRadius` / `topRightRadius` / `bottomLeftRadius` / `bottomRightRadius`), `strokeWeight`, `paddingTop`, `paddingBottom`, `paddingLeft`, `paddingRight`, `itemSpacing`, `counterAxisSpacing`, `fontSize`, `letterSpacing`, `lineHeight`, `paragraphSpacing`, `paragraphIndent`, `visible`
 
 ### Image & Icon Helpers (server-side)
 | Operation | Description |
@@ -454,6 +459,97 @@ Supported easings: `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_AND_OUT`, `CUSTOM_B
 | `scan_design` | Progressive scan for large files — all text, colors, fonts, images, icons |
 
 **`includeHidden` param** (boolean, default `false`) — available on `get_selection`, `get_design`, `search_nodes`, `scan_design`. When `false` (default), nodes with `visible: false` are skipped. Pass `true` to include hidden layers.
+
+---
+
+## Working with an Existing Project
+
+When opening a Figma file that already has a design system, **always read before drawing**.
+
+### Step 1 — Read what exists
+
+```
+figma_read get_variables      → load variable IDs (Design Tokens)
+figma_read get_styles         → load paint/text style IDs and hex values
+figma_read get_local_components → load component IDs
+figma_read get_page_nodes     → load top-level frame IDs
+```
+
+### Step 2 — Build lookup maps in figma_write
+
+```js
+// Load variables → build varMap: name → id
+var vars = await figma.get_variables();
+var varMap = {};
+for (var ci = 0; ci < vars.collections.length; ci++) {
+  var col = vars.collections[ci];
+  for (var vi = 0; vi < col.variables.length; vi++) {
+    var v = col.variables[vi];
+    varMap[v.name] = v.id;
+  }
+}
+
+// Load styles → build colorMap: name → hex, textMap: name → {fontSize, fontWeight}
+var styles = await figma.get_styles();
+var colorMap = {}, textMap = {};
+styles.paintStyles.forEach(function(s) { colorMap[s.name] = s.hex; });
+styles.textStyles.forEach(function(s)  { textMap[s.name]  = s; });
+
+// Load components → build compMap: name → id
+var comps = await figma.get_local_components();
+var compMap = {};
+comps.components.forEach(function(c) { compMap[c.name] = c.id; });
+```
+
+### Step 3 — Create nodes using discovered values
+
+```js
+// Use colorMap for fill (hex from existing styles)
+var card = await figma.create({
+  type: "FRAME", name: "Card",
+  fill: colorMap["color/bg-surface"] || "#FFFFFF",
+  width: 360, height: 200,
+  layoutMode: "VERTICAL", paddingTop: 16, paddingLeft: 16,
+  paddingBottom: 16, paddingRight: 16, itemSpacing: 12,
+});
+
+// Then bind variables so light/dark mode switches propagate
+if (varMap["bg-surface"])
+  await figma.applyVariable({ nodeId: card.id, field: "fill",        variableId: varMap["bg-surface"] });
+if (varMap["radius-md"])
+  await figma.applyVariable({ nodeId: card.id, field: "cornerRadius",variableId: varMap["radius-md"] });
+if (varMap["spacing-md"])
+  await figma.applyVariable({ nodeId: card.id, field: "paddingTop",  variableId: varMap["spacing-md"] });
+```
+
+### Step 4 — Instantiate components with overrides
+
+```js
+// Prefer existing components over drawing from scratch
+if (compMap["btn/primary"]) {
+  await figma.instantiate({
+    componentId: compMap["btn/primary"],
+    parentId: card.id,
+    overrides: { "Label": { text: "Confirm", fill: "#FFFFFF" } }
+  });
+}
+```
+
+### Step 5 — Pin frames to Light / Dark mode
+
+```js
+var collection = vars.collections.find(function(c) { return c.name === "Design Tokens"; });
+
+// Duplicate frame and preview both modes side by side
+var frames = await figma.get_page_nodes();
+var homeId  = frames.find(function(f) { return f.name === "Home"; }).id;
+var light   = await figma.clone({ id: homeId, x: 0,    name: "Preview/Light" });
+var dark    = await figma.clone({ id: homeId, x: 1540, name: "Preview/Dark"  });
+await figma.setFrameVariableMode({ nodeId: light.id, collectionId: collection.id, modeName: "light" });
+await figma.setFrameVariableMode({ nodeId: dark.id,  collectionId: collection.id, modeName: "dark"  });
+```
+
+> Full API reference and all design rules: run `figma_docs` in your AI client.
 
 ---
 

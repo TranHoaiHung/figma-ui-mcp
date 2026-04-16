@@ -554,14 +554,59 @@ await figma.modifyVariable({ variableName: "spacing-md", value: 20 });
 ## applyVariable — Bind a variable to a node property
 
 \`\`\`js
-// Bind accent color to a frame's fill
-await figma.applyVariable({ nodeId: "49:115", field: "fill", variableId: "VariableID:57:671" });
+// Bind by variableId (fast, preferred)
+await figma.applyVariable({ nodeId: "49:115", field: "fill", variableId: varMap["accent"] });
 
 // Bind by variable name (slower, searches all collections)
 await figma.applyVariable({ nodeId: "49:115", field: "fill", variableName: "accent" });
-
-// Supported fields: fill, stroke, opacity, cornerRadius, width, height
 // → { nodeId, nodeName, field, variableId, variableName }
+\`\`\`
+
+**Supported fields — full list:**
+
+| Field | Variable type | Node type | Notes |
+|-------|--------------|-----------|-------|
+| `fill` / `fills` | COLOR | any | Binds to first solid paint color |
+| `stroke` / `strokes` | COLOR | any | Binds to first solid stroke color |
+| `opacity` | FLOAT | any | 0.0 – 1.0 |
+| `width` | FLOAT | any | |
+| `height` | FLOAT | any | |
+| `cornerRadius` | FLOAT | FRAME/RECT | Alias → topLeftRadius |
+| `topLeftRadius` | FLOAT | FRAME/RECT | Individual corner |
+| `topRightRadius` | FLOAT | FRAME/RECT | Individual corner |
+| `bottomLeftRadius` | FLOAT | FRAME/RECT | Individual corner |
+| `bottomRightRadius` | FLOAT | FRAME/RECT | Individual corner |
+| `strokeWeight` | FLOAT | any | |
+| `itemSpacing` | FLOAT | auto-layout frame | Gap between children |
+| `counterAxisSpacing` | FLOAT | auto-layout (wrap) | Gap on cross axis |
+| `paddingTop` | FLOAT | auto-layout frame | |
+| `paddingBottom` | FLOAT | auto-layout frame | |
+| `paddingLeft` | FLOAT | auto-layout frame | |
+| `paddingRight` | FLOAT | auto-layout frame | |
+| `padding` | FLOAT | auto-layout frame | Alias → paddingTop |
+| `fontSize` | FLOAT | TEXT | |
+| `letterSpacing` | FLOAT | TEXT | |
+| `lineHeight` | FLOAT | TEXT | |
+| `paragraphSpacing` | FLOAT | TEXT | |
+| `paragraphIndent` | FLOAT | TEXT | |
+| `visible` | BOOLEAN | any | Show/hide via variable |
+
+\`\`\`js
+// Bind spacing tokens to an auto-layout frame
+await figma.applyVariable({ nodeId: card.id, field: "paddingTop",    variableId: varMap["spacing-lg"] });
+await figma.applyVariable({ nodeId: card.id, field: "paddingBottom", variableId: varMap["spacing-lg"] });
+await figma.applyVariable({ nodeId: card.id, field: "paddingLeft",   variableId: varMap["spacing-md"] });
+await figma.applyVariable({ nodeId: card.id, field: "paddingRight",  variableId: varMap["spacing-md"] });
+await figma.applyVariable({ nodeId: card.id, field: "itemSpacing",   variableId: varMap["spacing-sm"] });
+
+// Bind corner radius token
+await figma.applyVariable({ nodeId: btn.id, field: "cornerRadius", variableId: varMap["radius-md"] });
+
+// Bind font size token (TEXT nodes only)
+await figma.applyVariable({ nodeId: title.id, field: "fontSize", variableId: varMap["font-size-heading"] });
+
+// Bind visibility to boolean variable (useful for toggling states)
+await figma.applyVariable({ nodeId: badge.id, field: "visible", variableId: varMap["show-badge"] });
 \`\`\`
 
 ## createComponent — Convert frame to reusable component
@@ -570,10 +615,29 @@ await figma.applyVariable({ nodeId: "49:115", field: "fill", variableName: "acce
 var comp = await figma.createComponent({ nodeId: "49:200", name: "btn/primary" });
 // → { id, name, key, width, height }
 
-// Then instantiate anywhere:
+// Instantiate by componentId or componentName:
 await figma.instantiate({ componentId: comp.id, parentId: screen.id, x: 100, y: 200 });
-// Or by name:
 await figma.instantiate({ componentName: "btn/primary", parentId: screen.id, x: 100, y: 200 });
+
+// Instantiate WITH property overrides — target child layers by name
+// overrides: { "Layer Name": { text, fill, stroke, opacity, visible, fontSize, cornerRadius } }
+await figma.instantiate({
+  componentName: "btn/primary",
+  parentId: screen.id, x: 100, y: 200,
+  overrides: {
+    "Label":      { text: "Sign Up", fill: "#FFFFFF", fontSize: 16 },
+    "Background": { fill: "#6C5CE7", cornerRadius: 8 },
+    "Icon":       { visible: false }
+  }
+});
+// Overrides walk the instance subtree by layer name and apply:
+//   text      → characters (TEXT nodes only, loadFontAsync called automatically)
+//   fill      → fills (hex / rgba / CSS name)
+//   stroke    → strokes
+//   opacity   → opacity (0.0–1.0)
+//   visible   → visible (boolean)
+//   fontSize  → fontSize (TEXT nodes only)
+//   cornerRadius → cornerRadius (FRAME/RECT only)
 \`\`\`
 
 ## export_image — Export node as base64 PNG/JPG (for saving to disk)
@@ -1583,24 +1647,50 @@ console.log(JSON.stringify(nodes[0], null, 2));
 // Screenshot a frame
 const { dataUrl } = await figma.screenshot({ id: f.id, scale: 2 });
 
-// Top-level frames on current page
-const { nodes: frames } = await figma.get_page_nodes();
+// Top-level frames on current page — returns ARRAY directly (not {nodes:[...]})
+var frames = await figma.get_page_nodes();
+// → [ {id, name, type, x, y, width, height, childCount}, ... ]
+// ✅ CORRECT: for (var i = 0; i < frames.length; i++) { ... }
+// ✅ CORRECT: frames.find(f => f.name === "Home")
+// ❌ WRONG:   const { nodes } = await figma.get_page_nodes()  ← destructuring fails
 
-// Get all local styles (paint, text, effect, grid)
-const styles = await figma.get_styles();
-// → { paintStyles: [{id, name, hex}], textStyles: [{id, name, fontSize, fontFamily, fontWeight}], effectStyles, gridStyles }
+// Get all local paint/text/effect/grid styles
+var styles = await figma.get_styles();
+// → {
+//     paintStyles: [ { id: "S:1", name: "color/accent", hex: "#6C5CE7", type: "PAINT" } ],
+//     textStyles:  [ { id: "S:2", name: "text/heading-xl", type: "TEXT",
+//                      fontSize: 24, fontFamily: "Inter", fontWeight: "Bold",
+//                      lineHeight: 32, letterSpacing: 0 } ],
+//     effectStyles: [ { id: "S:3", name: "shadow/card", type: "EFFECT", effects: 1 } ],
+//     gridStyles:   [ { id: "S:4", name: "grid/8pt", type: "GRID" } ]
+//   }
+// Use paintStyles[i].id with createPaintStyle or paintStyles[i].hex for fill values
+// Use textStyles[i].id with createTextStyle; textStyles[i].fontSize for token lookup
 
 // Get enhanced component listing with properties
-const comps = await figma.get_local_components();
-// → { components: [{id, name, key, description, width, height, properties}], componentSets, total }
+var comps = await figma.get_local_components();
+// → { components: [{id, name, key, description, width, height, variantProperties}],
+//     componentSets: [{id, name, key}], total: N }
 
 // Get current viewport position and zoom
-const vp = await figma.get_viewport();
+var vp = await figma.get_viewport();
 // → { center: {x, y}, zoom, bounds: {x, y, width, height} }
 
 // Read Figma local variables (Design Tokens)
-const vars = await figma.get_variables();
-// → { collections: [{id, name, modes, variables: [{id, name, resolvedType, values, description}]}] }
+var vars = await figma.get_variables();
+// → { collections: [{
+//       id: "VC:1", name: "Design Tokens",
+//       modes: [ {id: "m:1", name: "light"}, {id: "m:2", name: "dark"} ],
+//       variables: [ {
+//         id: "V:10", name: "accent", resolvedType: "COLOR",
+//         values: { "m:1": "#6C5CE7", "m:2": "#A78BFA" },  // hex strings for COLOR
+//         description: ""
+//       }, {
+//         id: "V:11", name: "spacing-md", resolvedType: "FLOAT",
+//         values: { "m:1": 16 }, description: ""
+//       } ]
+//   }] }
+// Build lookup: var varMap = {}; vars.collections[0].variables.forEach(v => varMap[v.name] = v.id);
 
 // Get design tree with control over hidden layers (default: invisible nodes are SKIPPED)
 const { nodes } = await figma.get_selection();                      // hidden children excluded
@@ -1660,18 +1750,186 @@ await figma.set_viewport({ nodeName: "Dashboard" });
 await figma.set_viewport({ center: { x: 500, y: 300 }, zoom: 0.5 });
 \`\`\`
 
-### Batch — execute multiple operations in one call
+### delete — remove nodes (single or batch)
 \`\`\`js
-// Up to 50 operations per batch — much faster than individual calls
-const result = await figma.batch({
-  operations: [
-    { operation: "create", params: { type: "RECTANGLE", parentId: f.id, x: 0, y: 0, width: 100, height: 100, fill: "#ff0000" } },
-    { operation: "create", params: { type: "TEXT", parentId: f.id, x: 10, y: 10, content: "Hello", fontSize: 14, fill: "#ffffff" } },
-    { operation: "modify", params: { id: "1:5", fill: "#00ff00" } },
-  ]
-});
-// → { results: [{index, operation, success, data}], total: 3, succeeded: 3 }
+// Single delete — by id or name
+await figma.delete({ id: "1:23" });
+await figma.delete({ name: "Temp Frame" });
+// → { deleted: true, id, name, type }  or  { deleted: true, alreadyGone: true } if already removed
+
+// Batch delete — pass ids array (one round-trip)
+await figma.delete({ ids: ["1:1", "1:2", "1:3", "1:4"] });
+// → { deleted: true, count: 4, results: [{deleted, id}, ...] }
 \`\`\`
+
+### Batch — execute up to 50 mixed operations in one round-trip
+\`\`\`js
+// Supported operations: create, modify, delete, clone, append, resize, group, flatten
+const result = await figma.batch([
+  { operation: "create", params: { type: "RECTANGLE", parentId: f.id, width: 100, height: 100, fill: "#FF0000" } },
+  { operation: "create", params: { type: "TEXT", parentId: f.id, content: "Hello", fontSize: 14, fill: "#FFFFFF" } },
+  { operation: "modify", params: { id: "1:5", fill: "#00FF00" } },
+  { operation: "delete", params: { id: "1:99" } },                        // single delete in batch
+  { operation: "delete", params: { ids: ["2:1", "2:2", "2:3"] } },        // batch delete in batch
+]);
+// → { results: [{index, operation, success, data}], total: 5, succeeded: 5 }
+// Failed operations set success: false with error string — others still execute (no rollback)
+\`\`\`
+
+---
+
+## 🔑 WORKFLOW: Apply Existing Project Styles & Variables
+
+**Use this when entering a project that already has a design system defined.**
+Read first, then apply — never hardcode colors that already exist as variables or styles.
+
+### Step 1 — Read what exists in the project
+
+\`\`\`js
+// Always run at the start of any design task on an existing project
+
+// A — Read Figma Variables (Design Tokens bound to nodes)
+var vars = await figma.get_variables();
+var varMap = {};   // name → id lookup
+for (var ci = 0; ci < vars.collections.length; ci++) {
+  var col = vars.collections[ci];
+  for (var vi = 0; vi < col.variables.length; vi++) {
+    var v = col.variables[vi];
+    varMap[v.name] = v.id;
+  }
+}
+// varMap now contains: { "accent": "V:1", "bg": "V:2", "spacing-md": "V:3", ... }
+
+// B — Read Paint/Text Styles (Figma local styles panel)
+var styles = await figma.get_styles();
+var colorMap = {};  // name → hex (for fill values)
+var styleIdMap = {}; // name → styleId (for style binding)
+for (var i = 0; i < styles.paintStyles.length; i++) {
+  colorMap[styles.paintStyles[i].name] = styles.paintStyles[i].hex;
+  styleIdMap[styles.paintStyles[i].name] = styles.paintStyles[i].id;
+}
+var textMap = {};   // name → { fontSize, fontFamily, fontWeight }
+for (var j = 0; j < styles.textStyles.length; j++) {
+  textMap[styles.textStyles[j].name] = styles.textStyles[j];
+}
+
+// C — Read existing components
+var comps = await figma.get_local_components();
+var compMap = {};  // name → id
+for (var k = 0; k < comps.components.length; k++) {
+  compMap[comps.components[k].name] = comps.components[k].id;
+}
+
+// D — Read top-level frames to understand page layout
+var pages = await figma.get_page_nodes();
+var frameMap = {};
+for (var fi = 0; fi < pages.length; fi++) {
+  frameMap[pages[fi].name] = pages[fi].id;
+}
+\`\`\`
+
+### Step 2a — Create new nodes using discovered colors (fill from variable/style)
+
+\`\`\`js
+// Use colorMap values as fill (fallback to hex from styles)
+var card = await figma.create({
+  type: "FRAME", name: "Card",
+  fill: colorMap["color/bg-surface"] || "#FFFFFF",   // use discovered hex
+  width: 360, height: 200,
+  cornerRadius: 12,
+  layoutMode: "VERTICAL",
+  paddingTop: 16, paddingBottom: 16, paddingLeft: 16, paddingRight: 16,
+  itemSpacing: 12,
+});
+
+// Then bind variable so future mode switches propagate
+if (varMap["bg-surface"]) {
+  await figma.applyVariable({ nodeId: card.id, field: "fill", variableId: varMap["bg-surface"] });
+}
+if (varMap["radius-md"]) {
+  await figma.applyVariable({ nodeId: card.id, field: "cornerRadius", variableId: varMap["radius-md"] });
+}
+\`\`\`
+
+### Step 2b — Create text using discovered text styles
+
+\`\`\`js
+var headingStyle = textMap["text/heading-lg"] || { fontSize: 20, fontFamily: "Inter", fontWeight: "Bold" };
+var bodyStyle    = textMap["text/body"]       || { fontSize: 14, fontFamily: "Inter", fontWeight: "Regular" };
+
+var title = await figma.create({
+  type: "TEXT", parentId: card.id,
+  content: "Card Title",
+  fontSize: headingStyle.fontSize,
+  fontWeight: headingStyle.fontWeight,
+  fill: colorMap["color/text-primary"] || "#1E3150",
+});
+// Bind color variable if available
+if (varMap["text-primary"]) {
+  await figma.applyVariable({ nodeId: title.id, field: "fill", variableId: varMap["text-primary"] });
+}
+\`\`\`
+
+### Step 2c — Instantiate existing components
+
+\`\`\`js
+// Check compMap before creating anything from scratch
+if (compMap["btn/primary"]) {
+  // Component exists — instantiate with overrides
+  await figma.instantiate({
+    componentId: compMap["btn/primary"],
+    parentId: card.id,
+    overrides: { "Label": { text: "Confirm" } }
+  });
+} else {
+  // Component doesn't exist — build from scratch, then convert to component
+  var btnFrame = await figma.create({ type: "FRAME", name: "btn/primary", ... });
+  await figma.createComponent({ nodeId: btnFrame.id, name: "btn/primary" });
+}
+\`\`\`
+
+### Step 3 — Apply variables to ALL bindable properties
+
+\`\`\`js
+// Complete binding pattern for a card component:
+var bindings = [
+  { nodeId: card.id,    field: "fill",        varName: "bg-surface" },
+  { nodeId: card.id,    field: "cornerRadius", varName: "radius-md" },
+  { nodeId: card.id,    field: "paddingTop",   varName: "spacing-md" },
+  { nodeId: card.id,    field: "paddingLeft",  varName: "spacing-md" },
+  { nodeId: card.id,    field: "itemSpacing",  varName: "spacing-sm" },
+  { nodeId: title.id,   field: "fill",         varName: "text-primary" },
+  { nodeId: title.id,   field: "fontSize",     varName: "font-heading" },
+  { nodeId: subtitle.id,field: "fill",         varName: "text-secondary" },
+  { nodeId: divider.id, field: "fill",         varName: "border" },
+];
+for (var bi = 0; bi < bindings.length; bi++) {
+  var b = bindings[bi];
+  if (varMap[b.varName]) {
+    await figma.applyVariable({ nodeId: b.nodeId, field: b.field, variableId: varMap[b.varName] });
+  }
+}
+\`\`\`
+
+### Step 4 — Switch between Light / Dark mode on a frame
+
+\`\`\`js
+// Pin a frame to a specific variable mode (Light or Dark preview)
+var collection = vars.collections.find(function(c) { return c.name === "Design Tokens"; });
+await figma.setFrameVariableMode({
+  nodeId: frameMap["Home Screen"],
+  collectionId: collection.id,
+  modeName: "dark"   // or "light" — must match exact mode name in collection
+});
+
+// Build side-by-side light/dark preview
+var lightPreview = await figma.clone({ id: frameMap["Home Screen"], x: 0,    name: "Preview/Light" });
+var darkPreview  = await figma.clone({ id: frameMap["Home Screen"], x: 1500, name: "Preview/Dark"  });
+await figma.setFrameVariableMode({ nodeId: lightPreview.id, collectionId: collection.id, modeName: "light" });
+await figma.setFrameVariableMode({ nodeId: darkPreview.id,  collectionId: collection.id, modeName: "dark" });
+\`\`\`
+
+---
 
 ### Design Tokens — Variables, Styles, Components (v1.7.0)
 
@@ -1780,19 +2038,15 @@ await figma.applyVariable({ nodeId: card.id, field: "fill", variableId: bgBase.i
 
 #### applyVariable — bind variable to a node property
 \`\`\`js
-// Bind fill color to variable — change variable later → all bound nodes update
-await figma.applyVariable({
-  nodeId: card.id,
-  field: "fill",           // fill | stroke | opacity | cornerRadius | width | height
-  variableName: "bg-base"  // or variableId: bgBase.id
-});
-
-// Bind stroke to variable
-await figma.applyVariable({
-  nodeId: card.id,
-  field: "stroke",
-  variableName: "border-color"
-});
+// Bind fill color — change variable value later → ALL bound nodes update automatically
+await figma.applyVariable({ nodeId: card.id, field: "fill",         variableName: "bg-base" });
+await figma.applyVariable({ nodeId: card.id, field: "stroke",       variableName: "border-color" });
+await figma.applyVariable({ nodeId: card.id, field: "cornerRadius", variableName: "radius-md" });
+await figma.applyVariable({ nodeId: card.id, field: "paddingTop",   variableName: "spacing-lg" });
+await figma.applyVariable({ nodeId: card.id, field: "paddingLeft",  variableName: "spacing-md" });
+await figma.applyVariable({ nodeId: card.id, field: "itemSpacing",  variableName: "spacing-sm" });
+await figma.applyVariable({ nodeId: text.id, field: "fontSize",     variableName: "font-size-heading" });
+// Full field list: see ## applyVariable section above
 \`\`\`
 
 #### setFrameVariableMode — pin a frame to a specific variable mode
