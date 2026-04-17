@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.5.8] — 2026-04-17
+
+### Added — Read design-to-code improvements (competitive with official Figma MCP)
+
+**P1 — `boundVariables` now resolved** (not just IDs):
+`get_node_detail` calls `getVariableByIdAsync()` for each binding and returns `{ id, name, resolvedType, value }` — value is hex string for COLOR, number for FLOAT, string for STRING. No more secondary `get_variables` + manual ID join.
+
+**P2 — New `get_css` operation**:
+`figma_read get_css { nodeId }` returns a ready-to-use CSS string covering: `position`, `width/height`, `display/flex`, `gap`, `align-items`, `justify-content`, `padding`, `background-color` / `linear-gradient`, `border`, `border-radius`, `box-shadow`, `filter`, `backdrop-filter`, `opacity`, `mix-blend-mode`, `color`, `font-size`, `font-family`, `font-weight`, `line-height`, `letter-spacing`, `text-align`, `text-decoration`, `transform: rotate`, `overflow: hidden`.
+Also returns `detail` (structured) alongside `css` (string).
+
+**P3 — Instance overrides: full list instead of count**:
+`overrides: [{ id, overriddenFields: ["fills", "characters", ...] }]` — shows exactly what changed on each overridden child vs. the main component.
+
+**P4 — `fillStyleId` / `textStyleId` resolved to name+value**:
+Alongside the raw IDs, `get_node_detail` now returns:
+- `textStyle: { name, fontSize, fontFamily, fontWeight }`
+- `fillStyle: { name, hex }`
+
+**P5 — `componentSetName` + `variantLabel` on INSTANCE nodes**:
+When an instance's main component belongs to a COMPONENT_SET, exposes:
+- `componentSetName: "Button"`
+- `variantLabel: "State=Primary, Size=Large"` (the variant portion after stripping the set name)
+
+### Tests
+- `scripts/test-v258.mjs` — 36 tests, all 5 improvements + regression (14 ops in enum)
+- **257/257 total tests pass**
+
 ## [2.5.7] — 2026-04-17
 
 ### Fixed

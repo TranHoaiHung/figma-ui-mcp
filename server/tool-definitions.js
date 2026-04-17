@@ -51,7 +51,7 @@ export const TOOLS = [
           enum: [
             "get_selection", "get_design", "get_page_nodes", "screenshot", "export_svg",
             "get_styles", "get_local_components", "get_viewport", "get_variables",
-            "get_node_detail",
+            "get_node_detail", "get_css",
             "export_image",
             "search_nodes",
             "scan_design"
@@ -65,8 +65,9 @@ export const TOOLS = [
             "get_styles: all local paint, text, effect, grid styles. " +
             "get_local_components: enhanced component listing with properties. " +
             "get_viewport: current viewport position and zoom. " +
-            "get_variables: read Figma local variables (Design Tokens). " +
-            "get_node_detail: CSS-like properties for a single node (fill, stroke, padding, shadow, font — no tree traversal). " +
+            "get_variables: read Figma local variables (Design Tokens) with resolved names and values. " +
+            "get_node_detail: structured properties for a single node — fills, strokes, layout, typography, effects, bound variables (resolved to name+value), style refs (resolved to name), instance overrides, componentSetName/variantLabel. " +
+            "get_css: ready-to-use CSS string for a single node — background, flex, border, radius, shadow, typography, opacity, transform. Best for design-to-code. " +
             "export_image: export node as base64 PNG/JPG for saving to disk (use scale param for resolution). " +
             "search_nodes: find nodes by properties — type, namePattern (wildcard), fill (hex), fontFamily, fontSize, hasImage, hasIcon. " +
             "scan_design: progressive scan for large/complex designs — returns structured summary with all text, colors, fonts, images, icons, sections. No token overflow.",
