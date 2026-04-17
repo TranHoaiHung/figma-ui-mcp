@@ -334,8 +334,6 @@ handlers.create = async (params) => {
   }
 
   if (name)   node.name = name;
-  node.x = x;
-  node.y = y;
   if (opacity !== undefined) node.opacity = opacity;
   if (visible !== undefined) node.visible = visible;
 
@@ -375,6 +373,11 @@ handlers.create = async (params) => {
     if (params.layoutAlign !== undefined && "layoutAlign" in node) node.layoutAlign = params.layoutAlign;
     if (params.layoutGrow !== undefined && "layoutGrow" in node) node.layoutGrow = params.layoutGrow;
   }
+
+  // Set x/y after appendChild — Figma resets position when a node is reparented,
+  // so coordinates must be applied after the node is in its final parent.
+  node.x = x;
+  node.y = y;
 
   return nodeToInfo(node);
 };
@@ -444,18 +447,23 @@ handlers.modify = async (params) => {
 
   // Auto Layout properties (modify existing frame)
   if (node.type === "FRAME") {
+    var removingLayout = params.layoutMode === "NONE" || params.layoutMode === null || params.layoutMode === "";
     if (params.layoutMode !== undefined) {
-      node.layoutMode = params.layoutMode === "NONE" ? "NONE" : params.layoutMode;
+      // Figma uses "NONE" to disable auto-layout; null/"" are aliases accepted here
+      node.layoutMode = removingLayout ? "NONE" : params.layoutMode;
     }
-    if (params.primaryAxisAlignItems !== undefined) node.primaryAxisAlignItems = params.primaryAxisAlignItems;
-    // BUG-05: better error when STRETCH passed to counterAxisAlignItems in modify()
-    if (params.counterAxisAlignItems === "STRETCH") {
-      throw new Error(
-        "counterAxisAlignItems does not support \"STRETCH\". To stretch children across the cross-axis, " +
-        "set counterAxisAlignItems: \"MIN\" on this container and layoutAlign: \"STRETCH\" on each child."
-      );
+    // Skip align/spacing props when removing auto-layout — Figma throws on non-layout frames
+    if (!removingLayout || node.layoutMode !== "NONE") {
+      if (params.primaryAxisAlignItems !== undefined) node.primaryAxisAlignItems = params.primaryAxisAlignItems;
+      // BUG-05: better error when STRETCH passed to counterAxisAlignItems in modify()
+      if (params.counterAxisAlignItems === "STRETCH") {
+        throw new Error(
+          "counterAxisAlignItems does not support \"STRETCH\". To stretch children across the cross-axis, " +
+          "set counterAxisAlignItems: \"MIN\" on this container and layoutAlign: \"STRETCH\" on each child."
+        );
+      }
+      if (params.counterAxisAlignItems !== undefined) node.counterAxisAlignItems = params.counterAxisAlignItems;
     }
-    if (params.counterAxisAlignItems !== undefined) node.counterAxisAlignItems = params.counterAxisAlignItems;
     if (params.padding !== undefined) {
       node.paddingTop = params.padding;
       node.paddingBottom = params.padding;

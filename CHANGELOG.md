@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.5.6] — 2026-04-17
+
+### Fixed — BUG-16: `loadIcon` x/y ignored, BUG-17: `layoutMode: "NONE"` silently ignored
+
+**BUG-16** (`loadIcon` always places icon at 0,0):
+- Root cause: `node.x = x` / `node.y = y` was set BEFORE `parent.appendChild(node)`. Figma resets a node's position when it is appended to a parent, discarding any coordinates set beforehand.
+- Fix: moved `node.x = x; node.y = y` to after `appendChild` in `handlers-write.js`. Applies to all node types (FRAME, RECTANGLE, SVG, TEXT, IMAGE, VECTOR, ELLIPSE, LINE).
+
+**BUG-17** (`modify({ layoutMode: "NONE" })` silently ignored):
+- Root cause: `primaryAxisAlignItems` / `counterAxisAlignItems` were still being applied after setting `layoutMode = "NONE"`, causing Figma to throw internally and roll back the change.
+- Fix: skip align/spacing props when `layoutMode` is being set to `"NONE"`. Also accept `null` and `""` as aliases for `"NONE"`.
+
+### Tests
+- Added `scripts/test-v256.mjs` — 8 tests covering BUG-16 (x/y after append) and BUG-17 (layout removal)
+
 ## [2.5.5] — 2026-04-17
 
 ### Added — Ionicons + Tabler icon libraries (free replacement for paid Icons8 ios-filled)
