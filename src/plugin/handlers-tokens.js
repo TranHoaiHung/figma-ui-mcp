@@ -347,6 +347,15 @@ handlers.applyVariable = async function(params) {
     "lineHeight":       "lineHeight",
     "paragraphSpacing": "paragraphSpacing",
     "paragraphIndent":  "paragraphIndent",
+    // ── Typography — STRING variables (v2.5.4) ────────────────────────────
+    // font family/style bind a STRING variable to TextNode.fontName
+    "fontFamily":       "fontFamily",
+    "fontName":         "fontFamily",   // alias
+    "fontStyle":        "fontStyle",
+    "fontWeight":       "fontStyle",    // alias (maps to the "style" part of fontName)
+    // ── Text characters (STRING variable) ─────────────────────────────────
+    "characters":       "characters",
+    "text":             "characters",   // alias
     // ── Stroke weight ─────────────────────────────────────────────────────
     "strokeWeight":     "strokeWeight",
     // ── Visibility (BOOLEAN variable) ─────────────────────────────────────
@@ -372,9 +381,23 @@ handlers.applyVariable = async function(params) {
     paintsCopy[0] = figma.variables.setBoundVariableForPaint(paintsCopy[0], "color", variable);
     if (figmaField === "fills") node.fills = paintsCopy;
     else node.strokes = paintsCopy;
+  } else if (figmaField === "fontFamily" || figmaField === "fontStyle") {
+    // STRING variable → fontName.family or fontName.style
+    // Figma API requires setBoundVariable with exact key
+    if (node.type !== "TEXT") throw new Error("field \"" + field + "\" can only be applied to TEXT nodes");
+    if (variable.resolvedType !== "STRING") {
+      throw new Error("field \"" + field + "\" requires a STRING variable, got " + variable.resolvedType);
+    }
+    // Ensure current font is loaded before binding (Figma throws if the resolved
+    // font family isn't loaded in the sandbox)
+    try { await figma.loadFontAsync(node.fontName); } catch (e) { /* continue */ }
+    node.setBoundVariable(figmaField, variable);
+  } else if (figmaField === "characters") {
+    if (node.type !== "TEXT") throw new Error("field \"characters\" can only be applied to TEXT nodes");
+    try { await figma.loadFontAsync(node.fontName); } catch (e) {}
+    node.setBoundVariable("characters", variable);
   } else if (figmaField === "letterSpacing" || figmaField === "lineHeight") {
     // letterSpacing/lineHeight are TEXT style objects, not scalar — bind via setBoundVariable
-    // Figma API expects field name exactly as "letterSpacing" / "lineHeight" on TextNode
     if (node.type !== "TEXT") throw new Error("field \"" + field + "\" can only be applied to TEXT nodes");
     node.setBoundVariable(figmaField, variable);
   } else {
@@ -383,7 +406,8 @@ handlers.applyVariable = async function(params) {
       throw new Error(
         "Field \"" + field + "\" (mapped to \"" + figmaField + "\") is not available on node type " + node.type + ". " +
         "Supported fields: fill, stroke, opacity, width, height, cornerRadius, " +
-        "paddingTop/Bottom/Left/Right, itemSpacing, fontSize, letterSpacing, lineHeight, strokeWeight, visible."
+        "paddingTop/Bottom/Left/Right, itemSpacing, fontSize, letterSpacing, lineHeight, " +
+        "fontFamily, fontStyle, strokeWeight, visible, characters."
       );
     }
     node.setBoundVariable(figmaField, variable);
@@ -546,15 +570,38 @@ handlers.modifyVariable = async function(params) {
   };
 };
 
-// setupDesignTokens — bootstrap a complete design token system in one call
-// Creates variable collection + all color/spacing variables if they don't exist
-// Idempotent: skips existing variables, only adds missing ones
+// setupDesignTokens — bootstrap a complete design token system in one call.
+// Idempotent: existing variables get their value updated; new ones are created.
+//
+// v2.5.4: added fontSizes (FLOAT), fonts (STRING), textStyles (text styles that
+// reference variables), and multi-mode support.
+//
+// Params:
+//   collectionName: string (default "Design Tokens")
+//   modes: array of mode names (optional — default ["Mode 1"])
+//   colors: { name: "#hex" } OR { name: { mode1: "#hex", mode2: "#hex" } }
+//   numbers: { name: 16 } OR { name: { mode1: 16, mode2: 14 } }
+//   fontSizes: same shape as numbers (creates FLOAT variables)
+//   fonts: { name: "Inter" } OR { name: { mode1: "Inter", mode2: "SF Pro" } } (STRING)
+//   textStyles: {
+//     "text/heading-xl": {
+//       fontFamily: "{font-primary}" | "Inter",   // {var-name} binds to STRING var
+//       fontWeight: "Bold",
+//       fontSize: "{text-heading-xl}" | 24,       // {var-name} binds to FLOAT var
+//       lineHeight: 32 | "auto" | "150%",
+//       letterSpacing: -0.4
+//     }
+//   }
 handlers.setupDesignTokens = async function(params) {
   var collectionName = params.collectionName || "Design Tokens";
-  var colors = params.colors || {};   // { "accent": "#3B82F6", "bg-base": "#08090E", ... }
-  var numbers = params.numbers || {}; // { "spacing-sm": 8, "radius-md": 12, ... }
+  var colors = params.colors || {};
+  var numbers = params.numbers || {};
+  var fontSizes = params.fontSizes || {};
+  var fonts = params.fonts || {};
+  var textStyles = params.textStyles || {};
+  var requestedModes = params.modes || null;
 
-  // Find or create collection
+  // ── Find or create collection ──────────────────────────────────────────
   var collection = null;
   var allCollections = await figma.variables.getLocalVariableCollectionsAsync();
   for (var ci = 0; ci < allCollections.length; ci++) {
@@ -567,53 +614,308 @@ handlers.setupDesignTokens = async function(params) {
     collection = figma.variables.createVariableCollection(collectionName);
   }
 
-  // Read existing variables in this collection
+  // ── Apply requested modes (rename default + add missing) ───────────────
+  if (Array.isArray(requestedModes) && requestedModes.length > 0) {
+    // Rename the default mode to the first requested name
+    var existingModes = collection.modes;
+    if (existingModes.length >= 1 && existingModes[0].name !== requestedModes[0]) {
+      try { collection.renameMode(existingModes[0].modeId, requestedModes[0]); }
+      catch (e) { /* non-fatal */ }
+    }
+    // Add any extra modes that don't exist yet
+    for (var rm = 1; rm < requestedModes.length; rm++) {
+      var rmName = requestedModes[rm];
+      var exists = false;
+      for (var em = 0; em < collection.modes.length; em++) {
+        if (collection.modes[em].name === rmName) { exists = true; break; }
+      }
+      if (!exists) {
+        try { collection.addMode(rmName); } catch (e) { /* non-fatal */ }
+      }
+    }
+  }
+
+  // Build modeName → modeId lookup (after any renames/adds)
+  var modesByName = {};
+  for (var mi = 0; mi < collection.modes.length; mi++) {
+    modesByName[collection.modes[mi].name] = collection.modes[mi].modeId;
+  }
+  var defaultModeId = collection.modes[0].modeId;
+
+  // ── Read existing variables in this collection ─────────────────────────
   var existing = {};
   for (var vi = 0; vi < collection.variableIds.length; vi++) {
     var v = await figma.variables.getVariableByIdAsync(collection.variableIds[vi]);
     if (v) existing[v.name] = v;
   }
 
-  var modeId = collection.modes[0].modeId;
   var created = [];
   var skipped = [];
 
-  // Create color variables
-  var colorNames = Object.keys(colors);
-  for (var i = 0; i < colorNames.length; i++) {
-    var name = colorNames[i];
-    var rgb = hexToRgb(colors[name]);
-
-    if (existing[name]) {
-      // Update existing variable value
-      existing[name].setValueForMode(modeId, { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 });
-      skipped.push(name);
+  // Helper: resolve a value (scalar) OR { modeName: value } object → apply to variable
+  function applyVariableValue(variable, valueSpec, mapValueFn) {
+    if (valueSpec && typeof valueSpec === "object" && !Array.isArray(valueSpec)) {
+      // Per-mode values
+      var keys = Object.keys(valueSpec);
+      for (var k = 0; k < keys.length; k++) {
+        var modeId = modesByName[keys[k]] || defaultModeId;
+        variable.setValueForMode(modeId, mapValueFn(valueSpec[keys[k]]));
+      }
     } else {
-      var cv = figma.variables.createVariable(name, collection, "COLOR");
-      cv.setValueForMode(modeId, { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 });
-      created.push({ name: name, id: cv.id, type: "COLOR" });
+      // Scalar — apply to default mode
+      variable.setValueForMode(defaultModeId, mapValueFn(valueSpec));
     }
   }
 
-  // Create number variables (spacing, radius, etc.)
-  var numNames = Object.keys(numbers);
-  for (var i = 0; i < numNames.length; i++) {
-    var name = numNames[i];
-    if (existing[name]) {
-      existing[name].setValueForMode(modeId, Number(numbers[name]));
-      skipped.push(name);
+  // ── Create/update COLOR variables ──────────────────────────────────────
+  var colorNames = Object.keys(colors);
+  for (var i = 0; i < colorNames.length; i++) {
+    var name = colorNames[i];
+    var variable = existing[name];
+    if (!variable) {
+      variable = figma.variables.createVariable(name, collection, "COLOR");
+      created.push({ name: name, id: variable.id, type: "COLOR" });
     } else {
-      var nv = figma.variables.createVariable(name, collection, "FLOAT");
-      nv.setValueForMode(modeId, Number(numbers[name]));
-      created.push({ name: name, id: nv.id, type: "FLOAT" });
+      skipped.push(name);
+    }
+    applyVariableValue(variable, colors[name], function(hex) {
+      var rgb = hexToRgb(hex);
+      return { r: rgb.r, g: rgb.g, b: rgb.b, a: 1 };
+    });
+  }
+
+  // ── Create/update FLOAT variables (spacing, radius, etc.) ──────────────
+  var numNames = Object.keys(numbers);
+  for (var n = 0; n < numNames.length; n++) {
+    var numName = numNames[n];
+    var numVar = existing[numName];
+    if (!numVar) {
+      numVar = figma.variables.createVariable(numName, collection, "FLOAT");
+      created.push({ name: numName, id: numVar.id, type: "FLOAT" });
+    } else {
+      skipped.push(numName);
+    }
+    applyVariableValue(numVar, numbers[numName], function(v) { return Number(v); });
+  }
+
+  // ── Create/update FLOAT variables for fontSizes (v2.5.4) ───────────────
+  var fsNames = Object.keys(fontSizes);
+  for (var fs = 0; fs < fsNames.length; fs++) {
+    var fsName = fsNames[fs];
+    var fsVar = existing[fsName];
+    if (!fsVar) {
+      fsVar = figma.variables.createVariable(fsName, collection, "FLOAT");
+      created.push({ name: fsName, id: fsVar.id, type: "FLOAT" });
+    } else {
+      skipped.push(fsName);
+    }
+    applyVariableValue(fsVar, fontSizes[fsName], function(v) { return Number(v); });
+  }
+
+  // ── Create/update STRING variables for fonts (v2.5.4) ──────────────────
+  var fontNames = Object.keys(fonts);
+  for (var fn = 0; fn < fontNames.length; fn++) {
+    var fontName = fontNames[fn];
+    var fontVar = existing[fontName];
+    if (!fontVar) {
+      fontVar = figma.variables.createVariable(fontName, collection, "STRING");
+      created.push({ name: fontName, id: fontVar.id, type: "STRING" });
+    } else {
+      skipped.push(fontName);
+    }
+    applyVariableValue(fontVar, fonts[fontName], function(v) { return String(v); });
+  }
+
+  // ── Re-read existing after creates so textStyles can reference new vars
+  for (var vi2 = 0; vi2 < collection.variableIds.length; vi2++) {
+    var v2 = await figma.variables.getVariableByIdAsync(collection.variableIds[vi2]);
+    if (v2) existing[v2.name] = v2;
+  }
+
+  // ── Create/update TEXT STYLES with variable references (v2.5.4) ───────
+  // Syntax: any field value that matches "{var-name}" is bound to the variable.
+  var textStyleResults = [];
+  var tsNames = Object.keys(textStyles);
+  if (tsNames.length > 0) {
+    // Index existing text styles by name
+    var existingTextStyles = {};
+    try {
+      var allStyles = await figma.getLocalTextStylesAsync();
+      for (var as = 0; as < allStyles.length; as++) {
+        existingTextStyles[allStyles[as].name] = allStyles[as];
+      }
+    } catch (e) { /* fall back to sync API if async not available */ }
+    if (Object.keys(existingTextStyles).length === 0 && figma.getLocalTextStyles) {
+      var syncStyles = figma.getLocalTextStyles();
+      for (var ss = 0; ss < syncStyles.length; ss++) {
+        existingTextStyles[syncStyles[ss].name] = syncStyles[ss];
+      }
+    }
+
+    for (var ts = 0; ts < tsNames.length; ts++) {
+      var styleName = tsNames[ts];
+      var spec = textStyles[styleName] || {};
+      var style = existingTextStyles[styleName];
+      var wasCreated = false;
+      if (!style) {
+        style = figma.createTextStyle();
+        style.name = styleName;
+        wasCreated = true;
+      }
+
+      // Resolve fontFamily (may be "{var-name}" or literal "Inter")
+      var resolvedFamily = resolveRefOrLiteral(spec.fontFamily || "Inter", existing);
+      var resolvedStyle = resolveRefOrLiteral(spec.fontWeight || "Regular", existing);
+      // If either is a variable ref, fall back to the variable's default-mode
+      // string value so we have a concrete fontName to load.
+      var familyLiteral = typeof resolvedFamily === "string"
+        ? resolvedFamily
+        : getStringVarValue(resolvedFamily, defaultModeId) || "Inter";
+      var styleLiteral = typeof resolvedStyle === "string"
+        ? (FONT_STYLE_MAP[resolvedStyle] || resolvedStyle)
+        : (FONT_STYLE_MAP[getStringVarValue(resolvedStyle, defaultModeId)] ||
+           getStringVarValue(resolvedStyle, defaultModeId) || "Regular");
+
+      try {
+        await figma.loadFontAsync({ family: familyLiteral, style: styleLiteral });
+      } catch (fontErr) {
+        // If the explicit weight isn't available, fall back to Regular
+        await figma.loadFontAsync({ family: familyLiteral, style: "Regular" });
+        styleLiteral = "Regular";
+      }
+      style.fontName = { family: familyLiteral, style: styleLiteral };
+
+      // fontSize — literal or variable reference
+      var sizeSpec = spec.fontSize;
+      if (sizeSpec !== undefined) {
+        var resolvedSize = resolveRefOrLiteral(sizeSpec, existing);
+        if (typeof resolvedSize === "number") {
+          style.fontSize = resolvedSize;
+        } else if (resolvedSize && resolvedSize.resolvedType === "FLOAT") {
+          // Variable — set literal first, then bind
+          style.fontSize = Number(resolvedSize.valuesByMode[defaultModeId]) || 14;
+          try { style.setBoundVariable("fontSize", resolvedSize); } catch (e) { /* may be unsupported */ }
+        } else {
+          style.fontSize = 14;
+        }
+      }
+
+      // lineHeight
+      if (spec.lineHeight !== undefined) {
+        if (spec.lineHeight === "auto" || spec.lineHeight === "AUTO") {
+          style.lineHeight = { unit: "AUTO" };
+        } else if (typeof spec.lineHeight === "string" && spec.lineHeight.indexOf("%") !== -1) {
+          style.lineHeight = { unit: "PERCENT", value: parseFloat(spec.lineHeight) };
+        } else {
+          var lhNum = typeof spec.lineHeight === "number" ? spec.lineHeight : Number(spec.lineHeight);
+          if (!isNaN(lhNum)) style.lineHeight = { unit: "PIXELS", value: lhNum };
+        }
+      }
+
+      // letterSpacing
+      if (spec.letterSpacing !== undefined) {
+        style.letterSpacing = { unit: "PIXELS", value: Number(spec.letterSpacing) };
+      }
+
+      // fontFamily/fontStyle bindings (STRING variables)
+      if (typeof resolvedFamily !== "string" && resolvedFamily && resolvedFamily.resolvedType === "STRING") {
+        try { style.setBoundVariable("fontFamily", resolvedFamily); } catch (e) {}
+      }
+      if (typeof resolvedStyle !== "string" && resolvedStyle && resolvedStyle.resolvedType === "STRING") {
+        try { style.setBoundVariable("fontStyle", resolvedStyle); } catch (e) {}
+      }
+
+      textStyleResults.push({
+        name: styleName,
+        id: style.id,
+        created: wasCreated,
+        fontFamily: familyLiteral,
+        fontStyle: styleLiteral,
+      });
+      if (wasCreated) created.push({ name: styleName, id: style.id, type: "TEXT_STYLE" });
+      else skipped.push(styleName);
     }
   }
 
   return {
     collectionId: collection.id,
     collectionName: collection.name,
+    modes: collection.modes.map(function(m) { return { id: m.modeId, name: m.name }; }),
     created: created,
     updated: skipped,
+    textStyles: textStyleResults,
     totalVariables: collection.variableIds.length,
+  };
+};
+
+// Helper: given a spec value, return variable object if "{name}" reference,
+// otherwise return the literal.
+function resolveRefOrLiteral(value, existingVarsByName) {
+  if (typeof value === "string") {
+    var m = value.match(/^\{([^}]+)\}$/);
+    if (m && existingVarsByName[m[1]]) return existingVarsByName[m[1]];
+  }
+  return value;
+}
+
+function getStringVarValue(variable, modeId) {
+  try {
+    var val = variable.valuesByMode[modeId];
+    return typeof val === "string" ? val : null;
+  } catch (e) { return null; }
+}
+
+// applyTextStyle — apply a text style by name to a TEXT node (v2.5.4)
+// Convenience wrapper: finds text style by name, sets textStyleId on the node.
+// Much faster than calling modify({ textStyleId: ... }) because the lookup
+// happens inside the plugin.
+handlers.applyTextStyle = async function(params) {
+  var nodeId = params.nodeId || params.id;
+  var styleName = params.styleName || params.name;
+  var styleId = params.styleId;
+
+  if (!nodeId) throw new Error("nodeId is required");
+  if (!styleId && !styleName) throw new Error("styleName or styleId is required");
+
+  var node = await findNodeByIdAsync(nodeId);
+  if (!node) throw new Error("Node not found: " + nodeId);
+  if (node.type !== "TEXT") throw new Error("applyTextStyle requires a TEXT node, got: " + node.type);
+
+  var resolvedStyleId = styleId;
+  if (!resolvedStyleId) {
+    // Look up by name
+    var styles = null;
+    try { styles = await figma.getLocalTextStylesAsync(); }
+    catch (e) { if (figma.getLocalTextStyles) styles = figma.getLocalTextStyles(); }
+    if (!styles) throw new Error("Could not list text styles");
+    for (var i = 0; i < styles.length; i++) {
+      if (styles[i].name === styleName) { resolvedStyleId = styles[i].id; break; }
+    }
+    if (!resolvedStyleId) {
+      throw new Error("Text style not found: \"" + styleName + "\". Available: " +
+        styles.map(function(s) { return s.name; }).join(", "));
+    }
+  }
+
+  // Ensure the style's font is loaded before applying
+  try {
+    var styleObj = await figma.getStyleByIdAsync ? await figma.getStyleByIdAsync(resolvedStyleId) : figma.getStyleById(resolvedStyleId);
+    if (styleObj && styleObj.fontName) {
+      await figma.loadFontAsync(styleObj.fontName);
+    }
+  } catch (e) { /* best-effort font load */ }
+
+  // Apply style (async setter preferred in newer API)
+  if (node.setTextStyleIdAsync) {
+    await node.setTextStyleIdAsync(resolvedStyleId);
+  } else {
+    node.textStyleId = resolvedStyleId;
+  }
+
+  return {
+    nodeId: node.id,
+    nodeName: node.name,
+    styleId: resolvedStyleId,
+    styleName: styleName || null,
   };
 };

@@ -22,6 +22,8 @@ const WRITE_OPS = [
   // Frame variable mode override (v1.9.7)
   "setFrameVariableMode", "clearFrameVariableMode",
   "createPaintStyle", "createTextStyle", "createComponent",
+  // Typography tokens + text style application (v2.5.4)
+  "applyTextStyle",
   // Node operations
   "clone", "group", "ungroup", "flatten", "resize",
   "set_selection", "set_viewport", "batch",

@@ -46,6 +46,8 @@ await figma.ensure_library();
 - ✅ ALWAYS draw background first (bottom layer), then overlays, then content
 - ✅ For centered TEXT across a container: pass BOTH \`width\` AND \`textAlign: "CENTER"\` — the plugin auto-sets \`textAutoResize: "NONE"\` so the text box keeps the width.
 - ✅ For display numerics (fontSize ≥ 48): pass explicit \`lineHeight\` ≈ fontSize to prevent overflow.
+- ❌ NEVER hardcode \`fontSize\`, \`fontFamily\`, \`fontWeight\` inline on TEXT nodes (v2.5.4+). Set them once via \`setupDesignTokens({ fontSizes, fonts, textStyles })\`, then \`await figma.applyTextStyle({ nodeId, styleName: "text/heading-xl" })\`.
+- ✅ Font swaps (Inter → SF Pro): change 1 STRING variable via \`modifyVariable({ variableName: "font-primary", value: "SF Pro" })\`. Every text bound to that variable updates automatically.
 
 **Reading hidden layers:**
 When the user says "hidden layer", "invisible element", "hidden elements", "ẩn", "không thấy layer", "phần tử ẩn", "layer bị ẩn", "要隐藏的元素", "非表示レイヤー", or asks about elements that don't appear in read results — pass \`includeHidden: true\` to any read operation:
@@ -522,24 +524,107 @@ const lib = await figma.ensure_library();
 const tokens = await figma.get_library_tokens();
 \`\`\`
 
-## setupDesignTokens — Bootstrap complete token system (idempotent)
+## setupDesignTokens — Bootstrap complete token system (idempotent, v2.5.4+)
+
+Creates a variable collection + all tokens in 1 call. Idempotent: existing variables get values updated, new ones are created. Supports multi-mode (Light/Dark, Compact/Comfortable/Large) out of the box.
 
 \`\`\`js
-// Creates collection + variables. Skips existing, updates values if name matches.
+// ── Simple setup: colors + spacing + typography in one call ─────────────
 const result = await figma.setupDesignTokens({
-  collectionName: "Design Tokens",     // name of variable collection
-  colors: {                            // COLOR variables
-    "accent": "#3B82F6",
-    "bg-base": "#08090E",
-    "positive": "#00DC82",
+  collectionName: "Design Tokens",
+
+  // COLOR variables
+  colors: {
+    "accent":      "#3B82F6",
+    "bg-base":     "#08090E",
+    "text-primary":"#F0F2F5",
+    "positive":    "#00DC82",
   },
-  numbers: {                           // FLOAT variables (spacing, radius)
-    "spacing-md": 16,
-    "radius-md": 12,
+
+  // FLOAT variables (spacing, radius, strokeWeight, etc.)
+  numbers: {
+    "spacing-xs": 4, "spacing-sm": 8, "spacing-md": 16, "spacing-lg": 24,
+    "radius-sm": 8, "radius-md": 12, "radius-lg": 16,
+  },
+
+  // FLOAT variables for typography (v2.5.4+)
+  fontSizes: {
+    "text-xs": 11, "text-sm": 12, "text-body": 14,
+    "text-heading-md": 16, "text-heading-lg": 20, "text-heading-xl": 24, "text-heading-2xl": 32,
+  },
+
+  // STRING variables for fonts (v2.5.4+)
+  fonts: {
+    "font-primary": "Inter",
+    "font-display": "Playfair Display",
+    "font-mono":    "JetBrains Mono",
+  },
+
+  // Text styles that REFERENCE the variables above (v2.5.4+)
+  // Any value in {curly-braces} is bound to a variable by name.
+  // Literal values (numbers, strings) become fixed values.
+  textStyles: {
+    "text/heading-2xl": { fontFamily: "{font-display}", fontWeight: "Bold",
+                          fontSize: "{text-heading-2xl}", lineHeight: 40, letterSpacing: -0.6 },
+    "text/heading-xl":  { fontFamily: "{font-primary}",  fontWeight: "Bold",
+                          fontSize: "{text-heading-xl}", lineHeight: 32, letterSpacing: -0.4 },
+    "text/heading-lg":  { fontFamily: "{font-primary}",  fontWeight: "SemiBold",
+                          fontSize: "{text-heading-lg}", lineHeight: 28 },
+    "text/body":        { fontFamily: "{font-primary}",  fontWeight: "Regular",
+                          fontSize: "{text-body}",        lineHeight: 20 },
+    "text/caption":     { fontFamily: "{font-primary}",  fontWeight: "Regular",
+                          fontSize: "{text-xs}",          lineHeight: 16 },
   }
 });
-// → { collectionId, collectionName, created: [{name, id, type}], updated: [...], totalVariables }
+// → { collectionId, collectionName, modes: [...], created: [{name, id, type}],
+//     updated: [...], textStyles: [{name, id, created, fontFamily, fontStyle}],
+//     totalVariables: N }
+
+
+// ── Multi-mode: Light + Dark (one call) ─────────────────────────────────
+await figma.setupDesignTokens({
+  collectionName: "Design Tokens",
+  modes: ["light", "dark"],
+  colors: {
+    "bg-base":      { light: "#FFFFFF", dark: "#0F1117" },
+    "text-primary": { light: "#111827", dark: "#F9FAFB" },
+    "accent":       { light: "#3B82F6", dark: "#60A5FA" },
+  }
+});
+
+
+// ── Multi-mode typography: Compact / Comfortable / Large ────────────────
+await figma.setupDesignTokens({
+  collectionName: "Typography",
+  modes: ["compact", "comfortable", "large"],
+  fontSizes: {
+    "text-body":       { compact: 12, comfortable: 14, large: 16 },
+    "text-heading-xl": { compact: 22, comfortable: 24, large: 28 },
+  }
+});
+// Switch frame to a mode:
+// await figma.setFrameVariableMode({ nodeId, collectionId, modeName: "large" })
 \`\`\`
+
+## applyTextStyle — Apply a text style by name (v2.5.4+)
+
+Shortcut to bind a TEXT node to a local text style. Much safer than building text properties inline — uses the style's font, size, line height, letter spacing, and any bound variables automatically.
+
+\`\`\`js
+// Create text then apply pre-defined style
+var title = await figma.create({ type: "TEXT", content: "Dashboard", parentId: card.id });
+await figma.applyTextStyle({ nodeId: title.id, styleName: "text/heading-xl" });
+
+// By styleId (faster, no lookup)
+await figma.applyTextStyle({ nodeId: title.id, styleId: "S:1:23" });
+// → { nodeId, nodeName, styleId, styleName }
+\`\`\`
+
+**Why use applyTextStyle instead of inline props:**
+- Font changes propagate: update "font-primary" STRING variable → every text using the style updates
+- Mode switches work: pin frame to "compact" mode → all text shrinks automatically
+- Consistent across screens: 1 style definition, infinite instances
+- AI-friendly: 1 line vs 5 inline props
 
 ## modifyVariable — Change variable value (propagates to all bound nodes)
 
@@ -593,6 +678,9 @@ await figma.applyVariable({ nodeId: "49:115", field: "fill", variableName: "acce
 | \`lineHeight\` | FLOAT | TEXT | |
 | \`paragraphSpacing\` | FLOAT | TEXT | |
 | \`paragraphIndent\` | FLOAT | TEXT | |
+| \`fontFamily\` / \`fontName\` | STRING | TEXT | v2.5.4+ — swap font via STRING variable |
+| \`fontStyle\` / \`fontWeight\` | STRING | TEXT | v2.5.4+ — "Regular", "Bold", etc. |
+| \`characters\` / \`text\` | STRING | TEXT | v2.5.4+ — bind text content to variable |
 | \`visible\` | BOOLEAN | any | Show/hide via variable |
 
 \`\`\`js
@@ -611,6 +699,13 @@ await figma.applyVariable({ nodeId: title.id, field: "fontSize", variableId: var
 
 // Bind visibility to boolean variable (useful for toggling states)
 await figma.applyVariable({ nodeId: badge.id, field: "visible", variableId: varMap["show-badge"] });
+
+// ── Typography bindings (v2.5.4+): STRING variables for font name/weight ──
+// Swap entire font stack by changing 1 variable — no per-node updates needed
+await figma.applyVariable({ nodeId: title.id, field: "fontFamily", variableName: "font-primary" });
+await figma.applyVariable({ nodeId: title.id, field: "fontWeight", variableName: "font-weight-bold" });
+// Bind text content — useful for localizable strings
+await figma.applyVariable({ nodeId: cta.id, field: "characters", variableName: "cta-label" });
 \`\`\`
 
 ## Effects — Drop Shadow, Inner Shadow, Blur (v2.5.2+)

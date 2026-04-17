@@ -1,5 +1,53 @@
 # Changelog
 
+## [2.5.4] — 2026-04-17
+
+### Added — Typography Tokens pipeline (merge of planned v2.6.0 + v2.7.0)
+
+Full first-class support for typography as Design Tokens. Previously text styles had to be created one-by-one and hardcoded fontSize/family. Now they are variable-bound and updatable globally.
+
+**`applyVariable` new fields (STRING variables):**
+- `fontFamily` / `fontName` — bind `TextNode.fontName.family`
+- `fontStyle` / `fontWeight` — bind `TextNode.fontName.style` ("Regular", "Bold", etc.)
+- `characters` / `text` — bind text content for localization
+
+**`setupDesignTokens` new params:**
+- `fontSizes: { "text-body": 14 }` → FLOAT variables
+- `fonts: { "font-primary": "Inter" }` → STRING variables
+- `textStyles: { "text/heading-xl": { fontFamily: "{font-primary}", fontSize: "{text-heading-xl}", lineHeight: 32 } }` — text styles with variable references (`{var-name}` syntax)
+- `modes: ["light", "dark"]` — multi-mode support; any token value can be `{ mode1: v, mode2: v }`
+
+**New handler: `applyTextStyle`**
+- `figma.applyTextStyle({ nodeId, styleName: "text/heading-xl" })` — apply a local text style by name in 1 call; auto-loads font before applying
+- Accepts `styleId` for faster lookup
+
+**Multi-mode typography example:**
+```js
+await figma.setupDesignTokens({
+  collectionName: "Typography",
+  modes: ["compact", "comfortable", "large"],
+  fontSizes: {
+    "text-body":       { compact: 12, comfortable: 14, large: 16 },
+    "text-heading-xl": { compact: 22, comfortable: 24, large: 28 }
+  }
+});
+```
+Then pin a frame to a mode: `figma.setFrameVariableMode({ nodeId, collectionId, modeName: "large" })` — every bound text resizes automatically.
+
+### Documentation
+
+- New non-negotiable rule: never hardcode `fontSize`/`fontFamily`/`fontWeight` inline on TEXT nodes.
+- `applyVariable` field table extended with fontFamily/fontStyle/characters.
+- New `applyTextStyle` section with examples.
+- `setupDesignTokens` example expanded to show fontSizes + fonts + textStyles + multi-mode.
+
+### Tests
+
+- 27 new typography tests (total 194/194 passing: 84 full + 34 fix + 49 v2.5.2 + 27 v2.5.4).
+- MCP stdio handshake verified clean (initialize + tools/list round-trip).
+
+---
+
 ## [2.5.3] — 2026-04-17
 
 ### Fixed — CRITICAL: MCP server crash on startup (v2.5.2 regression)
