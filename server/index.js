@@ -5,21 +5,6 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import http from "node:http";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-
-// ── --version flag ─────────────────────────────────────────────────────────
-if (process.argv.includes("--version") || process.argv.includes("-v")) {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const pkg = JSON.parse(
-    await import("node:fs").then(fs =>
-      fs.promises.readFile(path.join(__dirname, "../package.json"), "utf-8")
-    )
-  );
-  const pluginDir = path.resolve(__dirname, "../plugin");
-  process.stdout.write(`figma-ui-mcp v${pkg.version}  —  plugin: ${pluginDir}\n`);
-  process.exit(0);
-}
 
 import { BridgeServer, CONFIG } from "./bridge-server.js";
 import { executeCode } from "./code-executor.js";

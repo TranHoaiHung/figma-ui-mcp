@@ -5,9 +5,10 @@
   "mcpName": "io.github.TranHoaiHung/figma-ui-mcp",
   "type": "module",
   "bin": {
-    "figma-ui-mcp": "./server/index.js"
+    "figma-ui-mcp": "./server/cli.js"
   },
   "files": [
+    "server/cli.js",
     "server/index.js",
     "server/bridge-server.js",
     "server/code-executor.js",
