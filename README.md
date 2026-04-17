@@ -216,25 +216,24 @@ The plugin UI shows a **green dot** when the MCP server is connected.
 
 ### Updating to a newer version
 
-**MCP server** — update via npm as usual:
 ```bash
-npm update -g figma-ui-mcp   # if installed globally
-# or bump the version in your MCP config and re-run
+# Step 1 — get the new version + plugin path
+npx figma-ui-mcp@latest --version
+# figma-ui-mcp v2.5.12  —  plugin: /.../.npm/_npx/.../figma-ui-mcp/plugin
+
+# Step 2 — restart Claude / your IDE so the MCP server reloads
+
+# Step 3 — re-link the Figma plugin (manual, one-time per update)
+#   Figma Desktop → Plugins → Development → Manage plugins in development
+#   Remove old "Figma UI MCP Bridge" → "+" → Import plugin from manifest...
+#   Select manifest.json from the plugin path printed in Step 1
+
+# Step 4 — verify
+#   Ask your AI: "figma_status"
+#   pluginVersion in the response should match the npm version above
 ```
 
-**Figma plugin** — the plugin does NOT auto-update. After updating the npm package, re-link it:
-
-1. Find the new plugin folder:
-```bash
-npx figma-ui-mcp --version   # prints version AND shows plugin folder path
-# Example output: figma-ui-mcp v2.5.11  —  plugin: /usr/local/lib/node_modules/figma-ui-mcp/plugin
-```
-2. In Figma Desktop: **Plugins → Development → Manage plugins in development**
-3. Remove the old "Figma UI MCP Bridge" entry
-4. Click **"+"** → **"Import plugin from manifest..."** → select `manifest.json` from the path shown above
-5. Run the plugin — the green dot should reconnect within seconds
-
-> **How to tell if your plugin is outdated:** Ask your AI `"figma_status"` — the response includes `pluginVersion`. Compare it to the npm package version (`npx figma-ui-mcp --version`). If they differ, re-link the plugin.
+> The Figma plugin does **not** auto-update — re-linking (Step 3) is required whenever the plugin changes.
 
 ### Step 3 — Connect AI to Figma
 
