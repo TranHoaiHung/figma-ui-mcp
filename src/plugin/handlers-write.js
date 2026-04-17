@@ -83,14 +83,25 @@ handlers.create = async (params) => {
   if (type === "FRAME" || type === "GROUP") {
     node = figma.createFrame();
     node.resize(width, height);
-    node.fills = fill ? solidFill(fill, params.fillOpacity) : [];
-    if (stroke) { node.strokes = solidStroke(stroke); node.strokeWeight = strokeWeight; }
-    if (cornerRadius !== undefined) node.cornerRadius = cornerRadius;
+    // BUG-11: fill accepts hex string OR gradient spec {type, stops, angle}
+    node.fills = fill ? buildFillArray(fill, params.fillOpacity) : [];
+    if (stroke) { node.strokes = solidStroke(stroke, params.strokeOpacity); node.strokeWeight = strokeWeight; }
+    // BUG-13: individual corner radii (topLeftRadius, etc.) in addition to uniform
+    applyCornerRadii(node, params);
+    // BUG-10: effects array (drop shadow, blur, etc.)
+    if (params.effects) applyEffects(node, params.effects);
 
     // Auto Layout support
     // layoutMode: "HORIZONTAL" | "VERTICAL" | "NONE"
     if (params.layoutMode && params.layoutMode !== "NONE") {
       node.layoutMode = params.layoutMode;
+      // BUG-05: better error when STRETCH passed to counterAxisAlignItems (Figma rejects it)
+      if (params.counterAxisAlignItems === "STRETCH") {
+        throw new Error(
+          "counterAxisAlignItems does not support \"STRETCH\". To stretch children across the cross-axis, " +
+          "set counterAxisAlignItems: \"MIN\" on this container and layoutAlign: \"STRETCH\" on each child."
+        );
+      }
       // Alignment: how children align on each axis
       if (params.primaryAxisAlignItems) node.primaryAxisAlignItems = params.primaryAxisAlignItems;
       if (params.counterAxisAlignItems) node.counterAxisAlignItems = params.counterAxisAlignItems;
@@ -129,21 +140,24 @@ handlers.create = async (params) => {
   } else if (type === "RECTANGLE") {
     node = figma.createRectangle();
     node.resize(width, height);
-    node.fills = fill ? solidFill(fill, params.fillOpacity) : [];
-    if (stroke) { node.strokes = solidStroke(stroke); node.strokeWeight = strokeWeight; }
-    if (cornerRadius !== undefined) node.cornerRadius = cornerRadius;
+    node.fills = fill ? buildFillArray(fill, params.fillOpacity) : [];
+    if (stroke) { node.strokes = solidStroke(stroke, params.strokeOpacity); node.strokeWeight = strokeWeight; }
+    applyCornerRadii(node, params);
+    if (params.effects) applyEffects(node, params.effects);
 
   } else if (type === "ELLIPSE") {
     node = figma.createEllipse();
     node.resize(width, height);
-    node.fills = fill ? solidFill(fill, params.fillOpacity) : [];
-    if (stroke) { node.strokes = solidStroke(stroke); node.strokeWeight = strokeWeight; }
+    node.fills = fill ? buildFillArray(fill, params.fillOpacity) : [];
+    if (stroke) { node.strokes = solidStroke(stroke, params.strokeOpacity); node.strokeWeight = strokeWeight; }
+    if (params.effects) applyEffects(node, params.effects);
 
   } else if (type === "LINE") {
     node = figma.createLine();
     node.resize(width || 100, 0);
     node.fills = [];
-    if (stroke) { node.strokes = solidStroke(stroke); node.strokeWeight = strokeWeight; }
+    if (stroke) { node.strokes = solidStroke(stroke, params.strokeOpacity); node.strokeWeight = strokeWeight; }
+    if (params.effects) applyEffects(node, params.effects);
 
   } else if (type === "TEXT") {
     const style = FONT_STYLE_MAP[fontWeight] || "Regular";
@@ -152,19 +166,32 @@ handlers.create = async (params) => {
     node.fontName = { family: "Inter", style };
     node.fontSize = fontSize;
     node.characters = content;
-    if (fill) node.fills = solidFill(fill);
+    if (fill) node.fills = solidFill(fill, params.fillOpacity);
+    if (params.effects) applyEffects(node, params.effects);
     // Accept lineHeight as number (pixels) or pre-formed object { value, unit }
     if (lineHeight) {
       if (typeof lineHeight === "object" && lineHeight.unit) node.lineHeight = lineHeight;
       else node.lineHeight = { value: lineHeight, unit: "PIXELS" };
     }
-    // Text alignment
-    if (params.textAlignHorizontal) node.textAlignHorizontal = params.textAlignHorizontal;
-    if (params.textAlignVertical) node.textAlignVertical = params.textAlignVertical;
-    // Auto-resize: "WIDTH_AND_HEIGHT" (default, hug), "HEIGHT" (fixed width, auto height), "NONE" (fixed both)
-    // Auto-detect: if width is set, default to "HEIGHT" so text wraps instead of overflowing
+    // BUG-15: accept `textAlign` (friendly alias) in addition to textAlignHorizontal
+    var textAlignValue = params.textAlignHorizontal || params.textAlign;
+    if (textAlignValue) node.textAlignHorizontal = String(textAlignValue).toUpperCase();
+    if (params.textAlignVertical) node.textAlignVertical = String(params.textAlignVertical).toUpperCase();
+    // Auto-resize logic:
+    //  - Explicit textAutoResize wins
+    //  - BUG-15: width + textAlign CENTER/RIGHT/JUSTIFIED → NONE so the box stays at full width
+    //  - width alone (no centered align) → HEIGHT (fixed width, auto-wrap)
+    //  - no width → WIDTH_AND_HEIGHT (hug content, default)
     if (params.textAutoResize) {
       node.textAutoResize = params.textAutoResize;
+    } else if (width && textAlignValue) {
+      var upAlign = String(textAlignValue).toUpperCase();
+      if (upAlign === "CENTER" || upAlign === "RIGHT" || upAlign === "JUSTIFIED") {
+        // User explicitly wants text centered/right-aligned across a known width — keep the box fixed
+        node.textAutoResize = "NONE";
+      } else {
+        node.textAutoResize = "HEIGHT";
+      }
     } else if (width) {
       node.textAutoResize = "HEIGHT";
     }
@@ -207,7 +234,7 @@ handlers.create = async (params) => {
 
   } else if (type === "VECTOR") {
     // Create vector paths from SVG path data (d attribute)
-    // Supports: diagonal lines, curves (bezier, quadratic, arcs), polygons, any shape
+    // Supports: diagonal lines, curves (bezier, quadratic), arcs (BUG-03: A→cubic), polygons
     // params.paths: array of {d, windingRule?} or single string d
     // params.d: shorthand — single path data string (alternative to paths)
     // params.strokeCap: "NONE" | "ROUND" | "SQUARE" | "ARROW_LINES" | "ARROW_EQUILATERAL"
@@ -220,37 +247,45 @@ handlers.create = async (params) => {
     }
 
     node = figma.createVector();
-    node.resize(width, height);
+    // BUG-08: wrap vectorPaths assignment in try/catch so we can roll back the
+    // node on parse failure (previously left orphan vectors at page root).
+    try {
+      node.resize(width, height);
+      // Normalize SVG paths: comma→space (BUG-04), arc A→cubic bezier (BUG-03)
+      if (pathsArr && Array.isArray(pathsArr)) {
+        node.vectorPaths = pathsArr.map(function(p) {
+          var raw = typeof p === "string" ? p : p.d;
+          return {
+            data: normalizeSvgPath(raw),
+            windingRule: (typeof p === "object" && p.windingRule) ? p.windingRule : "NONZERO"
+          };
+        });
+      } else {
+        node.vectorPaths = [{
+          data: normalizeSvgPath(pathData),
+          windingRule: params.windingRule || "NONZERO"
+        }];
+      }
 
-    // Build vectorPaths
-    if (pathsArr && Array.isArray(pathsArr)) {
-      node.vectorPaths = pathsArr.map(function(p) {
-        return {
-          data: typeof p === "string" ? p : p.d,
-          windingRule: (typeof p === "object" && p.windingRule) ? p.windingRule : "NONZERO"
-        };
-      });
-    } else {
-      node.vectorPaths = [{
-        data: pathData,
-        windingRule: params.windingRule || "NONZERO"
-      }];
-    }
+      // Fill and stroke
+      if (fill) {
+        node.fills = solidFill(fill, params.fillOpacity);
+      } else {
+        node.fills = [];
+      }
+      if (stroke) {
+        node.strokes = solidStroke(stroke);
+        node.strokeWeight = strokeWeight;
+      }
 
-    // Fill and stroke
-    if (fill) {
-      node.fills = solidFill(fill, params.fillOpacity);
-    } else {
-      node.fills = [];
+      // Stroke styling
+      if (params.strokeCap) node.strokeCap = params.strokeCap;
+      if (params.strokeJoin) node.strokeJoin = params.strokeJoin;
+    } catch (vectorErr) {
+      // Roll back the orphan node so the page stays clean
+      try { node.remove(); } catch(e) { /* already removed */ }
+      throw new Error("VECTOR path error: " + vectorErr.message + ". Check that 'd' is valid SVG path data (commas and A/arc are now supported).");
     }
-    if (stroke) {
-      node.strokes = solidStroke(stroke);
-      node.strokeWeight = strokeWeight;
-    }
-
-    // Stroke styling
-    if (params.strokeCap) node.strokeCap = params.strokeCap;
-    if (params.strokeJoin) node.strokeJoin = params.strokeJoin;
 
   } else if (type === "IMAGE") {
     // Create a rectangle with an image fill from base64 data
@@ -354,7 +389,8 @@ handlers.modify = async (params) => {
   }
   if (node.removed) throw new Error("Node was deleted: " + nodeRef);
 
-  if (params.fill     !== undefined && "fills"   in node) node.fills   = solidFill(params.fill, params.fillOpacity);
+  // BUG-11: fill accepts hex string OR gradient spec {type, stops, angle}
+  if (params.fill     !== undefined && "fills"   in node) node.fills   = buildFillArray(params.fill, params.fillOpacity);
   if (params.fillOpacity !== undefined && params.fill === undefined && "fills" in node && node.fills && node.fills.length) {
     // Update fillOpacity on existing fill without changing color
     var existingFills = JSON.parse(JSON.stringify(node.fills));
@@ -362,7 +398,7 @@ handlers.modify = async (params) => {
     node.fills = existingFills;
   }
   if (params.stroke   !== undefined && "strokes" in node) {
-    node.strokes = solidStroke(params.stroke);
+    node.strokes = solidStroke(params.stroke, params.strokeOpacity);
     if (params.strokeWeight !== undefined) node.strokeWeight = params.strokeWeight;
   }
   if (params.x       !== undefined) node.x = params.x;
@@ -370,7 +406,16 @@ handlers.modify = async (params) => {
   if (params.opacity !== undefined) node.opacity = params.opacity;
   if (params.visible !== undefined) node.visible = params.visible;
   if (params.name    !== undefined) node.name = params.name;
-  if (params.cornerRadius !== undefined && "cornerRadius" in node) node.cornerRadius = params.cornerRadius;
+  // BUG-13: individual corner radii in modify() too
+  applyCornerRadii(node, params);
+  // BUG-10: effects in modify()
+  if (params.effects !== undefined) {
+    if (params.effects === null || (Array.isArray(params.effects) && params.effects.length === 0)) {
+      if ("effects" in node) node.effects = [];
+    } else {
+      applyEffects(node, params.effects);
+    }
+  }
 
   if ((params.width !== undefined || params.height !== undefined) && "resize" in node) {
     node.resize(params.width !== undefined ? params.width : node.width, params.height !== undefined ? params.height : node.height);
@@ -403,6 +448,13 @@ handlers.modify = async (params) => {
       node.layoutMode = params.layoutMode === "NONE" ? "NONE" : params.layoutMode;
     }
     if (params.primaryAxisAlignItems !== undefined) node.primaryAxisAlignItems = params.primaryAxisAlignItems;
+    // BUG-05: better error when STRETCH passed to counterAxisAlignItems in modify()
+    if (params.counterAxisAlignItems === "STRETCH") {
+      throw new Error(
+        "counterAxisAlignItems does not support \"STRETCH\". To stretch children across the cross-axis, " +
+        "set counterAxisAlignItems: \"MIN\" on this container and layoutAlign: \"STRETCH\" on each child."
+      );
+    }
     if (params.counterAxisAlignItems !== undefined) node.counterAxisAlignItems = params.counterAxisAlignItems;
     if (params.padding !== undefined) {
       node.paddingTop = params.padding;

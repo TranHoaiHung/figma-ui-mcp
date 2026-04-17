@@ -40,8 +40,12 @@ await figma.ensure_library();
 - ❌ NEVER set icon size >= container size — icon = container × 0.5
 - ❌ NEVER draw background image AFTER other elements — background/image FIRST, content on top
 - ❌ NEVER put two overlapping rectangles inside auto-layout (progress bars, etc.) — use a non-auto-layout wrapper
+- ❌ NEVER use \`opacity: 0\` on a wrapper frame — it hides ALL children. Use \`fill: "NONE"\` or \`fillOpacity: 0\` instead.
+- ❌ NEVER use \`counterAxisAlignItems: "STRETCH"\` — invalid in Figma. Use \`counterAxisAlignItems: "MIN"\` on parent + \`layoutAlign: "STRETCH"\` on each child.
 - ✅ ALWAYS use auto-layout with counterAxisAlignItems: "CENTER" for icon+text rows
 - ✅ ALWAYS draw background first (bottom layer), then overlays, then content
+- ✅ For centered TEXT across a container: pass BOTH \`width\` AND \`textAlign: "CENTER"\` — the plugin auto-sets \`textAutoResize: "NONE"\` so the text box keeps the width.
+- ✅ For display numerics (fontSize ≥ 48): pass explicit \`lineHeight\` ≈ fontSize to prevent overflow.
 
 **Reading hidden layers:**
 When the user says "hidden layer", "invisible element", "hidden elements", "ẩn", "không thấy layer", "phần tử ẩn", "layer bị ẩn", "要隐藏的元素", "非表示レイヤー", or asks about elements that don't appear in read results — pass \`includeHidden: true\` to any read operation:
@@ -608,6 +612,148 @@ await figma.applyVariable({ nodeId: title.id, field: "fontSize", variableId: var
 // Bind visibility to boolean variable (useful for toggling states)
 await figma.applyVariable({ nodeId: badge.id, field: "visible", variableId: varMap["show-badge"] });
 \`\`\`
+
+## Effects — Drop Shadow, Inner Shadow, Blur (v2.5.2+)
+
+Pass an \`effects\` array to \`create\` or \`modify\`. Each effect is an object:
+
+\`\`\`js
+// Drop shadow on a card
+await figma.create({
+  type: "FRAME", name: "Card", width: 320, height: 200, fill: "#FFFFFF",
+  effects: [{
+    type: "DROP_SHADOW",
+    color: "#00000026",      // 15% black — alpha auto-extracted from 8-digit hex
+    offset: { x: 0, y: 8 },
+    radius: 24,              // blur radius
+    spread: 0,
+  }]
+});
+
+// Multiple effects (stacked, bottom-to-top)
+await figma.modify({ id: card.id, effects: [
+  { type: "DROP_SHADOW", color: "#00000020", offset: {x:0,y:2}, radius: 8 },
+  { type: "DROP_SHADOW", color: "#00000010", offset: {x:0,y:16}, radius: 48 },
+]});
+
+// Layer blur (blurs the node itself)
+effects: [{ type: "LAYER_BLUR", radius: 12 }]
+
+// Background blur (glassmorphism — blurs what's behind the node)
+// IMPORTANT: set fill with alpha < 1 so the blur shows through
+effects: [{ type: "BACKGROUND_BLUR", radius: 20 }]
+// fill: "#FFFFFF40" (25% white) + BACKGROUND_BLUR → glass effect
+
+// Inner shadow (for pressed buttons, etched edges)
+effects: [{ type: "INNER_SHADOW", color: "#00000030", offset: {x:0,y:2}, radius: 4 }]
+
+// Clear all effects
+await figma.modify({ id: node, effects: [] });
+\`\`\`
+
+Shorthand spec:
+- \`color\` accepts hex (alpha auto-extracted from 8-digit \`#RRGGBBAA\` or \`rgba()\`)
+- \`offset: {x,y}\` or \`offsetX/offsetY\` shorthand
+- \`radius\` (alias: \`blur\`) — default 4
+- \`spread\` — default 0 (DROP/INNER shadow only)
+- \`visible\` — default true
+- \`blendMode\` — default "NORMAL"
+
+## Gradient Fills — LINEAR / RADIAL (v2.5.2+)
+
+Pass a gradient spec to \`fill\` on any shape. Alpha is auto-extracted from hex stops.
+
+\`\`\`js
+// Aurora linear gradient (135°)
+await figma.create({
+  type: "FRAME", name: "Hero", width: 800, height: 400,
+  fill: {
+    type: "LINEAR_GRADIENT",
+    angle: 135,
+    stops: [
+      { pos: 0, color: "#7C3AED" },
+      { pos: 0.5, color: "#EC489980" },  // alpha from hex
+      { pos: 1, color: "#F59E0B" },
+    ]
+  }
+});
+
+// Radial gradient centered
+await figma.create({
+  type: "ELLIPSE", width: 400, height: 400,
+  fill: {
+    type: "RADIAL_GRADIENT",
+    stops: [{ pos: 0, color: "#FFFFFF" }, { pos: 1, color: "#00000000" }]
+  }
+});
+
+// Modify existing node's fill to gradient
+await figma.modify({ id: card.id, fill: {
+  type: "LINEAR_GRADIENT", angle: 90,
+  stops: [{ pos: 0, color: "#3B82F6" }, { pos: 1, color: "#1D4ED8" }]
+}});
+\`\`\`
+
+**Angle convention:** 0° = left-to-right, 90° = top-to-bottom, 135° = diagonal ↘.
+
+## Individual Corner Radii (v2.5.2+)
+
+Pass individual corners instead of uniform \`cornerRadius\`:
+
+\`\`\`js
+// Bottom sheet: rounded top, flat bottom
+await figma.create({
+  type: "FRAME", name: "Sheet", width: 375, height: 400,
+  topLeftRadius: 20, topRightRadius: 20,
+  bottomLeftRadius: 0, bottomRightRadius: 0,
+});
+
+// Button group: first child rounds left, last child rounds right
+await figma.modify({ id: firstBtn, topLeftRadius: 8, bottomLeftRadius: 8 });
+await figma.modify({ id: lastBtn,  topRightRadius: 8, bottomRightRadius: 8 });
+
+// Uniform cornerRadius still works (applies to all 4)
+await figma.create({ ..., cornerRadius: 12 });
+\`\`\`
+
+## Hex Alpha Shorthand (v2.5.2+)
+
+8-digit hex \`#RRGGBBAA\` is now accepted everywhere. Alpha is automatically applied
+as opacity on the fill/stroke paint — you don't need a separate \`fillOpacity\` field.
+
+\`\`\`js
+fill: "#FFFFFF80"   // 50% white — same as fill: "#FFFFFF", fillOpacity: 0.502
+fill: "#6C5CE733"   // 20% accent purple
+stroke: "#00000010" // 6% black border
+\`\`\`
+
+Also accepts:
+- \`rgba(r, g, b, a)\` — e.g. \`rgba(255,255,255,0.3)\`
+- 4-digit shorthand \`#RGBA\` — e.g. \`#fff8\`
+- Explicit \`fillOpacity\` still works and overrides hex alpha when both are given.
+
+## SVG Path Commands — Full Support (v2.5.2+)
+
+VECTOR \`d\` paths now support:
+- **Commas as delimiters** — \`"M 0 0, L 100 100"\` works (spec-compliant, matches Illustrator/Figma export)
+- **Arc command \`A\` / \`a\`** — auto-converted to cubic Bézier segments before Figma ingests them
+
+\`\`\`js
+// Progress ring arc — previously failed at 'A'
+await figma.create({
+  type: "VECTOR", width: 300, height: 300,
+  d: "M 150 7 A 143 143 0 1 1 29.26 226.62",
+  stroke: "#6C5CE7", strokeWeight: 12, strokeCap: "ROUND",
+});
+
+// External path data with commas — now works
+await figma.create({
+  type: "VECTOR", width: 300, height: 150,
+  d: "M 150 7 C 229 7, 293 71, 293 150",
+});
+\`\`\`
+
+If the path fails to parse, the orphan VECTOR node is auto-removed (no more garbage at page root).
 
 ## createComponent — Convert frame to reusable component
 

@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.5.2] — 2026-04-16
+
+### Fixed — feedback.md BUG-02/03/04/05/08/10/11/13/15
+
+- **BUG-02**: `fill`/`stroke` now accept 8-digit hex `#RRGGBBAA`, `rgba(r,g,b,a)`, and 4-digit `#RGBA` — alpha is auto-extracted and applied as paint opacity. Explicit `fillOpacity`/`strokeOpacity` still wins.
+- **BUG-03**: VECTOR `d` paths now support SVG arc commands (`A`/`a`). Arcs are converted to cubic Bézier segments before Figma ingests them (Foley/van Dam algorithm, ≤90° chunks).
+- **BUG-04**: VECTOR `d` paths accept commas as delimiters — `"M 0 0, L 100 100"` works (spec-compliant).
+- **BUG-05**: `counterAxisAlignItems: "STRETCH"` now throws a descriptive error pointing to the correct fix: `counterAxisAlignItems: "MIN"` on parent + `layoutAlign: "STRETCH"` on each child.
+- **BUG-08**: Failed VECTOR path parsing now rolls back the orphan node — no more garbage vectors at page root after errors.
+- **BUG-10**: `effects: [...]` array supported on `create` and `modify` for any node type. Effect types: `DROP_SHADOW`, `INNER_SHADOW`, `LAYER_BLUR`, `BACKGROUND_BLUR` with `color`, `offset`, `radius`, `spread`, `visible`, `blendMode`. Hex alpha in shadow color auto-extracted.
+- **BUG-11**: Gradient fills via `fill: { type: "LINEAR_GRADIENT" | "RADIAL_GRADIENT", angle, stops: [{pos, color}] }`. Works in both `create` and `modify`.
+- **BUG-13**: Individual corner radii (`topLeftRadius`, `topRightRadius`, `bottomLeftRadius`, `bottomRightRadius`) now accepted in `create` and `modify`. Uniform `cornerRadius` still works as alias for all 4.
+- **BUG-15**: When both `width` and `textAlign: "CENTER"` (or RIGHT/JUSTIFIED) are passed to TEXT, plugin auto-infers `textAutoResize: "NONE"` so the text box keeps its full width — fixes silent label-alignment bugs where the box shrunk to content and collapsed centering.
+
+### Documentation
+
+- Added non-negotiable rules for `opacity: 0` wrapper trap, `counterAxisAlignItems: "STRETCH"` invalid value, centered TEXT width requirement, display numeric lineHeight.
+- New sections: Effects, Gradient Fills, Individual Corner Radii, Hex Alpha Shorthand, SVG Path Commands with examples.
+
+### Internal
+
+- New source files: `src/plugin/svg-path-helpers.js`, `src/plugin/paint-and-effects.js`.
+- 167 automated tests (84 full + 34 fix + 49 v2.5.2) passing.
+
+---
+
 ## [2.5.1] — 2026-04-16
 
 ### Fixed — feedback.md BUG-01, BUG-03, BUG-05 + SUGGEST-01, SUGGEST-04 + applyVariable extended fields

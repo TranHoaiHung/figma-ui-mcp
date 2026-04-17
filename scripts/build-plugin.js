@@ -4,6 +4,8 @@ import { readFileSync, writeFileSync } from "fs";
 
 const files = [
   "src/plugin/utils.js",
+  "src/plugin/svg-path-helpers.js",
+  "src/plugin/paint-and-effects.js",
   "src/plugin/read-helpers.js",
   "src/plugin/handlers-write.js",
   "src/plugin/handlers-library.js",
