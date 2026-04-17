@@ -161,6 +161,24 @@ function buildFigmaProxy(bridge) {
           if (lib.fillType === "none" && !/fill="/.test(svg.slice(0, svg.indexOf(">") + 1))) {
             svg = svg.replace(/<svg([^>]*)>/, `<svg$1 fill="${fill}">`);
           }
+          // BUG-10: normalize stroke-width to the requested pixel size.
+          // SVG icons (esp. Ionicons outline) use stroke-width in their own coordinate space
+          // (e.g. stroke-width="48" in a 512×512 viewBox). When Figma scales the icon down
+          // to `size` pixels the stroke looks correct visually, but after createNodeFromSvg
+          // the vector's strokeWeight is the raw SVG value (48), which overflows a 14px frame.
+          // Fix: detect viewBox width, compute scale = size / viewBoxW, replace stroke-width.
+          const vbMatch = svg.match(/viewBox="[^"]*"/);
+          if (vbMatch) {
+            const parts = vbMatch[0].replace('viewBox="', "").replace('"', "").trim().split(/[\s,]+/);
+            const vbW = parseFloat(parts[2]);
+            if (vbW > 0 && vbW !== size) {
+              const scale = size / vbW;
+              svg = svg.replace(/stroke-width="([^"]+)"/g, (_, w) => {
+                const normalized = Math.max(0.5, parseFloat(w) * scale);
+                return `stroke-width="${Math.round(normalized * 100) / 100}"`;
+              });
+            }
+          }
           usedLib = lib.name;
           break;
         }

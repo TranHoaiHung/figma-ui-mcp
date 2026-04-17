@@ -355,7 +355,14 @@ handlers.create = async (params) => {
       });
     }
 
-    parent.appendChild(node);
+    // BUG-08: insertIndex places node at a specific position in parent.children.
+    // appendChild always goes to the end; insertChild(index, node) inserts at index.
+    if (params.insertIndex !== undefined && typeof parent.insertChild === "function") {
+      var idx = Math.max(0, Math.min(params.insertIndex, parent.children ? parent.children.length : 0));
+      parent.insertChild(idx, node);
+    } else {
+      parent.appendChild(node);
+    }
 
     // Auto-set child layout properties when parent uses auto-layout
     if (parent.layoutMode && parent.layoutMode !== "NONE" && "layoutAlign" in node) {
@@ -430,7 +437,16 @@ handlers.modify = async (params) => {
       const style = FONT_STYLE_MAP[params.fontWeight] || node.fontName.style;
       await figma.loadFontAsync({ family, style });
       node.fontName = { family, style };
-      if (params.content !== undefined) node.characters = params.content;
+      if (params.content !== undefined) {
+        node.characters = params.content;
+        // BUG-07: when content changes and no explicit width/textAutoResize given,
+        // switch to WIDTH_AND_HEIGHT so Figma recalculates the bounding box.
+        // Without this, a longer string wraps inside the old fixed width.
+        if (params.width === undefined && params.textAutoResize === undefined &&
+            node.textAutoResize !== "NONE") {
+          node.textAutoResize = "WIDTH_AND_HEIGHT";
+        }
+      }
     }
     if (params.fontSize !== undefined) node.fontSize = params.fontSize;
     // textAlign, textAlignVertical, lineHeight require font to be loaded

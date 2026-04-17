@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.5.7] — 2026-04-17
+
+### Fixed
+
+**BUG-07** — `modify({ content })` doesn't reflow TEXT node width:
+- When `content` changes on a TEXT node that has `textAutoResize: "HEIGHT"` or `"WIDTH_AND_HEIGHT"`, Figma kept the old fixed width causing the longer text to wrap.
+- Fix: plugin now sets `textAutoResize = "WIDTH_AND_HEIGHT"` automatically after changing `characters`, unless caller explicitly passes `width` or `textAutoResize`.
+
+**BUG-08** — `create()` always appends to end, no way to insert at position:
+- Added `insertIndex` param to `create`. Uses Figma's `parent.insertChild(index, node)` to place the new node at the given index in `parent.children`. Clamps to valid range; falls back to `appendChild` when `insertIndex` is omitted.
+- Example: `figma.create({ type: "FRAME", parentId: sidebarId, insertIndex: 1, ... })` inserts after the first child.
+
+**BUG-10** — `loadIcon()` stroke-width raw SVG value makes outline icons invisible at small sizes:
+- Ionicons outline SVGs use `stroke-width="48"` in a 512×512 viewBox. After `createNodeFromSvg` the vector's `strokeWeight` is 48, overflowing a 14–24px icon frame.
+- Fix: `loadIcon` now reads the SVG `viewBox` width, computes `scale = requestedSize / viewBoxW`, and rewrites all `stroke-width` attributes to `max(0.5, originalStroke × scale)`.
+
+### Tests
+- `scripts/test-v257.mjs` — 16 tests covering all three fixes
+- **221/221 total tests pass**
+
 ## [2.5.6] — 2026-04-17
 
 ### Fixed — BUG-16: `loadIcon` x/y ignored, BUG-17: `layoutMode: "NONE"` silently ignored
