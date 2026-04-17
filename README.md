@@ -49,6 +49,12 @@ The MCP server starts a small HTTP server bound to `localhost:38451`. The Figma 
 
 | Feature | Description |
 |---------|-------------|
+| **`get_css` operation** | `figma_read get_css { nodeId }` → ready-to-use CSS string (flex, typography, fill, border, shadow, opacity, transform). One call, paste into code. |
+| **Resolved variables** | `get_node_detail` now resolves `boundVariables` IDs → `{ name, resolvedType, value }`. No more manual ID lookup. |
+| **Resolved style refs** | `fillStyleId` / `textStyleId` now include `fillStyle: { name, hex }` and `textStyle: { name, fontSize, fontFamily }`. |
+| **Instance overrides detail** | `overrides: [{ id, overriddenFields: ["fills","characters",...] }]` — full diff vs mainComponent, not just count. |
+| **`componentSetName` + `variantLabel`** | INSTANCE nodes now expose set name (`"Button"`) and variant label (`"State=Primary, Size=Large"`) separately. |
+| **`insertIndex` for create** | `figma.create({ ..., insertIndex: 2 })` — insert node at exact position in parent, not always at end. |
 | **Typography tokens** | `setupDesignTokens({ fontSizes, fonts, textStyles })` — 1 call bootstrap full typography system with variable-bound text styles. Multi-mode (Compact/Comfortable/Large) supported. |
 | **`applyTextStyle`** | Apply a local text style to a TEXT node by name in 1 call — auto-loads font. |
 | **STRING variables for fonts** | `applyVariable` now binds `fontFamily`, `fontStyle`, `characters` (swap Inter → SF Pro via 1 variable). |
@@ -57,14 +63,13 @@ The MCP server starts a small HTTP server bound to `localhost:38451`. The Figma 
 | **Individual corner radii** | `topLeftRadius`, `topRightRadius`, `bottomLeftRadius`, `bottomRightRadius` on FRAME/RECT. |
 | **8-digit hex + rgba alpha** | `fill: "#FFFFFF80"` or `"rgba(255,255,255,0.5)"` — alpha auto-applied to paint opacity. |
 | **SVG arc (A) + commas** | VECTOR `d` paths accept `A` arc command (auto-converted to cubic Bézier) and commas. |
-| **Icon libraries** | 7 free open-source libraries, iOS-filled first: **Ionicons** → Fluent → Bootstrap → Phosphor → **Tabler Filled** → Tabler Outline → Lucide. Replaces paid Icons8 ios-filled. |
+| **Icon libraries** | 7 free open-source libraries, iOS-filled first: **Ionicons** → Fluent → Bootstrap → Phosphor → **Tabler Filled** → Tabler Outline → Lucide. |
 | **Instance overrides** | `figma.instantiate({ overrides: { "LayerName": { text, fill, fontSize } } })` — override props per-layer. |
 | **Batch delete** | `figma.delete({ ids: [...] })` — delete multiple nodes in 1 round-trip. |
 | **Prototyping** | `setReactions` — click/hover/press → navigate/overlay/swap with Smart Animate. |
 | **Scroll behavior** | `setScrollBehavior` — HORIZONTAL / VERTICAL / BOTH overflow. |
 | **Variants & instance swap** | `setComponentProperties` / `swapComponent` — variants + instance swap. |
 | **Multi-instance** | Multiple Figma tabs connect simultaneously via sessions. |
-| **MCP Registry** | Listed on glama.ai + smithery.ai. |
 
 Full version history: see [CHANGELOG.md](CHANGELOG.md).
 
@@ -492,7 +497,8 @@ Supported easings: `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_AND_OUT`, `CUSTOM_B
 | `screenshot` | Export node as PNG — displays **inline** in Claude Code |
 | `export_svg` | Export node as SVG markup |
 | `export_image` | Export node as base64 PNG/JPG — for saving to disk (`format`, `scale` params) |
-| `get_node_detail` | CSS-like properties for single node (no tree traversal) |
+| `get_node_detail` | Structured properties for single node — fills, layout, typography, effects, bound variables **(resolved to name+value)**, style refs **(resolved to name+hex)**, instance overrides **(full field list)**, `componentSetName` + `variantLabel` |
+| `get_css` | **Ready-to-use CSS string** for a node — background, flex, border, radius, shadow, typography, opacity, transform. Best for design-to-code. |
 | `get_styles` | All local paint, text, effect, grid styles |
 | `get_local_components` | Component listing with descriptions + variant properties |
 | `get_viewport` | Current viewport position, zoom, bounds |
