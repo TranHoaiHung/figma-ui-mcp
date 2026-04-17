@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.5.3] — 2026-04-17
+
+### Fixed — CRITICAL: MCP server crash on startup (v2.5.2 regression)
+
+- Raw backticks inside the markdown table in `server/api-docs.js` (applyVariable fields) were interpreted as template-literal expressions, causing `SyntaxError: Unexpected identifier 'fill'` the moment Node imported the module.
+- Every MCP client loading v2.5.2 saw `MCP error -32000: Connection closed` because the server died before the stdio handshake completed.
+- Backticks now properly escaped. Server start verified clean.
+
+**Action for users on v2.5.2:** upgrade to 2.5.3 (`npx figma-ui-mcp@latest`) and restart your IDE.
+
+---
+
 ## [2.5.2] — 2026-04-16
 
 ### Fixed — feedback.md BUG-02/03/04/05/08/10/11/13/15
