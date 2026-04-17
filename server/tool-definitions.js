@@ -52,25 +52,35 @@ export const TOOLS = [
             "get_selection", "get_design", "get_page_nodes", "screenshot", "export_svg",
             "get_styles", "get_local_components", "get_viewport", "get_variables",
             "get_node_detail", "get_css",
+            "get_design_context", "get_component_map", "get_unmapped_components",
             "export_image",
             "search_nodes",
             "scan_design"
           ],
           description:
-            "get_selection: data for currently selected node(s). " +
-            "get_design: full node tree for a frame/page (use depth param to control, default 10, or 'full'). " +
-            "get_page_nodes: top-level frames on the current page. " +
-            "screenshot: PNG of a node as base64. " +
-            "export_svg: SVG markup of a node. " +
-            "get_styles: all local paint, text, effect, grid styles. " +
-            "get_local_components: enhanced component listing with properties. " +
-            "get_viewport: current viewport position and zoom. " +
-            "get_variables: read Figma local variables (Design Tokens) with resolved names and values. " +
-            "get_node_detail: structured properties for a single node — fills, strokes, layout, typography, effects, bound variables (resolved to name+value), style refs (resolved to name), instance overrides, componentSetName/variantLabel. " +
-            "get_css: ready-to-use CSS string for a single node — background, flex, border, radius, shadow, typography, opacity, transform. Best for design-to-code. " +
-            "export_image: export node as base64 PNG/JPG for saving to disk (use scale param for resolution). " +
-            "search_nodes: find nodes by properties — type, namePattern (wildcard), fill (hex), fontFamily, fontSize, hasImage, hasIcon. " +
-            "scan_design: progressive scan for large/complex designs — returns structured summary with all text, colors, fonts, images, icons, sections. No token overflow.",
+            "── Design-to-code (use these for code generation) ──\n" +
+            "get_design_context: AI-optimized payload for a node — flex layout, token-resolved colors, typography with style names, component instances with variant properties. Best single call for design→React/Vue/Swift code.\n" +
+            "get_css: ready-to-use CSS string for a single node — background, flex, border, radius, shadow, typography, opacity, transform.\n" +
+            "get_component_map: list every component instance in a frame with componentSetName, variantLabel, properties, and suggestedImport path. Use to scaffold import statements.\n" +
+            "get_unmapped_components: find component instances that have no description in Figma (likely no code mapping yet). Prompts AI to ask user for correct import paths.\n" +
+            "── Inspect ──\n" +
+            "get_node_detail: structured properties for a single node — fills, bound variables (resolved to name+value), style refs (resolved to name+hex), instance overrides (full field list), componentSetName/variantLabel.\n" +
+            "get_selection: full design tree of selected node(s) + design tokens summary.\n" +
+            "get_design: full node tree for a frame/page (depth param: number or 'full').\n" +
+            "get_page_nodes: top-level frames on the current page.\n" +
+            "── Styles & tokens ──\n" +
+            "get_styles: all local paint, text, effect, grid styles.\n" +
+            "get_variables: all local Design Token variables — collections, modes, resolved values.\n" +
+            "get_local_components: component listing with descriptions + variant property definitions.\n" +
+            "── Export ──\n" +
+            "screenshot: PNG of a node — displays inline in Claude Code.\n" +
+            "export_svg: SVG markup string.\n" +
+            "export_image: base64 PNG/JPG for saving to disk (scale param for resolution).\n" +
+            "── Search ──\n" +
+            "search_nodes: filter by type, namePattern (wildcard *), fill color, fontFamily, fontSize, hasImage, hasIcon.\n" +
+            "scan_design: structured summary of large frames — all text, colors, fonts, images, icons, sections.\n" +
+            "── Viewport ──\n" +
+            "get_viewport: current viewport center, zoom, bounds.",
         },
         nodeId:   { type: "string", description: "Target node ID (optional — omit to use current selection)." },
         nodeName: { type: "string", description: "Target node name (alternative to nodeId)." },
@@ -90,5 +100,25 @@ export const TOOLS = [
       "Get the full API reference for figma_write — all operations, parameters, and code examples. " +
       "Always call this before writing non-trivial draw code.",
     inputSchema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "figma_rules",
+    description:
+      "Generate a design system rule sheet from the current Figma file — aggregates color tokens, " +
+      "typography styles, variables (all modes), and component catalog into a single markdown block. " +
+      "Equivalent to official Figma MCP's create_design_system_rules. " +
+      "Call once at the start of a design-to-code session to give the AI full context: " +
+      "what tokens to use, what text styles exist, which components are available. " +
+      "Re-run when the design system changes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: {
+          type: "string",
+          description: "Target a specific Figma file/tab. Omit to auto-select.",
+        },
+      },
+      required: [],
+    },
   },
 ];

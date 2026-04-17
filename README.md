@@ -44,11 +44,16 @@ The MCP server starts a small HTTP server bound to `localhost:38451`. The Figma 
 | Read  | `figma_read`  | Extract node trees, colors, typography, screenshots |
 | Info  | `figma_status`| Check plugin connection + active sessions |
 | Docs  | `figma_docs`  | Get full API reference + examples |
+| Rules | `figma_rules` | Generate design system rule sheet — tokens, typography, components |
 
 ### What's new in v2.5
 
 | Feature | Description |
 |---------|-------------|
+| **`get_design_context`** | AI-optimized payload for a node — flex layout, token-resolved colors (`var(--name)`), typography with style names, component instances with variant properties. Best single call for design→React/Vue/Swift code. |
+| **`get_component_map`** | List every component instance in a frame with `componentSetName`, `variantLabel`, properties, and `suggestedImport` path. Scaffold import statements in one call. |
+| **`get_unmapped_components`** | Find component instances that have no description in Figma (no code mapping yet). Prompts AI to ask user for correct import paths. |
+| **`figma_rules` tool** | New top-level MCP tool — aggregates color tokens, typography styles, variables (all modes), and component catalog into a single markdown rule sheet. Equivalent to official Figma MCP's `create_design_system_rules`. Call once at session start. |
 | **`get_css` operation** | `figma_read get_css { nodeId }` → ready-to-use CSS string (flex, typography, fill, border, shadow, opacity, transform). One call, paste into code. |
 | **Resolved variables** | `get_node_detail` now resolves `boundVariables` IDs → `{ name, resolvedType, value }`. No more manual ID lookup. |
 | **Resolved style refs** | `fillStyleId` / `textStyleId` now include `fillStyle: { name, hex }` and `textStyle: { name, fontSize, fontFamily }`. |
@@ -497,6 +502,9 @@ Supported easings: `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_AND_OUT`, `CUSTOM_B
 | `screenshot` | Export node as PNG — displays **inline** in Claude Code |
 | `export_svg` | Export node as SVG markup |
 | `export_image` | Export node as base64 PNG/JPG — for saving to disk (`format`, `scale` params) |
+| `get_design_context` | **AI-optimized design→code payload** — flex layout, token-resolved fills as `var(--name)`, typography with style names, component instances with variant properties + `componentsUsed` / `tokensUsed` summaries. Best single call for generating React/Vue/Swift code. |
+| `get_component_map` | **Component instance map** — every INSTANCE in a frame with `componentSetName`, `variantLabel`, `properties`, and `suggestedImport` path. Deduplicates into `uniqueComponents[]` with usage counts. |
+| `get_unmapped_components` | **Code-mapping audit** — lists instances with no description in Figma (`unmapped[]`). Use to prompt user for correct import paths before code generation. |
 | `get_node_detail` | Structured properties for single node — fills, layout, typography, effects, bound variables **(resolved to name+value)**, style refs **(resolved to name+hex)**, instance overrides **(full field list)**, `componentSetName` + `variantLabel` |
 | `get_css` | **Ready-to-use CSS string** for a node — background, flex, border, radius, shadow, typography, opacity, transform. Best for design-to-code. |
 | `get_styles` | All local paint, text, effect, grid styles |

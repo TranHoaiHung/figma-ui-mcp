@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.5.9] — 2026-04-17
+
+### Added — Design-to-code gap closure (parity with official Figma MCP)
+
+**`get_design_context`** (new `figma_read` operation):
+AI-optimized payload for a node/selection — one call returns everything needed to scaffold code:
+- Flex layout semantics (`display`, `flexDirection`, `gap`, `alignItems`, `justifyContent`, `padding`)
+- Token-resolved fill colors as `var(--token-name)` CSS custom properties
+- Typography with applied style name (`text.style: "heading-xl"`)
+- Component instances with `component.set`, `component.variant`, `component.properties`
+- Summary: `tokensUsed[]`, `textStylesUsed[]`, `componentsUsed[]`
+- Children up to depth 4 (prevents token overflow on large frames)
+
+**`get_component_map`** (new `figma_read` operation):
+Lists every component instance in a frame with:
+- `componentSetName`, `variantLabel` ("State=Primary, Size=Large")
+- `properties` object (all variant/boolean/text property values)
+- `suggestedImport` — best-guess import path from component name convention
+- `uniqueComponents` — deduplicated summary with usage count
+
+**`get_unmapped_components`** (new `figma_read` operation):
+Finds component instances with no Figma description (likely no code mapping). Returns `unmapped[]` + `mapped[]` + hint telling AI to ask user for correct import paths.
+
+**`figma_rules`** (new top-level MCP tool):
+Aggregates the entire design system into a prompt-injectable markdown rule sheet:
+- `## Color Tokens` — CSS custom property format (`--color-accent: #6366F1`)
+- `## Variables` — per collection, per mode, with resolved values
+- `## Typography Styles` — font family + weight + size + line height
+- `## Component Sets` — all components with descriptions
+Equivalent to official Figma MCP's `create_design_system_rules`. Call once at session start.
+
+### Updated
+- `figma_read` operation enum now has 17 operations (added 3 new + reorganized descriptions by category)
+- `figma_rules` added as 5th top-level MCP tool alongside `figma_status/write/read/docs`
+
+### Tests
+- `scripts/test-v259.mjs` — 59 tests covering all 4 new features + 17-op enum + variantLabel logic
+- **316/316 total tests pass**
+
 ## [2.5.8] — 2026-04-17
 
 ### Added — Read design-to-code improvements (competitive with official Figma MCP)
