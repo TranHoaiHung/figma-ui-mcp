@@ -214,6 +214,28 @@ npm install
 
 The plugin UI shows a **green dot** when the MCP server is connected.
 
+### Updating to a newer version
+
+**MCP server** — update via npm as usual:
+```bash
+npm update -g figma-ui-mcp   # if installed globally
+# or bump the version in your MCP config and re-run
+```
+
+**Figma plugin** — the plugin does NOT auto-update. After updating the npm package, re-link it:
+
+1. Find the new plugin folder:
+```bash
+npx figma-ui-mcp --version   # prints version AND shows plugin folder path
+# Example output: figma-ui-mcp v2.5.11  —  plugin: /usr/local/lib/node_modules/figma-ui-mcp/plugin
+```
+2. In Figma Desktop: **Plugins → Development → Manage plugins in development**
+3. Remove the old "Figma UI MCP Bridge" entry
+4. Click **"+"** → **"Import plugin from manifest..."** → select `manifest.json` from the path shown above
+5. Run the plugin — the green dot should reconnect within seconds
+
+> **How to tell if your plugin is outdated:** Ask your AI `"figma_status"` — the response includes `pluginVersion`. Compare it to the npm package version (`npx figma-ui-mcp --version`). If they differ, re-link the plugin.
+
 ### Step 3 — Connect AI to Figma
 
 Tell your AI assistant to connect:
