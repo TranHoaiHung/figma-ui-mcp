@@ -104,6 +104,22 @@ function buildFigmaProxy(bridge) {
     proxy[op] = (params = {}) => bridge.sendOperation(op, params);
   }
 
+  // ── BUG-12: figma.getNodeById(id) — read node detail by ID ────────────
+  proxy.getNodeById = async (id) => {
+    return bridge.sendOperation("get_node_detail", { id });
+  };
+
+  // ── BUG-13: figma.zoom_to_fit(opts) — alias for set_viewport ──────────
+  proxy.zoom_to_fit = async (opts = {}) => {
+    var nodeIds = opts.nodeIds || (opts.nodeId ? [opts.nodeId] : []);
+    return bridge.sendOperation("set_viewport", { nodeId: nodeIds[0] || null });
+  };
+
+  // ── BUG-14: figma.getCurrentPage() — returns current page info ─────────
+  proxy.getCurrentPage = async () => {
+    return bridge.sendOperation("status", {});
+  };
+
   // ── figma.get_page_nodes() — returns nodes array (with .page property) ─
   // Plugin returns { page, nodes: [...] }. Proxy unwraps to array so that
   // `for (var i = 0; i < nodes.length; i++)` works directly.

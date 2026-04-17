@@ -79,6 +79,16 @@ handlers.set_selection = async function(params) {
     var n = await findNodeByIdAsync(nodeIds[i]);
     if (n) nodes.push(n);
   }
+  // BUG-08: nodes may belong to a different page than currentPage.
+  // Find the page of the first node and switch to it before setting selection.
+  if (nodes.length > 0) {
+    var targetPage = null;
+    var candidate = nodes[0];
+    while (candidate && candidate.type !== "PAGE") candidate = candidate.parent;
+    if (candidate && candidate.type === "PAGE" && candidate !== figma.currentPage) {
+      await figma.setCurrentPageAsync(candidate);
+    }
+  }
   figma.currentPage.selection = nodes;
   return { selected: nodes.map(nodeToInfo) };
 };

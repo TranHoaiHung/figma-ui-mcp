@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.5.10] — 2026-04-17
+
+### Fixed — Bug fixes from v2.5.x field reports
+
+- **BUG-03**: `characters` param now accepted as alias for `content` when creating TEXT nodes — previously silently discarded, text was invisible
+- **BUG-04**: `fills` array and `fontColor` shorthand now accepted on TEXT create — previously only `fill` (hex string) worked
+- **BUG-05**: `fontColor` in `modify()` now correctly updates fill color — previously a no-op
+- **BUG-08**: `set_selection` now auto-switches to the node's page before selecting — fixes "selection can only include nodes in that page" error when called after `setPage`
+- **BUG-12**: `figma.getNodeById(id)` added to write sandbox — calls `get_node_detail` under the hood
+- **BUG-13**: `figma.zoom_to_fit({ nodeIds })` added to write sandbox — alias for `set_viewport`
+- **BUG-14**: `figma.getCurrentPage()` added to write sandbox — returns current page info via `status`
+
+---
+
 ## [2.5.9] — 2026-04-17
 
 ### Added — Design-to-code gap closure (parity with official Figma MCP)

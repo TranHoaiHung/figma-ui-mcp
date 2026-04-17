@@ -60,9 +60,11 @@ handlers.create = async (params) => {
     type, parentId, name,
     x = 0, y = 0, width = 100, height = 100,
     fill, stroke, strokeWeight = 1, cornerRadius,
-    content = "", fontSize = 14, fontWeight = "Regular", lineHeight,
+    fontSize = 14, fontWeight = "Regular", lineHeight,
     opacity, visible,
   } = params;
+  // BUG-03: accept both `content` and `characters` for TEXT nodes
+  var content = params.content !== undefined ? params.content : (params.characters !== undefined ? params.characters : "");
 
   let parent = figma.currentPage;
   if (parentId) {
@@ -166,7 +168,10 @@ handlers.create = async (params) => {
     node.fontName = { family: "Inter", style };
     node.fontSize = fontSize;
     node.characters = content;
-    if (fill) node.fills = solidFill(fill, params.fillOpacity);
+    // BUG-04: accept `fill` (hex), `fills` (array), or `fontColor` (alias) for text color
+    var textFill = fill || params.fontColor;
+    if (textFill) node.fills = solidFill(textFill, params.fillOpacity);
+    else if (params.fills && Array.isArray(params.fills)) node.fills = buildFillArray(params.fills[0] && params.fills[0].color, params.fillOpacity);
     if (params.effects) applyEffects(node, params.effects);
     // Accept lineHeight as number (pixels) or pre-formed object { value, unit }
     if (lineHeight) {
@@ -399,6 +404,8 @@ handlers.modify = async (params) => {
   }
   if (node.removed) throw new Error("Node was deleted: " + nodeRef);
 
+  // BUG-05: fontColor is an alias for fill on TEXT nodes (and any node)
+  if (params.fontColor !== undefined && params.fill === undefined) params.fill = params.fontColor;
   // BUG-11: fill accepts hex string OR gradient spec {type, stops, angle}
   if (params.fill     !== undefined && "fills"   in node) node.fills   = buildFillArray(params.fill, params.fillOpacity);
   if (params.fillOpacity !== undefined && params.fill === undefined && "fills" in node && node.fills && node.fills.length) {
