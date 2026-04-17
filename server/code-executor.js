@@ -47,11 +47,25 @@ const READ_OPS = [
 const ALL_OPS = [...WRITE_OPS, ...READ_OPS];
 
 // ─── Icon library config ──────────────────────────────────────────────────────
+// Priority order: iOS-style filled → Win11 filled → Bootstrap filled → Phosphor filled
+//                 → Tabler filled → Tabler outline → Lucide (outline fallback)
+// v2.5.5+: Added Ionicons (iOS-native filled, replaces Icons8 ios-filled use case)
+//          + Tabler filled (4500+ icons, broadest coverage).
 const ICON_LIBRARIES = [
-  { name: "fluent",    urlFn: (n) => `https://unpkg.com/@fluentui/svg-icons/icons/${n.replace(/-/g, "_")}_24_filled.svg`, fillType: "fill" },
-  { name: "bootstrap", urlFn: (n) => `https://unpkg.com/bootstrap-icons@1.11.3/icons/${n}-fill.svg`, fillType: "fill" },
-  { name: "phosphor",  urlFn: (n) => `https://unpkg.com/@phosphor-icons/core@latest/assets/fill/${n}-fill.svg`, fillType: "fill" },
-  { name: "lucide",    urlFn: (n) => `https://unpkg.com/lucide-static@0.577.0/icons/${n}.svg`, fillType: "stroke" },
+  // iOS-style filled (default-filled, outline/sharp variants via suffix)
+  { name: "ionicons",     urlFn: (n) => `https://unpkg.com/ionicons@7.4.0/dist/svg/${n}.svg`,                                                         fillType: "none" },
+  // Win11 Fluent filled (Microsoft)
+  { name: "fluent",       urlFn: (n) => `https://unpkg.com/@fluentui/svg-icons/icons/${n.replace(/-/g, "_")}_24_filled.svg`,                           fillType: "fill" },
+  // Bootstrap filled
+  { name: "bootstrap",    urlFn: (n) => `https://unpkg.com/bootstrap-icons@1.11.3/icons/${n}-fill.svg`,                                                fillType: "fill" },
+  // Phosphor filled
+  { name: "phosphor",     urlFn: (n) => `https://unpkg.com/@phosphor-icons/core@latest/assets/fill/${n}-fill.svg`,                                     fillType: "fill" },
+  // Tabler filled — 4,500+ icons, broadest coverage of filled-style
+  { name: "tabler-filled",urlFn: (n) => `https://unpkg.com/@tabler/icons@3.24.0/icons/filled/${n}.svg`,                                                fillType: "fill" },
+  // Tabler outline — very thorough outline set
+  { name: "tabler",       urlFn: (n) => `https://unpkg.com/@tabler/icons@3.24.0/icons/outline/${n}.svg`,                                               fillType: "stroke" },
+  // Lucide — last resort outline
+  { name: "lucide",       urlFn: (n) => `https://unpkg.com/lucide-static@0.577.0/icons/${n}.svg`,                                                      fillType: "stroke" },
 ];
 
 // ─── HTTP fetch helper (server-side, NOT in sandbox) ──────────────────────────
@@ -122,7 +136,8 @@ function buildFigmaProxy(bridge) {
   };
 
   // ── figma.loadIcon(name, opts) ──────────────────────────────────────────
-  // Fetches SVG icon from libraries (Fluent → Bootstrap → Phosphor → Lucide)
+  // Fetches SVG icon from libraries in priority order (filled first):
+  // Ionicons → Fluent → Bootstrap → Phosphor → Tabler-filled → Tabler → Lucide
   // opts: { parentId, x, y, size, fill }
   proxy.loadIcon = async (iconName, opts = {}) => {
     const size = opts.size || 24;
@@ -141,13 +156,18 @@ function buildFigmaProxy(bridge) {
             .replace(/class="[^"]*"/g, "")
             .replace(/fill="currentColor"/g, `fill="${fill}"`)
             .replace(/stroke="currentColor"/g, `stroke="${fill}"`);
+          // Ionicons and similar libs have <path> tags without fill attribute;
+          // inject `fill` at the <svg> root so Figma imports with the requested color.
+          if (lib.fillType === "none" && !/fill="/.test(svg.slice(0, svg.indexOf(">") + 1))) {
+            svg = svg.replace(/<svg([^>]*)>/, `<svg$1 fill="${fill}">`);
+          }
           usedLib = lib.name;
           break;
         }
       } catch { /* try next library */ }
     }
 
-    if (!svg) throw new Error(`Icon "${iconName}" not found in any library`);
+    if (!svg) throw new Error(`Icon "${iconName}" not found in any library (tried: ${ICON_LIBRARIES.map(l => l.name).join(", ")})`);
 
     return bridge.sendOperation("create", {
       type: "SVG",

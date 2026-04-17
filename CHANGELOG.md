@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.5.5] — 2026-04-17
+
+### Added — Ionicons + Tabler icon libraries (free replacement for paid Icons8 ios-filled)
+
+Icons8 requires a paid plan for SVG format. Added 3 free open-source libraries with filled-first priority so `figma.loadIcon()` now resolves the iOS/filled styles Icons8 users were asking for.
+
+**New ICON_LIBRARIES priority order** (filled-first):
+
+1. **Ionicons v7.4.0** — iOS-native filled (default), 1,300+ icons (replaces Icons8 ios-filled style)
+2. Fluent UI — Win11 Filled
+3. Bootstrap — Filled
+4. Phosphor — Filled
+5. **Tabler Filled v3.24.0** — 4,500+ filled icons (broadest coverage)
+6. **Tabler Outline v3.24.0** — matching outline set
+7. Lucide — outline fallback
+
+**Ionicons SVG handling**: `<path>` tags have no `fill` attribute by default. Plugin now injects `fill="${requested}"` at the `<svg>` root so Figma imports with the requested color.
+
+**Ionicons naming quirks documented**:
+- Bell → `notifications`, Back arrow → `chevron-back`, Clock → `time`
+- Fire → `flame`, Lightning → `flash`, Lock → `lock-closed`
+- Outline/Sharp variants via suffix: `home-outline`, `home-sharp`
+
+### Why not Icons8 directly
+- SVG format requires paid plan (`{"error":"paid format requested"}` for free users)
+- Free PNG has attribution watermark + fixed resolution, unusable for Figma
+- API access needs paid key → violates zero-config philosophy
+
+### Tests
+- 11 new icon library tests (real unpkg.com fetches, verifies priority + fill injection)
+- **205/205 total tests pass** (84 full + 34 fix + 49 v2.5.2 + 27 v2.5.4 + 11 v2.5.5)
+- MCP stdio handshake verified clean
+
+### Docs
+- Naming table extended to 6 columns (Ionicons + Fluent + Bootstrap + Phosphor + Tabler Filled + Lucide)
+- ICON COLORING RULE updated with `fill="none"` handling for Ionicons
+- Both `server/api-docs.js` and `CLAUDE.md` in sync
+
+---
+
 ## [2.5.4] — 2026-04-17
 
 ### Added — Typography Tokens pipeline (merge of planned v2.6.0 + v2.7.0)

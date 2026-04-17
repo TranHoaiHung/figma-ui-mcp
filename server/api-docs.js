@@ -1596,51 +1596,67 @@ await figma.loadIconIn("check", {
 Use \`type: "SVG"\` with \`svg\` param containing SVG markup string.
 Replace \`fill="currentColor"\` or \`stroke="currentColor"\` with desired color before sending.
 
-### ICON LIBRARY PRIORITY (MANDATORY)
-Always try libraries in this order. If icon not found in first, fallback to next:
+### ICON LIBRARY PRIORITY (MANDATORY — v2.5.5 updated)
+Fallback order prioritizes **iOS-style filled** first (replaces paid Icons8 ios-filled
+use case). \`figma.loadIcon()\` tries libraries in this order and returns the first match:
 
 | Priority | Library | Style | URL Pattern | Fill Type |
 |----------|---------|-------|-------------|-----------|
-| 1st | **Fluent UI** | Win11 Filled | \`https://unpkg.com/@fluentui/svg-icons/icons/{name}_24_filled.svg\` | \`fill\` |
-| 2nd | **Bootstrap** | Filled | \`https://unpkg.com/bootstrap-icons@1.11.3/icons/{name}-fill.svg\` | \`fill\` |
-| 3rd | **Phosphor** | Filled | \`https://unpkg.com/@phosphor-icons/core@latest/assets/fill/{name}-fill.svg\` | \`fill\` |
-| 4th | **Lucide** | Outline | \`https://unpkg.com/lucide-static@0.577.0/icons/{name}.svg\` | \`stroke\` |
+| 1st | **Ionicons** (v7.4.0) | iOS filled (default) | \`https://unpkg.com/ionicons@7.4.0/dist/svg/{name}.svg\` | none (injected) |
+| 2nd | **Fluent UI** | Win11 Filled | \`https://unpkg.com/@fluentui/svg-icons/icons/{name}_24_filled.svg\` | \`fill\` |
+| 3rd | **Bootstrap** | Filled | \`https://unpkg.com/bootstrap-icons@1.11.3/icons/{name}-fill.svg\` | \`fill\` |
+| 4th | **Phosphor** | Filled | \`https://unpkg.com/@phosphor-icons/core@latest/assets/fill/{name}-fill.svg\` | \`fill\` |
+| 5th | **Tabler Filled** (v3.24) | Filled (4,500+ icons) | \`https://unpkg.com/@tabler/icons@3.24.0/icons/filled/{name}.svg\` | \`currentColor\` |
+| 6th | **Tabler Outline** | Outline | \`https://unpkg.com/@tabler/icons@3.24.0/icons/outline/{name}.svg\` | \`currentColor\` |
+| 7th | **Lucide** | Outline fallback | \`https://unpkg.com/lucide-static@0.577.0/icons/{name}.svg\` | \`stroke\` |
 
-**Naming differences between libraries:**
-| Concept | Fluent UI | Bootstrap | Phosphor | Lucide |
-|---------|-----------|-----------|----------|--------|
-| Home | \`home_24_filled\` | \`house-fill\` | \`house-fill\` | \`home\` |
-| Bell | \`alert_24_filled\` | \`bell-fill\` | \`bell-fill\` | \`bell\` |
-| User | \`person_24_filled\` | \`person-fill\` | \`user-fill\` | \`user\` |
-| Star | \`star_24_filled\` | \`star-fill\` | \`star-fill\` | \`star\` |
-| Book | \`book_24_filled\` | \`book-fill\` | \`book-open-fill\` | \`book-open\` |
-| Search | \`search_24_filled\` | \`search\` | \`magnifying-glass-fill\` | \`search\` |
-| Settings | \`settings_24_filled\` | \`gear-fill\` | \`gear-fill\` | \`settings\` |
-| Check | \`checkmark_24_filled\` | \`check-circle-fill\` | \`check-circle-fill\` | \`check\` |
-| Close | \`dismiss_24_filled\` | \`x-circle-fill\` | \`x-circle-fill\` | \`x\` |
-| Arrow L | \`arrow_left_24_filled\` | \`arrow-left\` | \`arrow-left-fill\` | \`arrow-left\` |
-| Arrow R | \`arrow_right_24_filled\` | \`arrow-right\` | \`arrow-right-fill\` | \`arrow-right\` |
-| Fire | \`fire_24_filled\` | \`fire\` | \`fire-fill\` | \`flame\` |
-| Trophy | \`trophy_24_filled\` | \`trophy-fill\` | \`trophy-fill\` | \`trophy\` |
-| Clock | \`clock_24_filled\` | \`clock-fill\` | \`clock-fill\` | \`clock\` |
-| Share | \`share_24_filled\` | \`share-fill\` | \`share-fill\` | \`share-2\` |
-| Lock | \`lock_closed_24_filled\` | \`lock-fill\` | \`lock-fill\` | \`lock\` |
-| Gift | \`gift_24_filled\` | \`gift-fill\` | \`gift-fill\` | \`gift\` |
-| Heart | \`heart_24_filled\` | \`heart-fill\` | \`heart-fill\` | \`heart\` |
-| Compass | \`compass_northwest_24_filled\` | \`compass-fill\` | \`compass-fill\` | \`compass\` |
-| Grid | \`grid_24_filled\` | \`grid-fill\` | \`grid-four-fill\` | \`grid-2x2\` |
-| Eye | \`eye_24_filled\` | \`eye-fill\` | \`eye-fill\` | \`eye\` |
-| Bookmark | \`bookmark_24_filled\` | \`bookmark-fill\` | \`bookmark-simple-fill\` | \`bookmark\` |
-| Play | \`play_24_filled\` | \`play-fill\` | \`play-fill\` | \`play\` |
-| Chat | \`chat_24_filled\` | \`chat-fill\` | \`chat-circle-fill\` | \`message-circle\` |
-| Lightning | \`flash_24_filled\` | \`lightning-fill\` | \`lightning-fill\` | \`zap\` |
+**Naming differences between libraries** (use the FIRST library's name when calling \`loadIcon\`):
+
+| Concept | Ionicons | Fluent UI | Bootstrap | Phosphor | Tabler Filled | Lucide |
+|---------|----------|-----------|-----------|----------|---------------|--------|
+| Home | \`home\` | \`home_24_filled\` | \`house-fill\` | \`house-fill\` | \`home\` | \`home\` |
+| Bell | \`notifications\` | \`alert_24_filled\` | \`bell-fill\` | \`bell-fill\` | \`bell\` | \`bell\` |
+| User | \`person\` | \`person_24_filled\` | \`person-fill\` | \`user-fill\` | \`user\` | \`user\` |
+| Star | \`star\` | \`star_24_filled\` | \`star-fill\` | \`star-fill\` | \`star\` | \`star\` |
+| Book | \`book\` | \`book_24_filled\` | \`book-fill\` | \`book-open-fill\` | \`book\` | \`book-open\` |
+| Search | \`search\` | \`search_24_filled\` | \`search\` | \`magnifying-glass-fill\` | \`search\` | \`search\` |
+| Settings | \`settings\` | \`settings_24_filled\` | \`gear-fill\` | \`gear-fill\` | \`settings\` | \`settings\` |
+| Check | \`checkmark\` | \`checkmark_24_filled\` | \`check-circle-fill\` | \`check-circle-fill\` | \`check\` | \`check\` |
+| Close | \`close\` | \`dismiss_24_filled\` | \`x-circle-fill\` | \`x-circle-fill\` | \`x\` | \`x\` |
+| Arrow L | \`chevron-back\` | \`arrow_left_24_filled\` | \`arrow-left\` | \`arrow-left-fill\` | \`arrow-left\` | \`arrow-left\` |
+| Arrow R | \`chevron-forward\` | \`arrow_right_24_filled\` | \`arrow-right\` | \`arrow-right-fill\` | \`arrow-right\` | \`arrow-right\` |
+| Fire | \`flame\` | \`fire_24_filled\` | \`fire\` | \`fire-fill\` | \`flame\` | \`flame\` |
+| Trophy | \`trophy\` | \`trophy_24_filled\` | \`trophy-fill\` | \`trophy-fill\` | \`trophy\` | \`trophy\` |
+| Clock | \`time\` | \`clock_24_filled\` | \`clock-fill\` | \`clock-fill\` | \`clock\` | \`clock\` |
+| Share | \`share\` | \`share_24_filled\` | \`share-fill\` | \`share-fill\` | \`share\` | \`share-2\` |
+| Lock | \`lock-closed\` | \`lock_closed_24_filled\` | \`lock-fill\` | \`lock-fill\` | \`lock\` | \`lock\` |
+| Gift | \`gift\` | \`gift_24_filled\` | \`gift-fill\` | \`gift-fill\` | \`gift\` | \`gift\` |
+| Heart | \`heart\` | \`heart_24_filled\` | \`heart-fill\` | \`heart-fill\` | \`heart\` | \`heart\` |
+| Compass | \`compass\` | \`compass_northwest_24_filled\` | \`compass-fill\` | \`compass-fill\` | \`compass\` | \`compass\` |
+| Grid | \`grid\` | \`grid_24_filled\` | \`grid-fill\` | \`grid-four-fill\` | \`grid-dots\` | \`grid-2x2\` |
+| Eye | \`eye\` | \`eye_24_filled\` | \`eye-fill\` | \`eye-fill\` | \`eye\` | \`eye\` |
+| Bookmark | \`bookmark\` | \`bookmark_24_filled\` | \`bookmark-fill\` | \`bookmark-simple-fill\` | \`bookmark\` | \`bookmark\` |
+| Play | \`play\` | \`play_24_filled\` | \`play-fill\` | \`play-fill\` | \`player-play\` | \`play\` |
+| Chat | \`chatbubble\` | \`chat_24_filled\` | \`chat-fill\` | \`chat-circle-fill\` | \`message\` | \`message-circle\` |
+| Lightning | \`flash\` | \`flash_24_filled\` | \`lightning-fill\` | \`lightning-fill\` | \`bolt\` | \`zap\` |
+| Cart | \`cart\` | \`cart_24_filled\` | \`cart-fill\` | \`shopping-cart-fill\` | \`shopping-cart\` | \`shopping-cart\` |
+| Camera | \`camera\` | \`camera_24_filled\` | \`camera-fill\` | \`camera-fill\` | \`camera\` | \`camera\` |
+| Image | \`image\` | \`image_24_filled\` | \`image-fill\` | \`image-fill\` | \`photo\` | \`image\` |
+| Menu | \`menu\` | \`navigation_24_filled\` | \`list\` | \`list-fill\` | \`menu-2\` | \`menu\` |
+
+**Common Ionicons-specific quirks** (iOS naming):
+- Bell → \`notifications\`, Back arrow → \`chevron-back\`, Clock → \`time\`
+- Plus → \`add\`, Close → \`close\` (not \`x\`), Checkmark → \`checkmark\`
+- Fire → \`flame\`, Lightning → \`flash\`, Lock → \`lock-closed\`
+- Outline variants: append \`-outline\` (\`home-outline\`, \`heart-outline\`)
+- Sharp variants: append \`-sharp\` (\`home-sharp\`)
 
 ### ICON COLORING RULE (MANDATORY)
 Always pass \`fill\` param when creating SVG icons. Different libraries handle color differently:
+- **Ionicons**: No default fill attr → plugin injects \`fill\` at \`<svg>\` root
 - **Fluent UI**: No default fill attr → MUST pass \`fill\` param to color vectors
-- **Bootstrap**: Uses \`fill="currentColor"\` → sed replacement + \`fill\` param
-- **Phosphor**: Uses \`fill="currentColor"\` → sed replacement + \`fill\` param
-- **Lucide**: Uses \`stroke="currentColor"\` → sed replacement + \`stroke\` via SVG markup
+- **Bootstrap / Phosphor / Tabler**: Uses \`fill="currentColor"\` → sed replacement + \`fill\` param
+- **Lucide / Tabler outline**: Uses \`stroke="currentColor"\` → sed replacement + \`stroke\` param
 
 The plugin's SVG handler applies \`fill\` to ALL vector children, so always include it:
 \`\`\`js
