@@ -570,30 +570,30 @@ await figma.applyVariable({ nodeId: "49:115", field: "fill", variableName: "acce
 
 | Field | Variable type | Node type | Notes |
 |-------|--------------|-----------|-------|
-| `fill` / `fills` | COLOR | any | Binds to first solid paint color |
-| `stroke` / `strokes` | COLOR | any | Binds to first solid stroke color |
-| `opacity` | FLOAT | any | 0.0 – 1.0 |
-| `width` | FLOAT | any | |
-| `height` | FLOAT | any | |
-| `cornerRadius` | FLOAT | FRAME/RECT | Alias → topLeftRadius |
-| `topLeftRadius` | FLOAT | FRAME/RECT | Individual corner |
-| `topRightRadius` | FLOAT | FRAME/RECT | Individual corner |
-| `bottomLeftRadius` | FLOAT | FRAME/RECT | Individual corner |
-| `bottomRightRadius` | FLOAT | FRAME/RECT | Individual corner |
-| `strokeWeight` | FLOAT | any | |
-| `itemSpacing` | FLOAT | auto-layout frame | Gap between children |
-| `counterAxisSpacing` | FLOAT | auto-layout (wrap) | Gap on cross axis |
-| `paddingTop` | FLOAT | auto-layout frame | |
-| `paddingBottom` | FLOAT | auto-layout frame | |
-| `paddingLeft` | FLOAT | auto-layout frame | |
-| `paddingRight` | FLOAT | auto-layout frame | |
-| `padding` | FLOAT | auto-layout frame | Alias → paddingTop |
-| `fontSize` | FLOAT | TEXT | |
-| `letterSpacing` | FLOAT | TEXT | |
-| `lineHeight` | FLOAT | TEXT | |
-| `paragraphSpacing` | FLOAT | TEXT | |
-| `paragraphIndent` | FLOAT | TEXT | |
-| `visible` | BOOLEAN | any | Show/hide via variable |
+| \`fill\` / \`fills\` | COLOR | any | Binds to first solid paint color |
+| \`stroke\` / \`strokes\` | COLOR | any | Binds to first solid stroke color |
+| \`opacity\` | FLOAT | any | 0.0 – 1.0 |
+| \`width\` | FLOAT | any | |
+| \`height\` | FLOAT | any | |
+| \`cornerRadius\` | FLOAT | FRAME/RECT | Alias → topLeftRadius |
+| \`topLeftRadius\` | FLOAT | FRAME/RECT | Individual corner |
+| \`topRightRadius\` | FLOAT | FRAME/RECT | Individual corner |
+| \`bottomLeftRadius\` | FLOAT | FRAME/RECT | Individual corner |
+| \`bottomRightRadius\` | FLOAT | FRAME/RECT | Individual corner |
+| \`strokeWeight\` | FLOAT | any | |
+| \`itemSpacing\` | FLOAT | auto-layout frame | Gap between children |
+| \`counterAxisSpacing\` | FLOAT | auto-layout (wrap) | Gap on cross axis |
+| \`paddingTop\` | FLOAT | auto-layout frame | |
+| \`paddingBottom\` | FLOAT | auto-layout frame | |
+| \`paddingLeft\` | FLOAT | auto-layout frame | |
+| \`paddingRight\` | FLOAT | auto-layout frame | |
+| \`padding\` | FLOAT | auto-layout frame | Alias → paddingTop |
+| \`fontSize\` | FLOAT | TEXT | |
+| \`letterSpacing\` | FLOAT | TEXT | |
+| \`lineHeight\` | FLOAT | TEXT | |
+| \`paragraphSpacing\` | FLOAT | TEXT | |
+| \`paragraphIndent\` | FLOAT | TEXT | |
+| \`visible\` | BOOLEAN | any | Show/hide via variable |
 
 \`\`\`js
 // Bind spacing tokens to an auto-layout frame
