@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.5.11] — 2026-04-17
+
+### Changed — Sectioned `figma_docs` (fixes MCP token-limit error)
+
+- **`figma_docs` now accepts a `section` param** — instead of returning 102KB at once (which exceeded Claude Code's tool result limit), it returns a focused slice:
+  - No section → index + quick-start + critical rules (~15KB)
+  - `section="rules"` → design principles, token rules, layer order, component-first rule
+  - `section="layout"` → auto-layout, button/card/badge/progress/mobile/header rules
+  - `section="api"` → create/modify/delete/clone/batch/read operations + workflow
+  - `section="tokens"` → variables, multi-mode, paint styles, text styles
+  - `section="icons"` → loadImage, loadIcon, loadIconIn, icon libraries, coloring, sizing
+- Each section is ≤25KB — safely within Claude Code's tool result token limit
+- `DOCS` export kept for backwards compatibility
+
+---
+
 ## [2.5.10] — 2026-04-17
 
 ### Fixed — Bug fixes from v2.5.x field reports

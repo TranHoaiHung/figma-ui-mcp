@@ -97,9 +97,29 @@ export const TOOLS = [
   {
     name: "figma_docs",
     description:
-      "Get the full API reference for figma_write — all operations, parameters, and code examples. " +
-      "Always call this before writing non-trivial draw code.",
-    inputSchema: { type: "object", properties: {}, required: [] },
+      "Get the API reference and design rules for figma_write. " +
+      "Call with no args first — returns quick-start guide + critical rules. " +
+      "Then load specific sections as needed: " +
+      "section='rules' (design principles, token rules, layer order, component-first), " +
+      "section='layout' (auto-layout, button/card/badge/progress/mobile rules), " +
+      "section='api' (create/modify/delete/clone/batch/read operations + workflow), " +
+      "section='tokens' (variables, multi-mode, paint styles, text styles), " +
+      "section='icons' (loadImage, loadIcon, loadIconIn, icon libraries, coloring, sizing). " +
+      "Always call figma_docs BEFORE any figma_write code.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        section: {
+          type: "string",
+          enum: ["rules", "layout", "api", "tokens", "icons"],
+          description:
+            "Which section to load. Omit (or null) for quick-start + critical rules. " +
+            "Load layout before any auto-layout work. Load api for full operation reference. " +
+            "Load tokens for variable/multi-mode work. Load icons for image/icon placement.",
+        },
+      },
+      required: [],
+    },
   },
   {
     name: "figma_rules",

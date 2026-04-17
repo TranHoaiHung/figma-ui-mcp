@@ -1,11 +1,37 @@
-export const DOCS = `
-# figma-ui-mcp — Complete API Reference & Design Rules
+// figma_docs — sectioned API reference
+// Default (no section): quick-start + critical rules + token defaults
+// Sections: "rules" | "layout" | "api" | "tokens" | "icons"
+
+// ─── Section content ──────────────────────────────────────────────────────────
+
+const SECTION_INDEX = `
+# figma-ui-mcp — API Reference
+
+Call \`figma_docs\` with a \`section\` param to load a specific part:
+
+| section | What's inside |
+|---------|---------------|
+| _(none)_ | **Quick-start checklist + Critical rules 0–9 + Design Library defaults** — load this first |
+| \`"rules"\` | Design rules 10–20 (spacing, radius, shadow, semantic colors, states) + component reuse |
+| \`"layout"\` | Auto-layout, button/card/badge/progress bar/mobile anchoring/header centering rules |
+| \`"api"\` | Create / Modify / Delete / Clone / Batch / Read operations + full workflow example |
+| \`"tokens"\` | setupDesignTokens, applyTextStyle, modifyVariable, applyVariable, multi-mode workflow |
+| \`"icons"\` | loadImage, loadIcon, loadIconIn, icon library priority table, coloring & sizing rules |
+
+**Recommended call order for a new design session:**
+1. \`figma_docs\` (no section) → rules + quick-start
+2. \`figma_docs { section: "layout" }\` → layout patterns
+3. \`figma_docs { section: "api" }\` → create/modify API
+4. \`figma_docs { section: "tokens" }\` → if using variables/multi-mode
+5. \`figma_docs { section: "icons" }\` → if placing icons or images
+`;
+
+const SECTION_DEFAULT = `
+# figma-ui-mcp — Quick-Start & Critical Rules
 
 ---
 
-## 🚨 CRITICAL QUICK-START CHECKLIST (follow EVERY time, no exceptions)
-
-Before writing a single line of figma_write code, run this exact sequence:
+## 🚨 CRITICAL QUICK-START CHECKLIST (follow EVERY time)
 
 \`\`\`js
 // STEP 1 — Bootstrap design tokens (idempotent, safe to call every session)
@@ -36,1480 +62,330 @@ await figma.ensure_library();
 
 **Non-negotiable rules:**
 - ❌ NEVER hardcode hex in \`fill\`/\`stroke\` — always use \`applyVariable\` after create
-- ❌ NEVER use emoji as icons — use \`figma.loadIcon(name, {size, fill})\` (SVG)
+- ❌ NEVER use emoji as icons — use \`figma.loadIcon(name, {size, fill})\`
 - ❌ NEVER set icon size >= container size — icon = container × 0.5
-- ❌ NEVER draw background image AFTER other elements — background/image FIRST, content on top
-- ❌ NEVER put two overlapping rectangles inside auto-layout (progress bars, etc.) — use a non-auto-layout wrapper
-- ❌ NEVER use \`opacity: 0\` on a wrapper frame — it hides ALL children. Use \`fill: "NONE"\` or \`fillOpacity: 0\` instead.
-- ❌ NEVER use \`counterAxisAlignItems: "STRETCH"\` — invalid in Figma. Use \`counterAxisAlignItems: "MIN"\` on parent + \`layoutAlign: "STRETCH"\` on each child.
-- ✅ ALWAYS use auto-layout with counterAxisAlignItems: "CENTER" for icon+text rows
+- ❌ NEVER draw background image AFTER other elements — background FIRST, content on top
+- ❌ NEVER put overlapping rectangles inside auto-layout (progress bars) — use non-layout wrapper
+- ❌ NEVER use \`opacity: 0\` on wrapper frame — hides ALL children. Use \`fillOpacity: 0\` instead.
+- ❌ NEVER use \`counterAxisAlignItems: "STRETCH"\` — use \`"MIN"\` on parent + \`layoutAlign: "STRETCH"\` on each child.
+- ✅ ALWAYS use auto-layout with \`counterAxisAlignItems: "CENTER"\` for icon+text rows
 - ✅ ALWAYS draw background first (bottom layer), then overlays, then content
-- ✅ For centered TEXT across a container: pass BOTH \`width\` AND \`textAlign: "CENTER"\` — the plugin auto-sets \`textAutoResize: "NONE"\` so the text box keeps the width.
-- ✅ For display numerics (fontSize ≥ 48): pass explicit \`lineHeight\` ≈ fontSize to prevent overflow.
-- ❌ NEVER hardcode \`fontSize\`, \`fontFamily\`, \`fontWeight\` inline on TEXT nodes (v2.5.4+). Set them once via \`setupDesignTokens({ fontSizes, fonts, textStyles })\`, then \`await figma.applyTextStyle({ nodeId, styleName: "text/heading-xl" })\`.
-- ✅ Font swaps (Inter → SF Pro): change 1 STRING variable via \`modifyVariable({ variableName: "font-primary", value: "SF Pro" })\`. Every text bound to that variable updates automatically.
+- ✅ For centered TEXT: pass BOTH \`width\` AND \`textAlign: "CENTER"\` — plugin auto-sets \`textAutoResize: "NONE"\`
+- ✅ For display numerics (fontSize ≥ 48): pass explicit \`lineHeight\` ≈ fontSize to prevent overflow
+- ❌ NEVER hardcode \`fontSize\`/\`fontFamily\`/\`fontWeight\` inline — use \`setupDesignTokens({ textStyles })\` then \`applyTextStyle\`
 
 **Reading hidden layers:**
-When the user says "hidden layer", "invisible element", "hidden elements", "ẩn", "không thấy layer", "phần tử ẩn", "layer bị ẩn", "要隐藏的元素", "非表示レイヤー", or asks about elements that don't appear in read results — pass \`includeHidden: true\` to any read operation:
+Pass \`includeHidden: true\` to any read operation when user mentions "hidden layer", "invisible element", "ẩn", "layer bị ẩn":
 \`\`\`js
 figma_read({ operation: "get_design", nodeId: "1:2", includeHidden: true })
-figma_read({ operation: "get_selection", includeHidden: true })
 figma_read({ operation: "search_nodes", type: "TEXT", includeHidden: true })
 \`\`\`
-Default is \`false\` — hidden nodes are skipped to reduce noise.
 
 ---
 
-## ⚑ MANDATORY DESIGN SYSTEM RULES (read before every design task)
+## ⚑ MANDATORY DESIGN SYSTEM RULES (Rules 0–9)
 
-### Rule 0 — Token-First Workflow (HIGHEST PRIORITY — NON-NEGOTIABLE)
-**NEVER hardcode hex colors in \`fill\` or \`stroke\`.** Always use Figma Variables (Design Tokens).
+### Rule 0 — Token-First Workflow (HIGHEST PRIORITY)
+**NEVER hardcode hex colors.** Always use Figma Variables (Design Tokens).
 
-**Before ANY design work, run this bootstrap sequence:**
 \`\`\`js
-// 1. Bootstrap all tokens in one call (idempotent — safe to call every time)
-var tokens = await figma.setupDesignTokens({
-  collectionName: "Design Tokens",
-  colors: {
-    "accent":         "#3B82F6",
-    "accent-dim":     "#1D4ED8",
-    "bg-base":        "#08090E",
-    "bg-surface":     "#0F1117",
-    "bg-card":        "#111318",
-    "bg-elevated":    "#0D0F14",
-    "border":         "#1E2030",
-    "text-primary":   "#F0F2F5",
-    "text-secondary": "#8B8FA3",
-    "text-muted":     "#555872",
-    "positive":       "#00DC82",
-    "negative":       "#FF4757",
-    "warning":        "#FFB547",
-  },
-  numbers: {
-    "radius-sm": 8, "radius-md": 12, "radius-lg": 16,
-    "spacing-xs": 4, "spacing-sm": 8, "spacing-md": 16, "spacing-lg": 24,
-  }
-});
-// Returns { collectionId, created: [...], updated: [...], totalVariables }
-
-// 2. Read variable IDs for use in applyVariable
-var vars = await figma.get_variables();
-// Build a lookup map: name → variableId
-var varMap = {};
-for (var ci = 0; ci < vars.collections.length; ci++) {
-  for (var vi = 0; vi < vars.collections[ci].variables.length; vi++) {
-    var v = vars.collections[ci].variables[vi];
-    varMap[v.name] = v.id;
-  }
-}
-// Now varMap["accent"] = "VariableID:xx:yy"
-\`\`\`
-
-**Then for EVERY node you create:**
-\`\`\`js
-// WRONG — hardcoded hex
+// WRONG
 await figma.create({ type: "FRAME", fill: "#3B82F6", ... });
 
 // CORRECT — create with hex, then bind variable
 var node = await figma.create({ type: "FRAME", fill: "#3B82F6", ... });
 await figma.applyVariable({ nodeId: node.id, field: "fill", variableId: varMap["accent"] });
-\`\`\`
 
-**To change a color globally (all bound nodes update instantly):**
-\`\`\`js
+// Global rebrand — change 1 variable → ALL bound nodes update
 await figma.modifyVariable({ variableName: "accent", value: "#0EA5E9" });
-// → ALL nodes bound to "accent" update to #0EA5E9 automatically!
 \`\`\`
 
 ### Rule 0b — Component-First Workflow (MANDATORY for repeated elements)
 **NEVER draw the same element twice.** Create a Component, then instantiate it.
 
-**Workflow:**
 \`\`\`js
-// 1. Check if component exists
 var components = await figma.listComponents();
 var btnExists = components.some(function(c) { return c.name === "btn/primary"; });
 
-// 2. If not → create frame, convert to component
 if (!btnExists) {
   var btnFrame = await figma.create({
-    type: "FRAME", name: "btn/primary",
-    width: 120, height: 40, fill: "#3B82F6", cornerRadius: 10,
+    type: "FRAME", name: "btn/primary", width: 120, height: 40, fill: "#3B82F6", cornerRadius: 10,
     layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER"
   });
   await figma.create({ type: "TEXT", parentId: btnFrame.id, content: "Button", fontSize: 14, fontWeight: "SemiBold", fill: "#FFFFFF" });
-  await figma.applyVariable({ nodeId: btnFrame.id, field: "fill", variableId: varMap["accent"] });
   var comp = await figma.createComponent({ nodeId: btnFrame.id, name: "btn/primary" });
-  // comp.id is now a reusable component
 }
 
-// 3. Use instances everywhere (changes to component → all instances update)
 await figma.instantiate({ componentName: "btn/primary", parentId: screen.id, x: 100, y: 200 });
-await figma.instantiate({ componentName: "btn/primary", parentId: screen.id, x: 300, y: 200 });
 \`\`\`
 
-**Must create as Components:** buttons, badges (LONG/SHORT/status), nav items, stat cards, table headers, pagination.
-**Must use Variables:** ALL colors, ALL spacing, ALL border radius.
-
 ### Rule 1 — Design Library Frame
-Before drawing any new design, ALWAYS:
-1. Run \`setupDesignTokens\` (Rule 0) to bootstrap variables
-2. Call \`figma.get_page_nodes()\` to check if "🎨 Design Library" frame exists
-3. If not → \`figma.ensure_library()\` to create visual reference
-4. The Design Library frame is a **visual reference only** — actual tokens live in Figma Variables
-5. When adding new colors → add to \`setupDesignTokens\` colors param AND to library frame
+Before drawing any new design:
+1. Run \`setupDesignTokens\` (Rule 0)
+2. Call \`figma.get_page_nodes()\` — check if "🎨 Design Library" exists
+3. If not → \`figma.ensure_library()\`
+4. Library is visual reference only — actual tokens live in Figma Variables
 
 ### Rule 2 — Library Frame Structure
-The "🎨 Design Library" frame lives at x: -2000, y: 0 (off-canvas, never on-screen).
-It contains labeled sections:
-- **Colors** — rectangles named "color/{name}" with the hex fill (visual reference)
-- **Text Styles** — text nodes named "text/{role}" (e.g. text/heading-xl, text/body-sm)
-- **Components** — component instances showing all reusable elements
-- **Variables** — the REAL tokens live in Figma Variables panel, NOT in this frame
+"🎨 Design Library" lives at x: -2000, y: 0 (off-canvas).
+Contains: Colors, Text Styles, Components sections (visual reference).
 
 ### Rule 3 — Read selection when user refers to a frame
 When user says "this frame", "the selected one", "bạn thấy không", "cái đang chọn":
-→ Immediately call figma_read with operation "get_selection" to read what the user has selected in Figma.
-Never assume which frame the user means — always read it first.
+→ Immediately call \`figma_read { operation: "get_selection" }\`
 
 ### Rule 4 — Naming convention
-- Frame names: PascalCase (e.g. "Trading Dashboard", "Signal Card")
-- Component names: kebab-case with type prefix (e.g. "btn/primary-lg", "badge/success")
-- Color names: descriptive (e.g. "color/bg-surface", "color/accent-purple", "color/positive-green")
+- Frames: PascalCase ("Trading Dashboard", "Signal Card")
+- Components: kebab-case with type prefix ("btn/primary-lg", "badge/success")
+- Colors: "color/{name}" ("color/bg-surface", "color/accent-purple")
 
-### Rule 5 — Visual QA after every design (self-check loop)
-After finishing any design section, perform a self-QA pass:
-1. Call \`figma_read\` with \`operation: "screenshot"\` on the root frame (scale: 0.4)
-2. The base64 PNG is returned — Claude views it directly as an image
-3. Analyze visually: check for overlapping elements, misaligned nodes, text overflow, off-canvas items
-4. Cross-check coordinates via \`get_page_nodes\` — compare x/y/width/height of each node
-5. If overlap found → call \`figma.modify({ id, x, y, width, height })\` to fix
-6. Re-screenshot to confirm — repeat until clean
-This loop runs automatically after every major draw step.
+### Rule 5 — Visual QA after every design
+1. Call \`figma_read { operation: "screenshot" }\` on root frame (scale: 0.4)
+2. Analyze: check overlaps, misalignment, text overflow
+3. Cross-check via \`get_page_nodes\` — compare x/y/width/height
+4. Fix → re-screenshot → repeat until clean
 
 ### Rule 6 — Layer Order (CRITICAL)
-In Figma, the LAST child drawn renders ON TOP. When building screens:
-1. **Draw background/hero image FIRST** (bottom layer)
-2. Then overlays, content, buttons on top
-3. **NEVER** add a full-size image after other elements — it covers everything
-
+Last child drawn renders ON TOP.
 \`\`\`
-CORRECT:  image → overlay → back btn → title → content
-WRONG:    back btn → title → content → image (image covers all!)
+CORRECT:  background → overlay → back btn → title → content
+WRONG:    back btn → title → content → background  ← background covers all!
 \`\`\`
 
 ### Rule 7 — TEXT vs BACKGROUND COLOR (CRITICAL)
-**NEVER** create a container where fill color equals text color inside it. Text will be invisible.
+NEVER same color for container fill and inner text — text will be invisible.
 
-**Pattern to AVOID:**
-\`\`\`
-frame(fill: "#6C5CE7") → text(fill: "#6C5CE7")  ← INVISIBLE!
-\`\`\`
-
-**Correct patterns for tinted/accent containers:**
-
-| Style | Container | Text | When to use |
-|-------|-----------|------|-------------|
-| Filled active | \`fill: "#6C5CE7"\` | \`fill: "#FFFFFF"\` | Active tabs, primary buttons |
-| Outlined accent | \`fill: "#FFFFFF", stroke: "#6C5CE7"\` | \`fill: "#6C5CE7"\` | Filter pills, level badges |
-| Ghost/subtle | \`fill: "#F5F6FA"\` | \`fill: "#1E3150"\` | Inactive tabs, secondary |
-| Tinted (safe) | \`fill: "#FFFFFF", stroke: color\` | \`fill: color\` | Tags, badges with border |
-
-**Rule: If container and text need the same accent color, use white bg + colored border + colored text.**
+| Style | Container | Text |
+|-------|-----------|------|
+| Filled active | \`fill: "#6C5CE7"\` | \`fill: "#FFFFFF"\` |
+| Outlined accent | \`fill: "#FFFFFF", stroke: "#6C5CE7"\` | \`fill: "#6C5CE7"\` |
+| Ghost/subtle | \`fill: "#F5F6FA"\` | \`fill: "#1E3150"\` |
 
 ### Rule 8 — Container Height Must Fit Content
-When creating auto-layout containers (cards, banners, panels):
-- Set height **generously** to fit all children with padding + spacing
-- If unsure, add 20-30px buffer — too tall is better than content being clipped
-- After creating, verify with \`get_design\` or \`screenshot\` that no content overflows
-- Formula: height = paddingTop + paddingBottom + (childCount * avgChildHeight) + ((childCount-1) * itemSpacing)
+- Set height generously — too tall is better than clipped
+- Formula: height = paddingTop + paddingBottom + (childCount × avgChildHeight) + ((childCount-1) × itemSpacing)
+- Use \`primaryAxisSizingMode: "AUTO"\` when possible
 
-### Rule 9 — NO EMOJI AS ICONS (CRITICAL — NON-NEGOTIABLE)
-**NEVER** use emoji characters (🔔 📋 👤 🌐 🔒 etc.) as icons in designs. Emoji look unprofessional and inconsistent across platforms.
+### Rule 9 — NO EMOJI AS ICONS (NON-NEGOTIABLE)
+NEVER use emoji (🔔 📋 👤) as icons. Always use \`figma.loadIcon()\` or \`figma.loadIconIn()\`.
 
-**ALWAYS use SVG icons** from the icon library via \`figma.loadIcon()\` or \`figma.loadIconIn()\`:
 \`\`\`js
-// WRONG — unprofessional emoji
+// WRONG
 await figma.create({ type: "TEXT", content: "🔔", fontSize: 16 });
 
-// CORRECT — proper SVG icon from library
-await figma.loadIcon("bell", { parentId: iconBg.id, size: 18, fill: "#0e7c3a" });
-
-// CORRECT — icon inside colored circle
-await figma.loadIconIn("bell", { parentId: row.id, containerSize: 36, fill: "#0e7c3a", bgOpacity: 0.1 });
+// CORRECT
+await figma.loadIcon("notifications", { parentId: row.id, size: 18, fill: "#0e7c3a" });
+await figma.loadIconIn("notifications", { parentId: row.id, containerSize: 36, fill: "#0e7c3a", bgOpacity: 0.1 });
 \`\`\`
-
-**This rule applies to ALL icons:** navigation, menu items, buttons, badges, status indicators.
-Use \`figma.loadIcon()\` for bare icons, \`figma.loadIconIn()\` for icons inside circle backgrounds.
-
-### Rule 10 — Layout Quality Standards (MANDATORY for professional design)
-Every design must meet these quality standards:
-
-**Padding & Spacing:**
-- Cards: minimum 16px padding on all sides, 20px recommended
-- List items: minimum 12px vertical padding, 16-20px horizontal
-- Buttons: minimum 12px vertical, 24px horizontal padding
-- Between sections: minimum 16px gap, 20-24px recommended
-- Never place elements flush against container edges
-
-**Text Centering & Alignment:**
-- Button text: ALWAYS centered both horizontally and vertically (use auto-layout CENTER/CENTER)
-- Card titles: left-aligned with consistent left padding
-- Badges/pills: text ALWAYS centered inside (use auto-layout)
-- Numbers/stats: center-aligned within their containers
-
-**Text Wrapping & Overflow (CRITICAL for mobile UI):**
-- **Auto-detect**: plugin now defaults to \`textAutoResize: "HEIGHT"\` when width is set → text wraps automatically
-- Long text / descriptions: ALWAYS set \`width\` on text node → text wraps within that width
-- Single-line labels (no width set): defaults to \`"WIDTH_AND_HEIGHT"\` (auto-size, no wrap)
-- Override with explicit \`textAutoResize\`: \`"HEIGHT"\` (fixed width, auto height), \`"NONE"\` (fixed both), \`"WIDTH_AND_HEIGHT"\` (hug)
-- Truncation: if text may overflow, ensure container has \`clipsContent: true\`
-- Multi-line text: use appropriate \`lineHeight\` (1.4-1.6x fontSize)
-- **Mobile rule**: paragraphs, descriptions, chat messages MUST have \`width: parentWidth - paddingLeft - paddingRight\`
-
-**Borders & Strokes:**
-- Card borders: use subtle \`stroke\` color (e.g. "#E0E0E0" or "#EEEEEE"), \`strokeWeight: 1\`
-- Dividers between list items: use LINE type, full width, \`strokeWeight: 1\`, color "#EEEEEE"
-- Active/selected states: use colored border (e.g. \`stroke: "#0e7c3a", strokeWeight: 2\`)
-- Input fields: \`stroke: "#B5B5B5", strokeWeight: 1\`, focused: \`stroke: "#0e7c3a", strokeWeight: 2\`
-
-**Shadows & Elevation:**
-- Cards: use subtle shadow via slightly darker background or offset technique
-- For elevated cards, create a shadow rectangle behind the card:
-\`\`\`js
-// Shadow layer (draw BEFORE the card — layer order rule)
-await figma.create({
-  type: "RECTANGLE", name: "Card Shadow",
-  parentId: root.id, x: cardX + 2, y: cardY + 4,
-  width: cardWidth, height: cardHeight,
-  fill: "#000000", cornerRadius: cardRadius,
-  opacity: 0.08,
-});
-// Then draw the actual card on top
-await figma.create({
-  type: "FRAME", name: "Card",
-  parentId: root.id, x: cardX, y: cardY,
-  width: cardWidth, height: cardHeight,
-  fill: "#FFFFFF", cornerRadius: cardRadius,
-});
-\`\`\`
-
-**Corner Radius Consistency:**
-- Cards: 16-20px (use one value consistently across all cards)
-- Buttons: 12-16px
-- Input fields: 12px
-- Badges/pills: height/2 (fully rounded)
-- Avatar circles: width/2 (perfect circle)
-- Bottom nav: 0 (flush with screen edge)
-
-### Rule 11 — Centered Profile Layouts (CRITICAL for detail/profile screens)
-When creating a profile/detail screen with avatar + name + subtitle stacked vertically:
-
-**Text MUST be center-aligned relative to the full frame width:**
-\`\`\`js
-// CORRECT: use textAlign "CENTER" with full-width text
-await figma.create({
-  type: "TEXT", parentId: rootId,
-  x: 0, y: 202, width: frameWidth,  // FULL width of parent
-  content: "Phạm Văn An",
-  fontSize: 22, fontWeight: "Bold", fill: TEXT1,
-  textAlign: "CENTER",              // CENTER aligned
-});
-\`\`\`
-**WRONG:** Using \`x: 120\` with auto-width text — this won't center properly.
-
-**For centered badge/status below name:** Calculate \`x = (frameWidth - badgeWidth) / 2\`
-
-### Rule 12 — Key-Value Info Rows Must Have Spacing (CRITICAL)
-When displaying label:value pairs (e.g. "Họ và tên: Phạm Văn An"):
-
-**NEVER place label and value as a single text string.** Always use separate text nodes in a horizontal auto-layout:
-\`\`\`js
-// CORRECT: separate text nodes with auto-layout spacing
-var row = await figma.create({
-  type: "FRAME", parentId: parentId,
-  width: 305, height: 36,  // height 36px minimum for readable rows
-  fill: CARD, fillOpacity: 0,
-  layoutMode: "HORIZONTAL",
-  primaryAxisAlignItems: "MIN",
-  counterAxisAlignItems: "CENTER",
-  itemSpacing: 8,           // MINIMUM 8px gap between label and value
-  layoutAlign: "STRETCH",
-});
-// Label (fixed width for alignment)
-await figma.create({
-  type: "TEXT", parentId: row.id,
-  content: "Họ và tên:", fontSize: 13,
-  fontWeight: "Regular", fill: TEXT3,
-  width: 110,              // Fixed width so values align vertically
-});
-// Value (flexible)
-await figma.create({
-  type: "TEXT", parentId: row.id,
-  content: "Phạm Văn An", fontSize: 13,
-  fontWeight: "Medium", fill: TEXT1,
-  layoutGrow: 1,
-});
-\`\`\`
-**Row height rules:**
-- Simple key-value: minimum 36px height (not 32px)
-- With icon prefix: minimum 40px height
-- Between rows: use divider (1px) OR minimum 4px itemSpacing in parent
-
-### Rule 13 — Container Height Must Accommodate All Children (CRITICAL)
-**Always calculate container height BEFORE creating:**
-\`\`\`
-containerHeight = paddingTop + paddingBottom
-                + (numberOfChildren × childHeight)
-                + ((numberOfChildren - 1) × itemSpacing)
-                + dividerCount × 1  // if using dividers
-\`\`\`
-**Use \`primaryAxisSizingMode: "AUTO"\` when possible** to let the container grow:
-\`\`\`js
-var card = await figma.create({
-  type: "FRAME",
-  width: 353,
-  height: 500,  // generous initial height
-  primaryAxisSizingMode: "AUTO",  // auto-grow to fit content
-  layoutMode: "VERTICAL",
-  paddingTop: 24, paddingBottom: 24,
-  itemSpacing: 12,
-});
-\`\`\`
-**After drawing, ALWAYS verify** with screenshot that no content is clipped or overflowing.
-If content is clipped → increase height or use \`primaryAxisSizingMode: "AUTO"\`.
-
-### Rule 14 — Score/Match Result Cards Must Have Inner Padding (MANDATORY)
-When displaying match results (Team A vs Team B with score):
-\`\`\`js
-// CORRECT: teams row with proper padding
-var scoreRow = await figma.create({
-  type: "FRAME",
-  width: 317, height: 32,
-  layoutMode: "HORIZONTAL",
-  primaryAxisAlignItems: "SPACE_BETWEEN",
-  counterAxisAlignItems: "CENTER",
-  paddingLeft: 8,   // inner padding so text doesn't touch edges
-  paddingRight: 8,
-  layoutAlign: "STRETCH",
-});
-\`\`\`
-**WRONG:** No paddingLeft/Right on score rows — team names touch the card edges.
-
-### Rule 15 — Button Variants System (MANDATORY)
-Every button must use one of these variant patterns. Never create random button styles.
-
-| Variant | Fill | Text | Border | When to use |
-|---------|------|------|--------|-------------|
-| **Solid** | brand color | white | none | Primary CTA |
-| **Flat** | brand color 10% opacity | brand color | none | Secondary actions |
-| **Bordered** | transparent | brand color | 1px brand | Tertiary, filters |
-| **Ghost** | transparent | brand color | none | Minimal, inline |
-| **Light** | #F5F6FA | #1E3150 | none | Neutral, cancel |
-| **Shadow** | brand color | white | none + shadow | Elevated CTA |
-
-**Size scale (apply to ALL interactive elements):**
-| Size | Height | paddingX | fontSize | cornerRadius |
-|------|--------|----------|----------|--------------|
-| sm | 32px | 12px | 12px | 8px |
-| md | 40px | 16px | 14px | 12px |
-| lg | 48px | 24px | 16px | 14px |
-
-### Rule 16 — Consistent Spacing Scale (MANDATORY)
-Use ONLY these spacing values. Never use random pixel values.
-\`\`\`
-4px   — tight: icon-to-text gap, badge padding
-8px   — compact: between related items, small card padding
-12px  — default: standard item spacing, input padding
-16px  — comfortable: section padding, card content padding
-20px  — relaxed: between card sections
-24px  — spacious: page padding, major section gaps
-32px  — large: between major page sections
-48px  — hero: top/bottom of hero sections, major breaks
-\`\`\`
-
-### Rule 17 — Border Radius Consistency (MANDATORY)
-Match radius to element size. NEVER use random radius values.
-| Element type | cornerRadius | Example |
-|-------------|-------------|---------|
-| Small chips/tags | 4-6px | Status badge, tag pill |
-| Input fields | 8px | Text input, select |
-| Buttons | 8-12px | All button variants |
-| Cards | 12-16px | Content cards, modals |
-| Large panels | 16-24px | Side panels, bottom sheets |
-| Full round | 9999px | Avatar, circular icon bg, pills |
-
-**Nested radius rule:** Inner element radius = outer radius - padding.
-Example: Card radius 16px, padding 8px → inner element radius = 8px.
-
-### Rule 18 — Shadow/Elevation System (MANDATORY)
-Use consistent shadows for depth hierarchy. Never mix random shadow values.
-| Level | Effect | Usage |
-|-------|--------|-------|
-| **flat** | No shadow | Inline elements, flat cards |
-| **sm** | 0 1px 2px rgba(0,0,0,0.05) | Subtle lift: inputs, chips |
-| **md** | 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06) | Cards, dropdowns |
-| **lg** | 0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05) | Modals, popovers, floating |
-
-For dark themes: use border (1px #2A2B45) instead of shadows — shadows are invisible on dark bg.
-
-### Rule 19 — Semantic Color Usage (MANDATORY)
-Colors must carry meaning. Never pick colors randomly.
-| Role | Light theme | Dark theme | When to use |
-|------|------------|------------|-------------|
-| **Primary** | #006FEE | #338EF7 | Main CTA, active states, links |
-| **Success** | #17C964 | #45D483 | Confirmations, positive values, online |
-| **Warning** | #F5A524 | #F7B750 | Caution, pending, attention |
-| **Danger** | #F31260 | #F54180 | Errors, destructive actions, offline |
-| **Default** | #71717A | #A1A1AA | Neutral, secondary text, disabled |
-
-**Foreground contrast rule:** Every semantic color must pair with white text (#FFFFFF) for WCAG AA (4.5:1 minimum contrast ratio).
-
-### Rule 20 — Component State Indicators (MANDATORY)
-All interactive elements must visually indicate their state:
-| State | Visual change | How to implement |
-|-------|--------------|-----------------|
-| **Default** | Base appearance | Normal fills/colors |
-| **Hover** | Slight darken or lighten (opacity 0.8-0.9) | Fill opacity change |
-| **Pressed** | Scale down slightly + darken | Smaller size in Figma |
-| **Focused** | 2px ring around element | Stroke with focus color |
-| **Disabled** | 50% opacity, no interaction | opacity: 0.5 |
-| **Loading** | Spinner replaces content/icon | Spinner SVG inside |
-
-When designing in Figma: create one frame per state for interactive components.
 
 ---
 
 ## Design Library Tokens (defaults)
 
 ### Colors
-| Token               | Hex       | Usage                    |
-|---------------------|-----------|--------------------------|
-| bg-base             | #0F1117   | Page/canvas background   |
-| bg-surface          | #191C24   | Cards, side panels       |
-| bg-elevated         | #1E2233   | Dividers, hover states   |
-| accent-purple       | #6366F1   | Primary CTA, active nav  |
-| positive-green      | #00C896   | Profit, success, LONG    |
-| negative-red        | #FF4560   | Loss, error, SHORT       |
-| text-primary        | #E8ECF4   | Headings, values         |
-| text-secondary      | #6B7280   | Labels, captions         |
-| border              | #1E2233   | Separators               |
+| Token | Hex | Usage |
+|-------|-----|-------|
+| bg-base | #0F1117 | Page background |
+| bg-surface | #191C24 | Cards, panels |
+| bg-elevated | #1E2233 | Dividers, hover |
+| accent-purple | #6366F1 | Primary CTA |
+| positive-green | #00C896 | Success, profit |
+| negative-red | #FF4560 | Error, loss |
+| text-primary | #E8ECF4 | Headings |
+| text-secondary | #6B7280 | Labels |
+| border | #1E2233 | Separators |
 
 ### Text Styles
-| Token        | Size | Weight   |
-|--------------|------|----------|
-| heading-2xl  | 32px | Bold     |
-| heading-xl   | 24px | Bold     |
-| heading-lg   | 20px | Bold     |
-| heading-md   | 16px | SemiBold |
-| body-md      | 14px | Regular  |
-| body-sm      | 12px | Regular  |
-| caption      | 11px | Regular  |
-| label        | 11px | Medium   |
+| Token | Size | Weight |
+|-------|------|--------|
+| heading-2xl | 32px | Bold |
+| heading-xl | 24px | Bold |
+| heading-lg | 20px | Bold |
+| heading-md | 16px | SemiBold |
+| body-md | 14px | Regular |
+| body-sm | 12px | Regular |
+| caption | 11px | Regular |
+| label | 11px | Medium |
 
 ---
 
-## ensure_library — Bootstrap the Design Library frame
+## Figma Plugin Sandbox Limitations
+- No optional chaining \`?.\` → use \`x ? x.y : null\`
+- No nullish coalescing \`??\` → use \`x !== undefined ? x : default\`
+- No object spread \`{...obj}\` → use \`Object.assign({}, obj)\`
+- No \`require\`, \`fetch\`, \`setTimeout\`, \`process\`, \`fs\`
+- All \`figma.*\` calls return Promises — always use \`await\`
 
+---
+
+> Load more: \`figma_docs { section: "layout" }\` | \`figma_docs { section: "api" }\` | \`figma_docs { section: "tokens" }\` | \`figma_docs { section: "icons" }\`
+`;
+
+const SECTION_RULES = `
+# figma-ui-mcp — Design Rules 10–20 + Component Reuse
+
+---
+
+### Rule 10 — Layout Quality Standards
+
+**Padding & Spacing:**
+- Cards: min 16px all sides (20px recommended)
+- List items: min 12px vertical, 16-20px horizontal
+- Buttons: min 12px vertical, 24px horizontal
+- Never flush against container edges
+
+**Text:**
+- Button text: ALWAYS centered (auto-layout CENTER/CENTER)
+- Long text: ALWAYS set \`width\` → wraps automatically (\`textAutoResize: "HEIGHT"\`)
+- Multi-line: \`lineHeight\` = 1.4–1.6× fontSize
+
+**Borders:** Card borders: \`stroke: "#E0E0E0", strokeWeight: 1\`
+
+**Shadow for elevated cards:**
 \`\`\`js
-// Creates "🎨 Design Library" frame if it doesn't exist.
-// Returns { id, existed } — use .id to add components to it.
-const lib = await figma.ensure_library();
-\`\`\`
-
-## get_library_tokens — Read all tokens from the library
-
-\`\`\`js
-// Returns { colors: [{name, hex}], textStyles: [{name, fontSize, fontWeight, fill}] }
-const tokens = await figma.get_library_tokens();
-\`\`\`
-
-## setupDesignTokens — Bootstrap complete token system (idempotent, v2.5.4+)
-
-Creates a variable collection + all tokens in 1 call. Idempotent: existing variables get values updated, new ones are created. Supports multi-mode (Light/Dark, Compact/Comfortable/Large) out of the box.
-
-\`\`\`js
-// ── Simple setup: colors + spacing + typography in one call ─────────────
-const result = await figma.setupDesignTokens({
-  collectionName: "Design Tokens",
-
-  // COLOR variables
-  colors: {
-    "accent":      "#3B82F6",
-    "bg-base":     "#08090E",
-    "text-primary":"#F0F2F5",
-    "positive":    "#00DC82",
-  },
-
-  // FLOAT variables (spacing, radius, strokeWeight, etc.)
-  numbers: {
-    "spacing-xs": 4, "spacing-sm": 8, "spacing-md": 16, "spacing-lg": 24,
-    "radius-sm": 8, "radius-md": 12, "radius-lg": 16,
-  },
-
-  // FLOAT variables for typography (v2.5.4+)
-  fontSizes: {
-    "text-xs": 11, "text-sm": 12, "text-body": 14,
-    "text-heading-md": 16, "text-heading-lg": 20, "text-heading-xl": 24, "text-heading-2xl": 32,
-  },
-
-  // STRING variables for fonts (v2.5.4+)
-  fonts: {
-    "font-primary": "Inter",
-    "font-display": "Playfair Display",
-    "font-mono":    "JetBrains Mono",
-  },
-
-  // Text styles that REFERENCE the variables above (v2.5.4+)
-  // Any value in {curly-braces} is bound to a variable by name.
-  // Literal values (numbers, strings) become fixed values.
-  textStyles: {
-    "text/heading-2xl": { fontFamily: "{font-display}", fontWeight: "Bold",
-                          fontSize: "{text-heading-2xl}", lineHeight: 40, letterSpacing: -0.6 },
-    "text/heading-xl":  { fontFamily: "{font-primary}",  fontWeight: "Bold",
-                          fontSize: "{text-heading-xl}", lineHeight: 32, letterSpacing: -0.4 },
-    "text/heading-lg":  { fontFamily: "{font-primary}",  fontWeight: "SemiBold",
-                          fontSize: "{text-heading-lg}", lineHeight: 28 },
-    "text/body":        { fontFamily: "{font-primary}",  fontWeight: "Regular",
-                          fontSize: "{text-body}",        lineHeight: 20 },
-    "text/caption":     { fontFamily: "{font-primary}",  fontWeight: "Regular",
-                          fontSize: "{text-xs}",          lineHeight: 16 },
-  }
-});
-// → { collectionId, collectionName, modes: [...], created: [{name, id, type}],
-//     updated: [...], textStyles: [{name, id, created, fontFamily, fontStyle}],
-//     totalVariables: N }
-
-
-// ── Multi-mode: Light + Dark (one call) ─────────────────────────────────
-await figma.setupDesignTokens({
-  collectionName: "Design Tokens",
-  modes: ["light", "dark"],
-  colors: {
-    "bg-base":      { light: "#FFFFFF", dark: "#0F1117" },
-    "text-primary": { light: "#111827", dark: "#F9FAFB" },
-    "accent":       { light: "#3B82F6", dark: "#60A5FA" },
-  }
-});
-
-
-// ── Multi-mode typography: Compact / Comfortable / Large ────────────────
-await figma.setupDesignTokens({
-  collectionName: "Typography",
-  modes: ["compact", "comfortable", "large"],
-  fontSizes: {
-    "text-body":       { compact: 12, comfortable: 14, large: 16 },
-    "text-heading-xl": { compact: 22, comfortable: 24, large: 28 },
-  }
-});
-// Switch frame to a mode:
-// await figma.setFrameVariableMode({ nodeId, collectionId, modeName: "large" })
-\`\`\`
-
-## applyTextStyle — Apply a text style by name (v2.5.4+)
-
-Shortcut to bind a TEXT node to a local text style. Much safer than building text properties inline — uses the style's font, size, line height, letter spacing, and any bound variables automatically.
-
-\`\`\`js
-// Create text then apply pre-defined style
-var title = await figma.create({ type: "TEXT", content: "Dashboard", parentId: card.id });
-await figma.applyTextStyle({ nodeId: title.id, styleName: "text/heading-xl" });
-
-// By styleId (faster, no lookup)
-await figma.applyTextStyle({ nodeId: title.id, styleId: "S:1:23" });
-// → { nodeId, nodeName, styleId, styleName }
-\`\`\`
-
-**Why use applyTextStyle instead of inline props:**
-- Font changes propagate: update "font-primary" STRING variable → every text using the style updates
-- Mode switches work: pin frame to "compact" mode → all text shrinks automatically
-- Consistent across screens: 1 style definition, infinite instances
-- AI-friendly: 1 line vs 5 inline props
-
-## modifyVariable — Change variable value (propagates to all bound nodes)
-
-\`\`\`js
-// By name (searches all collections)
-await figma.modifyVariable({ variableName: "accent", value: "#0EA5E9" });
-
-// By ID (faster, no search)
-await figma.modifyVariable({ variableId: "VariableID:57:671", value: "#FF6B35" });
-
-// Works for all types: COLOR (hex), FLOAT (number), STRING, BOOLEAN
-await figma.modifyVariable({ variableName: "spacing-md", value: 20 });
-// → { id, name, resolvedType, newValue }
-\`\`\`
-
-## applyVariable — Bind a variable to a node property
-
-\`\`\`js
-// Bind by variableId (fast, preferred)
-await figma.applyVariable({ nodeId: "49:115", field: "fill", variableId: varMap["accent"] });
-
-// Bind by variable name (slower, searches all collections)
-await figma.applyVariable({ nodeId: "49:115", field: "fill", variableName: "accent" });
-// → { nodeId, nodeName, field, variableId, variableName }
-\`\`\`
-
-**Supported fields — full list:**
-
-| Field | Variable type | Node type | Notes |
-|-------|--------------|-----------|-------|
-| \`fill\` / \`fills\` | COLOR | any | Binds to first solid paint color |
-| \`stroke\` / \`strokes\` | COLOR | any | Binds to first solid stroke color |
-| \`opacity\` | FLOAT | any | 0.0 – 1.0 |
-| \`width\` | FLOAT | any | |
-| \`height\` | FLOAT | any | |
-| \`cornerRadius\` | FLOAT | FRAME/RECT | Alias → topLeftRadius |
-| \`topLeftRadius\` | FLOAT | FRAME/RECT | Individual corner |
-| \`topRightRadius\` | FLOAT | FRAME/RECT | Individual corner |
-| \`bottomLeftRadius\` | FLOAT | FRAME/RECT | Individual corner |
-| \`bottomRightRadius\` | FLOAT | FRAME/RECT | Individual corner |
-| \`strokeWeight\` | FLOAT | any | |
-| \`itemSpacing\` | FLOAT | auto-layout frame | Gap between children |
-| \`counterAxisSpacing\` | FLOAT | auto-layout (wrap) | Gap on cross axis |
-| \`paddingTop\` | FLOAT | auto-layout frame | |
-| \`paddingBottom\` | FLOAT | auto-layout frame | |
-| \`paddingLeft\` | FLOAT | auto-layout frame | |
-| \`paddingRight\` | FLOAT | auto-layout frame | |
-| \`padding\` | FLOAT | auto-layout frame | Alias → paddingTop |
-| \`fontSize\` | FLOAT | TEXT | |
-| \`letterSpacing\` | FLOAT | TEXT | |
-| \`lineHeight\` | FLOAT | TEXT | |
-| \`paragraphSpacing\` | FLOAT | TEXT | |
-| \`paragraphIndent\` | FLOAT | TEXT | |
-| \`fontFamily\` / \`fontName\` | STRING | TEXT | v2.5.4+ — swap font via STRING variable |
-| \`fontStyle\` / \`fontWeight\` | STRING | TEXT | v2.5.4+ — "Regular", "Bold", etc. |
-| \`characters\` / \`text\` | STRING | TEXT | v2.5.4+ — bind text content to variable |
-| \`visible\` | BOOLEAN | any | Show/hide via variable |
-
-\`\`\`js
-// Bind spacing tokens to an auto-layout frame
-await figma.applyVariable({ nodeId: card.id, field: "paddingTop",    variableId: varMap["spacing-lg"] });
-await figma.applyVariable({ nodeId: card.id, field: "paddingBottom", variableId: varMap["spacing-lg"] });
-await figma.applyVariable({ nodeId: card.id, field: "paddingLeft",   variableId: varMap["spacing-md"] });
-await figma.applyVariable({ nodeId: card.id, field: "paddingRight",  variableId: varMap["spacing-md"] });
-await figma.applyVariable({ nodeId: card.id, field: "itemSpacing",   variableId: varMap["spacing-sm"] });
-
-// Bind corner radius token
-await figma.applyVariable({ nodeId: btn.id, field: "cornerRadius", variableId: varMap["radius-md"] });
-
-// Bind font size token (TEXT nodes only)
-await figma.applyVariable({ nodeId: title.id, field: "fontSize", variableId: varMap["font-size-heading"] });
-
-// Bind visibility to boolean variable (useful for toggling states)
-await figma.applyVariable({ nodeId: badge.id, field: "visible", variableId: varMap["show-badge"] });
-
-// ── Typography bindings (v2.5.4+): STRING variables for font name/weight ──
-// Swap entire font stack by changing 1 variable — no per-node updates needed
-await figma.applyVariable({ nodeId: title.id, field: "fontFamily", variableName: "font-primary" });
-await figma.applyVariable({ nodeId: title.id, field: "fontWeight", variableName: "font-weight-bold" });
-// Bind text content — useful for localizable strings
-await figma.applyVariable({ nodeId: cta.id, field: "characters", variableName: "cta-label" });
-\`\`\`
-
-## Effects — Drop Shadow, Inner Shadow, Blur (v2.5.2+)
-
-Pass an \`effects\` array to \`create\` or \`modify\`. Each effect is an object:
-
-\`\`\`js
-// Drop shadow on a card
-await figma.create({
-  type: "FRAME", name: "Card", width: 320, height: 200, fill: "#FFFFFF",
-  effects: [{
-    type: "DROP_SHADOW",
-    color: "#00000026",      // 15% black — alpha auto-extracted from 8-digit hex
-    offset: { x: 0, y: 8 },
-    radius: 24,              // blur radius
-    spread: 0,
-  }]
-});
-
-// Multiple effects (stacked, bottom-to-top)
-await figma.modify({ id: card.id, effects: [
-  { type: "DROP_SHADOW", color: "#00000020", offset: {x:0,y:2}, radius: 8 },
-  { type: "DROP_SHADOW", color: "#00000010", offset: {x:0,y:16}, radius: 48 },
-]});
-
-// Layer blur (blurs the node itself)
-effects: [{ type: "LAYER_BLUR", radius: 12 }]
-
-// Background blur (glassmorphism — blurs what's behind the node)
-// IMPORTANT: set fill with alpha < 1 so the blur shows through
-effects: [{ type: "BACKGROUND_BLUR", radius: 20 }]
-// fill: "#FFFFFF40" (25% white) + BACKGROUND_BLUR → glass effect
-
-// Inner shadow (for pressed buttons, etched edges)
-effects: [{ type: "INNER_SHADOW", color: "#00000030", offset: {x:0,y:2}, radius: 4 }]
-
-// Clear all effects
-await figma.modify({ id: node, effects: [] });
-\`\`\`
-
-Shorthand spec:
-- \`color\` accepts hex (alpha auto-extracted from 8-digit \`#RRGGBBAA\` or \`rgba()\`)
-- \`offset: {x,y}\` or \`offsetX/offsetY\` shorthand
-- \`radius\` (alias: \`blur\`) — default 4
-- \`spread\` — default 0 (DROP/INNER shadow only)
-- \`visible\` — default true
-- \`blendMode\` — default "NORMAL"
-
-## Gradient Fills — LINEAR / RADIAL (v2.5.2+)
-
-Pass a gradient spec to \`fill\` on any shape. Alpha is auto-extracted from hex stops.
-
-\`\`\`js
-// Aurora linear gradient (135°)
-await figma.create({
-  type: "FRAME", name: "Hero", width: 800, height: 400,
-  fill: {
-    type: "LINEAR_GRADIENT",
-    angle: 135,
-    stops: [
-      { pos: 0, color: "#7C3AED" },
-      { pos: 0.5, color: "#EC489980" },  // alpha from hex
-      { pos: 1, color: "#F59E0B" },
-    ]
-  }
-});
-
-// Radial gradient centered
-await figma.create({
-  type: "ELLIPSE", width: 400, height: 400,
-  fill: {
-    type: "RADIAL_GRADIENT",
-    stops: [{ pos: 0, color: "#FFFFFF" }, { pos: 1, color: "#00000000" }]
-  }
-});
-
-// Modify existing node's fill to gradient
-await figma.modify({ id: card.id, fill: {
-  type: "LINEAR_GRADIENT", angle: 90,
-  stops: [{ pos: 0, color: "#3B82F6" }, { pos: 1, color: "#1D4ED8" }]
-}});
-\`\`\`
-
-**Angle convention:** 0° = left-to-right, 90° = top-to-bottom, 135° = diagonal ↘.
-
-## Individual Corner Radii (v2.5.2+)
-
-Pass individual corners instead of uniform \`cornerRadius\`:
-
-\`\`\`js
-// Bottom sheet: rounded top, flat bottom
-await figma.create({
-  type: "FRAME", name: "Sheet", width: 375, height: 400,
-  topLeftRadius: 20, topRightRadius: 20,
-  bottomLeftRadius: 0, bottomRightRadius: 0,
-});
-
-// Button group: first child rounds left, last child rounds right
-await figma.modify({ id: firstBtn, topLeftRadius: 8, bottomLeftRadius: 8 });
-await figma.modify({ id: lastBtn,  topRightRadius: 8, bottomRightRadius: 8 });
-
-// Uniform cornerRadius still works (applies to all 4)
-await figma.create({ ..., cornerRadius: 12 });
-\`\`\`
-
-## Hex Alpha Shorthand (v2.5.2+)
-
-8-digit hex \`#RRGGBBAA\` is now accepted everywhere. Alpha is automatically applied
-as opacity on the fill/stroke paint — you don't need a separate \`fillOpacity\` field.
-
-\`\`\`js
-fill: "#FFFFFF80"   // 50% white — same as fill: "#FFFFFF", fillOpacity: 0.502
-fill: "#6C5CE733"   // 20% accent purple
-stroke: "#00000010" // 6% black border
-\`\`\`
-
-Also accepts:
-- \`rgba(r, g, b, a)\` — e.g. \`rgba(255,255,255,0.3)\`
-- 4-digit shorthand \`#RGBA\` — e.g. \`#fff8\`
-- Explicit \`fillOpacity\` still works and overrides hex alpha when both are given.
-
-## SVG Path Commands — Full Support (v2.5.2+)
-
-VECTOR \`d\` paths now support:
-- **Commas as delimiters** — \`"M 0 0, L 100 100"\` works (spec-compliant, matches Illustrator/Figma export)
-- **Arc command \`A\` / \`a\`** — auto-converted to cubic Bézier segments before Figma ingests them
-
-\`\`\`js
-// Progress ring arc — previously failed at 'A'
-await figma.create({
-  type: "VECTOR", width: 300, height: 300,
-  d: "M 150 7 A 143 143 0 1 1 29.26 226.62",
-  stroke: "#6C5CE7", strokeWeight: 12, strokeCap: "ROUND",
-});
-
-// External path data with commas — now works
-await figma.create({
-  type: "VECTOR", width: 300, height: 150,
-  d: "M 150 7 C 229 7, 293 71, 293 150",
-});
-\`\`\`
-
-If the path fails to parse, the orphan VECTOR node is auto-removed (no more garbage at page root).
-
-## createComponent — Convert frame to reusable component
-
-\`\`\`js
-var comp = await figma.createComponent({ nodeId: "49:200", name: "btn/primary" });
-// → { id, name, key, width, height }
-
-// Instantiate by componentId or componentName:
-await figma.instantiate({ componentId: comp.id, parentId: screen.id, x: 100, y: 200 });
-await figma.instantiate({ componentName: "btn/primary", parentId: screen.id, x: 100, y: 200 });
-
-// Instantiate WITH property overrides — target child layers by name
-// overrides: { "Layer Name": { text, fill, stroke, opacity, visible, fontSize, cornerRadius } }
-await figma.instantiate({
-  componentName: "btn/primary",
-  parentId: screen.id, x: 100, y: 200,
-  overrides: {
-    "Label":      { text: "Sign Up", fill: "#FFFFFF", fontSize: 16 },
-    "Background": { fill: "#6C5CE7", cornerRadius: 8 },
-    "Icon":       { visible: false }
-  }
-});
-// Overrides walk the instance subtree by layer name and apply:
-//   text      → characters (TEXT nodes only, loadFontAsync called automatically)
-//   fill      → fills (hex / rgba / CSS name)
-//   stroke    → strokes
-//   opacity   → opacity (0.0–1.0)
-//   visible   → visible (boolean)
-//   fontSize  → fontSize (TEXT nodes only)
-//   cornerRadius → cornerRadius (FRAME/RECT only)
-\`\`\`
-
-## export_image — Export node as base64 PNG/JPG (for saving to disk)
-
-\`\`\`js
-// Export avatar at 2x scale as PNG
-figma_read({ operation: "export_image", nodeId: "89:209", scale: 2, format: "png" })
-// → { base64: "iVBORw0KGgo...", format: "png", width: 128, height: 128, nodeId: "89:209", sizeBytes: 4521 }
-
-// Save to file: echo "<base64>" | base64 -d > avatar.png
-
-// Export as JPG
-figma_read({ operation: "export_image", nodeId: "89:209", format: "jpg", scale: 1 })
-\`\`\`
-
-**screenshot vs export_image:**
-| | screenshot | export_image |
-|---|-----------|-------------|
-| **Purpose** | Visual preview in chat | Save asset to disk |
-| **Output** | Inline image in Claude Code | base64 text string |
-| **Format** | PNG only | PNG or JPG |
-| **Scale** | default 1x | default 2x |
-| **Use case** | "Show me the frame" | "Extract this avatar/icon/thumbnail" |
-
-## get_node_detail — CSS-like properties for a single node
-
-Query one node by ID or name. Returns CSS-mapped properties without tree traversal.
-Much faster than parsing full \`get_design\` output to find one node.
-
-\`\`\`js
-figma_read({ operation: "get_node_detail", nodeId: "89:393" })
-// → {
-//   id: "89:393", name: "Header", type: "FRAME",
-//   x: 0, y: 0, width: 440, height: 56,
-//   fills: [{ type: "SOLID", color: "#FFFFFF" }],
-//   stroke: "#E7EAF0", strokeWeight: 1, strokeAlign: "INSIDE",
-//   borderRadius: "0px",
-//   opacity: 1,
-//   boxShadow: "0px 1px 3px 0px rgba(0,0,0,0.1)",
-//   css: {
-//     display: "flex", flexDirection: "row",
-//     gap: "8px", alignItems: "center", justifyContent: "space-between",
-//     padding: "8px 16px 8px 16px"
-//   },
-//   childCount: 3,
-//   boundVariables: { fills: "VariableID:57:671" }
-// }
-\`\`\`
-
-**TEXT node returns additional properties:**
-\`\`\`js
-figma_read({ operation: "get_node_detail", nodeId: "89:348" })
-// → {
-//   content: "8 đ 83 token",
-//   color: "#1E3150",
-//   fontSize: "14px", fontFamily: "Inter", fontWeight: "Semi Bold",
-//   lineHeight: "20px", letterSpacing: "-0.2px",
-//   textAlign: "left"
-// }
-\`\`\`
-
-## Mixed Text Segments
-
-TEXT nodes with multiple styles return a \`segments\` array:
-\`\`\`js
-// Input: "8 đ 83 token" where "8 đ" is bold and "83 token" is regular
-// Output in get_design / get_selection:
-{
-  "type": "TEXT",
-  "content": "8 đ 83 token",
-  "mixedStyles": true,
-  "segments": [
-    { "text": "8 đ", "fill": "#1E3150", "fontWeight": "Bold", "fontSize": 14 },
-    { "text": "83 token", "fill": "#8E9AAD", "fontWeight": "Regular", "fontSize": 14 }
-  ]
-}
+// Draw shadow BEFORE card (layer order rule)
+await figma.create({ type: "RECTANGLE", parentId: root.id,
+  x: cardX + 2, y: cardY + 4, width: cardWidth, height: cardHeight,
+  fill: "#000000", cornerRadius: cardRadius, opacity: 0.08 });
+// Then draw card on top
 \`\`\`
 
 ---
 
-## AUTO LAYOUT (PREFERRED for centering — NON-NEGOTIABLE for complex containers)
-
-Use Auto Layout instead of manual x/y math whenever a container has children that need centering.
-
-### Creating an Auto Layout Frame
+### Rule 11 — Centered Profile Layouts
 \`\`\`js
-// Horizontal row: icon + text side by side, vertically centered
-await figma.create({
-  type: "FRAME", name: "Button",
-  parentId: root.id,
-  x: 24, y: 100, width: 392, height: 52,
-  fill: "#6C5CE7", cornerRadius: 12,
-  layoutMode: "HORIZONTAL",           // "HORIZONTAL" | "VERTICAL"
-  primaryAxisAlignItems: "CENTER",     // main axis: "MIN"|"CENTER"|"MAX"|"SPACE_BETWEEN"
-  counterAxisAlignItems: "CENTER",     // cross axis: "MIN"|"CENTER"|"MAX"
-  padding: 16,                        // uniform, or use paddingTop/Bottom/Left/Right
-  itemSpacing: 8,                     // gap between children
-})
-// → Children added to this frame will auto-center!
-\`\`\`
-
-### Common patterns:
-\`\`\`
-// Button with centered text:
-layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER"
-
-// Card with icon left + text right, vertically centered:
-layoutMode: "HORIZONTAL", primaryAxisAlignItems: "MIN", counterAxisAlignItems: "CENTER", paddingLeft: 16, itemSpacing: 12
-
-// Vertical stack (title + subtitle + button):
-// NOTE: counterAxisAlignItems does NOT support "STRETCH" — use "MIN" then set layoutAlign: "STRETCH" on each child
-layoutMode: "VERTICAL", primaryAxisAlignItems: "MIN", counterAxisAlignItems: "MIN", itemSpacing: 8
-// then each child: layoutAlign: "STRETCH"
-
-// Centered icon in a circle/square:
-layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER"
-\`\`\`
-
-### Child properties:
-\`\`\`js
-// Make child fill parent width in vertical layout:
-await figma.create({ ..., layoutAlign: "STRETCH" })
-
-// Make child grow to fill available space:
-await figma.create({ ..., layoutGrow: 1 })
-\`\`\`
-
-### Modify existing frame to auto-layout:
-\`\`\`js
-await figma.modify({ id: frameId, layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER" })
-\`\`\`
-
-### RULE: Always use Auto Layout for:
-- Buttons (text must be centered)
-- Cards with icon + text rows
-- Tab bar items
-- List items
-- Any container where children must be centered
-- Badge pills with text
-
-### FALLBACK: Manual math (only when Auto Layout is inappropriate)
-\`\`\`
-icon_x = container_x + (container_w - icon_size) / 2
-text_x = button_x + (button_w - text_w_estimate) / 2
+// CORRECT: full-width text with CENTER align
+await figma.create({ type: "TEXT", parentId: rootId,
+  x: 0, y: 202, width: frameWidth,   // FULL width of parent
+  content: "Profile Name", fontSize: 22, fontWeight: "Bold",
+  textAlign: "CENTER" });
+// For centered badge: x = (frameWidth - badgeWidth) / 2
 \`\`\`
 
 ---
 
-## BUTTON / INPUT CONSTRUCTION RULE (MANDATORY — prevents text misalignment)
-
-**NEVER use RECTANGLE + TEXT as separate siblings to build a button or input field.**
-This causes text to be manually offset with x/y and NEVER truly centered.
-
-### WRONG pattern (causes misalignment):
+### Rule 12 — Key-Value Info Rows
+NEVER place label+value as one text string. Use separate nodes in horizontal auto-layout:
 \`\`\`js
-// ✗ Rectangle as background + floating TEXT — text centering is fake/manual
-await figma.create({ type: "RECTANGLE", parentId: frame.id, x: 56, y: 808, width: 488, height: 58, fill: "#00C896", cornerRadius: 30 });
-await figma.create({ type: "TEXT", parentId: frame.id, x: 180, y: 827, content: "Capture new idea", fill: "#fff" });
-// ↑ text appears centered only at this exact size — breaks on any resize
-\`\`\`
-
-### CORRECT pattern — FRAME with auto-layout:
-\`\`\`js
-// ✓ FRAME handles fill + centering — text is always truly centered
-var btn = await figma.create({
-  type: "FRAME", name: "BtnCapture", parentId: frame.id,
-  x: 56, y: 808, width: 488, height: 58,
-  fill: "#00C896", cornerRadius: 30,
-  layoutMode: "HORIZONTAL",
-  primaryAxisAlignItems: "CENTER",
-  counterAxisAlignItems: "CENTER",
+var row = await figma.create({
+  type: "FRAME", parentId: parentId, height: 36,
+  layoutMode: "HORIZONTAL", primaryAxisAlignItems: "MIN",
+  counterAxisAlignItems: "CENTER", itemSpacing: 8, layoutAlign: "STRETCH"
 });
-await figma.create({ type: "TEXT", parentId: btn.id, content: "Capture new idea", fill: "#fff", fontSize: 16, fontWeight: "Bold" });
-// ↑ text is mathematically centered — works at any size
+await figma.create({ type: "TEXT", parentId: row.id, content: "Name:", fontSize: 13,
+  fontWeight: "Regular", fill: "#8B8FA3", width: 110 });
+await figma.create({ type: "TEXT", parentId: row.id, content: "John Doe", fontSize: 13,
+  fontWeight: "Medium", fill: "#F0F2F5", layoutGrow: 1 });
 \`\`\`
-
-**This rule applies to ALL interactive elements:** buttons, input fields, tabs, chips, badges, nav items, list rows.
-Use FRAME with \`layoutMode\` for EVERY element that has a background + content inside it.
+Row height: simple key-value min 36px, with icon min 40px.
 
 ---
 
-## CARD / SCREEN LAYOUT RULE (MANDATORY — prevents misalignment)
-
-**NEVER build a card or screen using absolute x/y for every child.** This causes misalignment when the container resizes and makes the design impossible to maintain.
-
-### Rule 1 — Card container MUST use VERTICAL auto-layout
-\`\`\`js
-// CORRECT: card uses VERTICAL auto-layout with uniform padding
-await figma.create({
-  type: "FRAME", name: "Card",
-  x: 0, y: 0, width: 480, height: 610,
-  layoutMode: "VERTICAL",
-  primaryAxisAlignItems: "MIN",
-  counterAxisAlignItems: "MIN",       // ← "STRETCH" is INVALID. Use "MIN" here, then set layoutAlign: "STRETCH" on each child
-  paddingTop: 48, paddingBottom: 48,
-  paddingLeft: 48, paddingRight: 48,
-  itemSpacing: 16,
-  primaryAxisSizingMode: "FIXED",
-  counterAxisSizingMode: "FIXED",
-});
-
-// WRONG: no layoutMode → children use manual x/y → misalignment guaranteed
-await figma.create({ type: "FRAME", name: "Card", width: 480, height: 610 });
-// then manually: x: 48, y: 52, width: 384 for every child ← NEVER do this
+### Rule 13 — Container Height Calculation
 \`\`\`
-
-### Rule 2 — Full-width children use layoutAlign: "STRETCH", NOT hardcoded width
-\`\`\`js
-// CORRECT: input/button stretches to card width minus padding automatically
-await figma.create({
-  type: "FRAME", name: "EmailInput", parentId: card.id,
-  height: 52, layoutAlign: "STRETCH",   // ← width auto = cardWidth - paddingLeft - paddingRight
-  layoutMode: "HORIZONTAL", counterAxisAlignItems: "CENTER",
-  paddingLeft: 20, paddingRight: 20,
-});
-
-// WRONG: hardcoded width breaks when card width changes
-await figma.create({ type: "FRAME", name: "EmailInput", parentId: card.id, width: 384, height: 52 });
+height = paddingTop + paddingBottom + (n × childH) + ((n-1) × spacing)
 \`\`\`
-
-### Rule 3 — "or" divider row uses HORIZONTAL + SPACE_BETWEEN
-\`\`\`js
-// CORRECT: divider auto-centers regardless of card width
-var dividerRow = await figma.create({
-  type: "FRAME", name: "Divider", parentId: card.id,
-  height: 20, layoutAlign: "STRETCH",
-  layoutMode: "HORIZONTAL",
-  primaryAxisAlignItems: "SPACE_BETWEEN",
-  counterAxisAlignItems: "CENTER",
-});
-await figma.create({ type: "RECTANGLE", parentId: dividerRow.id, height: 1, layoutGrow: 1, fill: "#E0E0E0" });
-await figma.create({ type: "TEXT", parentId: dividerRow.id, content: "or", fontSize: 12, fill: "#888" });
-await figma.create({ type: "RECTANGLE", parentId: dividerRow.id, height: 1, layoutGrow: 1, fill: "#E0E0E0" });
-
-// WRONG: 3 manually positioned elements with x/y coordinates → always off-center
-\`\`\`
-
-### Summary — Card build order:
-1. Create card frame with VERTICAL auto-layout + padding
-2. Add children without x/y — let auto-layout position them
-3. Full-width children: \`layoutAlign: "STRETCH"\` (no width needed)
-4. Growing spacers: \`layoutGrow: 1\`
-5. NEVER set x/y on direct children of an auto-layout frame
+Use \`primaryAxisSizingMode: "AUTO"\` to auto-grow. Always verify with screenshot.
 
 ---
 
-## DOT + TEXT / ICON + TEXT ROW ALIGNMENT RULE (MANDATORY)
-When placing a small element (dot, icon, bullet) next to text in a horizontal row:
-
-**ALWAYS use \`counterAxisAlignItems: "CENTER"\`** so items are vertically centered with each other.
-
-\`\`\`
-CORRECT:
-layoutMode: "HORIZONTAL", counterAxisAlignItems: "CENTER", itemSpacing: 12
-→ dot (8px) and text (22px line-height) are vertically aligned
-
-WRONG:
-counterAxisAlignItems: "MIN"
-→ dot sits at top, text at top — dot appears higher than text center
-\`\`\`
-
-| Pattern | Layout | Cross Axis | When to use |
-|---------|--------|------------|-------------|
-| Dot + single-line text | HORIZONTAL | CENTER | Bullet points, list items |
-| Icon + single-line text | HORIZONTAL | CENTER | Menu items, labels |
-| Icon + multi-line text | HORIZONTAL | MIN + paddingTop on icon | Descriptions, cards |
-| Badge + text | HORIZONTAL | CENTER | Tags, status indicators |
-
-**Multi-line exception:** If text wraps to 2+ lines and dot/icon should align with the FIRST line only:
-\`\`\`
-counterAxisAlignItems: "MIN"
-icon paddingTop = (textLineHeight - iconSize) / 2
-Example: text 22px line-height, dot 8px → paddingTop = (22 - 8) / 2 = 7
-\`\`\`
-
----
-
-## PROGRESS BAR RULE (MANDATORY — CRITICAL)
-Progress bars require TWO rectangles overlapping: track (full width bg) + fill (partial width foreground).
-**Auto-layout frames stack children sequentially**, so placing both rectangles inside auto-layout will show them SIDE BY SIDE, not overlapping.
-
-**ALWAYS wrap progress bars in a non-auto-layout frame:**
+### Rule 14 — Score/Match Result Cards
 \`\`\`js
-// CORRECT: wrapper frame WITHOUT layoutMode → children overlap via absolute x,y
-var pbWrap = await figma.create({
-  type: "FRAME", name: "progress-bar", parentId: autoLayoutParent.id,
-  width: 352, height: 6
-  // NO layoutMode here!
-});
-await figma.create({ type: "RECTANGLE", name: "progress-track", parentId: pbWrap.id, x: 0, y: 0, width: 352, height: 6, fill: "#E7EAF0", cornerRadius: 3 });
-await figma.create({ type: "RECTANGLE", name: "progress-fill", parentId: pbWrap.id, x: 0, y: 0, width: 211, height: 6, fill: "#6C5CE7", cornerRadius: 3 });
-
-// WRONG: both rectangles directly in auto-layout → they sit next to each other
-await figma.create({ type: "RECTANGLE", parentId: autoLayoutFrame.id, width: 352, height: 6, fill: "#E7EAF0" });
-await figma.create({ type: "RECTANGLE", parentId: autoLayoutFrame.id, width: 211, height: 6, fill: "#6C5CE7" });
-// ↑ These will NOT overlap — they'll be placed 352px + 211px = 563px total width!
-\`\`\`
-
-**This rule applies to ANY overlapping elements inside auto-layout:** score rings, slider tracks, overlay badges, etc.
-Use a non-auto-layout wrapper frame whenever children must overlap.
-
----
-
-## BADGE / PILL / TAG RULE (MANDATORY — TWO CONCERNS)
-Badges have TWO separate concerns: (1) text centering INSIDE badge, (2) badge POSITION on parent.
-
-**Concern 1 — Text inside badge: ALWAYS use auto-layout CENTER/CENTER**
-\`\`\`js
-// CORRECT: Auto-layout frame → text auto-centers inside badge
-var badge = await figma.create({
-  type: "FRAME", name: "badge", parentId: parent.id,
-  x: 100, y: 10, width: 64, height: 20,
-  fill: "#E8FBF5", cornerRadius: 10,
-  layoutMode: "HORIZONTAL",
-  primaryAxisAlignItems: "CENTER",   // centers text horizontally
-  counterAxisAlignItems: "CENTER"    // centers text vertically
-});
-await figma.create({ type: "TEXT", parentId: badge.id, content: "Free", fontSize: 10, fontWeight: "SemiBold", fill: "#00B894" });
-
-// WRONG: Separate rectangle + text → text never properly centered
-\`\`\`
-
-**Concern 2 — Badge position on card: use absolute x,y on PARENT (not inside card auto-layout)**
-\`\`\`js
-// Badge at top-right corner of a card:
-// badgeX = cardX + cardWidth - badgeWidth - margin (e.g. 6px)
-// badgeY = cardY + margin (e.g. 6px)
-var badge = await figma.create({
-  ..., parentId: rootFrame.id,    // parent is ROOT, not the card!
-  x: cardX + cardWidth - 64 - 6, // top-right corner
-  y: cardY + 6,
-  ...
-});
-// Badge is a sibling of the card, overlapping its top-right corner via absolute positioning.
-// Do NOT put badge inside the card's auto-layout — it will be stacked with other children!
-\`\`\`
-
-**This applies to:** badges, pills, tags, labels, small buttons, notification dots with numbers, level indicators.
-
----
-
-## MOBILE BOTTOM ANCHORING RULE (MANDATORY)
-When designing a mobile screen (e.g. 390×844), bottom-anchored elements (tab bar, bottom nav, FAB)
-MUST be positioned relative to the **frame bottom**, not placed with arbitrary y values.
-
-**Formula:**
-\`\`\`
-home_indicator_y = frameHeight - 18                        (e.g. 826)
-nav_bar_y        = frameHeight - safeArea - navHeight      (e.g. 844 - 34 - 64 = 746)
-cta_above_nav_y  = nav_bar_y - gap - ctaHeight             (e.g. 746 - 12 - 56 = 678)
-\`\`\`
-
-**Standard iOS safe area:** 34px from bottom (home indicator region).
-
-| Element | Position from bottom | Example y (844px frame) |
-|---------|---------------------|------------------------|
-| Home indicator | 18px from bottom | 826 |
-| Tab bar / Nav (64px) | 34px safe + height | 746 |
-| CTA / FAB above nav | nav_y - 12px - height | 678 (56px CTA) |
-
-\`\`\`js
-// CORRECT — calculate from frame bottom
-var frameH = 844;
-var safeArea = 34;
-var navH = 64;
-var navY = frameH - safeArea - navH;  // 746
-
-// WRONG — arbitrary y value
-var navY = 676;  // leaves 104px gap at bottom!
-\`\`\`
-
-**NEVER** hardcode y for bottom elements without calculating from frameHeight.
-**ALWAYS** verify with \`screenshot\` after placing bottom elements.
-
----
-
-## HUG vs STRETCH CONFLICT RULE (MANDATORY)
-When mass-modifying frames to HUG (\`primaryAxisSizingMode: "AUTO"\`), be careful with
-HORIZONTAL auto-layout frames that must fill parent width.
-
-**The conflict:** In a VERTICAL parent, \`layoutAlign: "STRETCH"\` tells child to fill width.
-But if child is HORIZONTAL layout with \`primaryAxisSizingMode: "AUTO"\`, it **hugs its own
-content width** — overriding the parent's STRETCH.
-
-| Parent layout | Child layout | Child fills width? | primaryAxisSizingMode |
-|--------------|-------------|-------------------|----------------------|
-| VERTICAL | HORIZONTAL | YES (search bars, nav rows) | **FIXED** + layoutAlign: STRETCH |
-| VERTICAL | HORIZONTAL | NO (inline tags, pills) | AUTO (hug) |
-| VERTICAL | VERTICAL | YES (sections) | N/A (use counterAxisSizingMode: FIXED) |
-
-\`\`\`js
-// CORRECT — HORIZONTAL child stretches in VERTICAL parent
-await figma.create({
-  type: "FRAME", layoutMode: "HORIZONTAL",
-  primaryAxisSizingMode: "FIXED",  // accept parent width
-  layoutAlign: "STRETCH"           // fill parent cross-axis
-});
-
-// WRONG — child hugs, ignores parent STRETCH
-await figma.create({
-  type: "FRAME", layoutMode: "HORIZONTAL",
-  primaryAxisSizingMode: "AUTO",   // hugs content → only 153px instead of 342px!
-  layoutAlign: "STRETCH"           // has no effect because AUTO wins
+var scoreRow = await figma.create({
+  type: "FRAME", height: 32, layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER",
+  paddingLeft: 8, paddingRight: 8, layoutAlign: "STRETCH"
 });
 \`\`\`
 
 ---
 
-## CENTERED CONTENT MUST USE AUTO-LAYOUT RULE (MANDATORY)
-When a container has children that need centering (icon above text, text centered in card),
-**ALWAYS use auto-layout** instead of manual x/y math.
+### Rule 15 — Button Variants System
 
-Manual \`x = (containerW - childW) / 2\` is fragile — it breaks if content width changes,
-and text width depends on font rendering which varies across systems.
+| Variant | Fill | Text | Border |
+|---------|------|------|--------|
+| Solid | brand color | white | none |
+| Flat | brand 10% opacity | brand | none |
+| Bordered | transparent | brand | 1px brand |
+| Ghost | transparent | brand | none |
+| Light | #F5F6FA | #1E3150 | none |
 
-\`\`\`js
-// CORRECT — auto-layout centers everything automatically
-var card = await figma.create({
-  type: "FRAME", name: "card", parentId: parent.id,
-  x: 20, y: 100, width: 108, height: 108,
-  fill: "#0D1229", cornerRadius: 18,
-  layoutMode: "VERTICAL",
-  primaryAxisAlignItems: "CENTER",   // vertical center
-  counterAxisAlignItems: "CENTER",   // horizontal center
-  paddingTop: 16, paddingBottom: 14, itemSpacing: 8
-});
-// Children auto-center — no x/y needed
-await figma.create({ type: "FRAME", parentId: card.id, width: 40, height: 40, ... });
-await figma.create({ type: "TEXT", parentId: card.id, content: "Label", ... });
-
-// WRONG — manual x/y math for centering
-var card = await figma.create({
-  type: "FRAME", width: 108, height: 108, ...
-  // NO layoutMode!
-});
-await figma.create({ type: "FRAME", parentId: card.id, x: 34, y: 16, width: 40, ... });
-await figma.create({ type: "TEXT", parentId: card.id, x: 0, y: 66, width: 108, textAlign: "CENTER", ... });
-// ↑ Text x:0 with hugged width → NOT centered! textAlign only aligns WITHIN text bounds.
-\`\`\`
-
-**When to use auto-layout vs manual positioning:**
-| Scenario | Use |
-|----------|-----|
-| Icon + text centered in card | Auto-layout VERTICAL + CENTER/CENTER |
-| Button with centered label | Auto-layout HORIZONTAL + CENTER/CENTER |
-| Grid of equally-sized cards | Manual x/y for card positions, auto-layout INSIDE each card |
-| Overlapping elements (progress bar) | Manual (no-layout wrapper frame) |
-| Absolute badge on card corner | Manual x/y on parent frame |
+**Size scale:**
+| Size | Height | paddingX | fontSize | cornerRadius |
+|------|--------|----------|----------|--------------|
+| sm | 32px | 12px | 12px | 8px |
+| md | 40px | 16px | 14px | 12px |
+| lg | 48px | 24px | 16px | 14px |
 
 ---
 
-## ILLUSTRATION CENTERING + LAYER ORDER RULE (MANDATORY)
-When creating illustrations with concentric elements (rings, glows, icons), two problems occur:
-
-**Problem 1 — Layer order:** In Figma, LAST child renders ON TOP. If you create background rings
-AFTER the center icon, they cover it.
-
-**Problem 2 — Centering:** Concentric elements must share the same mathematical center point.
-
-\`\`\`js
-// CORRECT — draw order: background → rings → center icon (last = on top)
-var area = await figma.create({ type: "FRAME", width: 280, height: 260, ... });
-var centerX = 140, centerY = 130; // center point of area
-
-// 1. Background rings FIRST (bottom layers)
-await figma.create({ type: "ELLIPSE", parentId: area.id,
-  x: centerX - 110, y: centerY - 110, width: 220, height: 220, ... }); // outer ring
-await figma.create({ type: "ELLIPSE", parentId: area.id,
-  x: centerX - 80, y: centerY - 80, width: 160, height: 160, ... });  // inner ring
-
-// 2. Floating badges (middle layers)
-await figma.create({ ..., x: 20, y: 60, ... }); // positioned around center
-
-// 3. Center icon LAST (top layer — visible above rings)
-var centerIcon = await figma.create({ type: "FRAME", parentId: area.id,
-  x: centerX - 50, y: centerY - 50, width: 100, height: 100, ... });
-
-// WRONG — center icon created FIRST, rings cover it
-var centerIcon = await figma.create({ ... }); // ← drawn first = bottom layer
-await figma.create({ type: "ELLIPSE", ... });  // ← drawn last = covers icon!
-\`\`\`
-
-**Centering formula for concentric elements:**
-\`\`\`
-element_x = centerX - (element_width / 2)
-element_y = centerY - (element_height / 2)
-\`\`\`
-
-**Avoid clipping:** Floating elements near edges must have margin ≥ element_size/2 from container border.
+### Rule 16 — Consistent Spacing Scale
+Use ONLY: 4 · 8 · 12 · 16 · 20 · 24 · 32 · 48px. Never random values.
 
 ---
 
-## TEXT ALIGN vs LAYOUT ALIGN RULE (MANDATORY)
-\`layoutAlign\` and \`textAlign\` are TWO SEPARATE concerns. Both must be set correctly.
+### Rule 17 — Border Radius Consistency
+| Element | cornerRadius |
+|---------|-------------|
+| Small chips/tags | 4–6px |
+| Input fields | 8px |
+| Buttons | 8–12px |
+| Cards | 12–16px |
+| Large panels | 16–24px |
+| Full round | 9999px |
 
-- **\`layoutAlign: "STRETCH"\`** → text BOX fills parent width (controls bounding box size)
-- **\`textAlign: "CENTER"\`** → text CONTENT centers within its bounding box (controls alignment)
-
-**Setting one does NOT set the other.** A stretched text box with LEFT align = text hugs left edge.
-
-\`\`\`js
-// CORRECT — text box fills width AND content is centered
-await figma.create({
-  type: "TEXT", parentId: card.id,
-  content: "Centered quote text",
-  fontSize: 18, fill: "#FFFFFF",
-  textAlign: "CENTER",        // ← content alignment
-  layoutAlign: "STRETCH",     // ← box fills parent width
-  lineHeight: 26
-});
-
-// WRONG — text box fills width but content is LEFT aligned (default)
-await figma.create({
-  type: "TEXT", parentId: card.id,
-  content: "Should be centered but isn't",
-  layoutAlign: "STRETCH"      // ← box stretches, but text stays LEFT!
-});
-\`\`\`
-
-**When to use each combination:**
-| Visual result | layoutAlign | textAlign |
-|--------------|-------------|-----------|
-| Left-aligned paragraph (default) | STRETCH | LEFT (default) |
-| Centered heading/quote | STRETCH | CENTER |
-| Right-aligned label | STRETCH | RIGHT |
-| Short label, no wrapping needed | omit | any |
-
-**Also: auto-layout containers with \`primaryAxisAlignItems: "CENTER"\` center children as blocks,
-but do NOT center text content inside each text node.** You must set \`textAlign: "CENTER"\` separately.
+**Nested radius rule:** inner = outer - padding. (Card 16px, padding 8px → inner 8px)
 
 ---
 
-## TEXT WRAPPING IN AUTO-LAYOUT RULE (MANDATORY)
-When placing text inside an auto-layout frame, the text will **overflow and not wrap** unless
-its width is constrained by the parent.
+### Rule 18 — Shadow/Elevation System
+| Level | Effect |
+|-------|--------|
+| flat | No shadow |
+| sm | 0 1px 2px rgba(0,0,0,0.05) |
+| md | 0 4px 6px rgba(0,0,0,0.07) |
+| lg | 0 10px 15px rgba(0,0,0,0.1) |
 
-**FIX: Always use \`layoutAlign: "STRETCH"\` on text nodes that should wrap within their parent.**
-
-\`\`\`js
-// CORRECT — text wraps within parent width
-var textFrame = await figma.create({
-  type: "FRAME", parentId: card.id,
-  layoutMode: "VERTICAL", itemSpacing: 4,
-  primaryAxisSizingMode: "AUTO", counterAxisSizingMode: "AUTO",
-  layoutGrow: 1   // fill available width in parent
-});
-await figma.create({
-  type: "TEXT", parentId: textFrame.id,
-  content: "Long text that needs to wrap...",
-  fontSize: 13, fill: "#E0E6F0", lineHeight: 18,
-  layoutAlign: "STRETCH"  // ← CRITICAL: constrains width to parent, enables wrapping
-});
-
-// WRONG — text overflows parent
-await figma.create({
-  type: "TEXT", parentId: textFrame.id,
-  content: "Long text...", fontSize: 13,
-  width: 260  // ← explicit width may not match parent, or gets ignored by textAutoResize
-});
-// ↑ Text renders at its natural width (367px), overflows parent (278px)
-\`\`\`
-
-**When to use \`layoutAlign: "STRETCH"\` on text:**
-| Scenario | layoutAlign | Why |
-|----------|------------|-----|
-| Multi-line description in card | STRETCH | Must wrap within card width |
-| Single-line label (known short) | omit | No wrapping needed |
-| Text inside \`layoutGrow: 1\` parent | STRETCH | Parent width is dynamic |
-| Paragraph/quote text | STRETCH | Always needs wrapping |
-
-**Rule: If text content could ever exceed its parent width, use \`layoutAlign: "STRETCH"\`.**
+Dark themes: use border (1px #2A2B45) instead of shadows.
 
 ---
 
-## HEADER TITLE CENTERING RULE (MANDATORY)
-When creating a header bar with pattern **[Left action] [Title] [Right action]** using \`SPACE_BETWEEN\`,
-the title text will NOT be visually centered if left/right elements have different widths.
+### Rule 19 — Semantic Color Usage
+| Role | Light | Dark |
+|------|-------|------|
+| Primary | #006FEE | #338EF7 |
+| Success | #17C964 | #45D483 |
+| Warning | #F5A524 | #F7B750 |
+| Danger | #F31260 | #F54180 |
+| Default | #71717A | #A1A1AA |
 
-**FIX: Title must use \`layoutGrow: 1\` + \`textAlign: "CENTER"\`**
-
-\`\`\`js
-// CORRECT — title grows to fill space, text centers within it
-var header = await figma.create({
-  type: "FRAME", layoutMode: "HORIZONTAL",
-  primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER", ...
-});
-// Left action (32px)
-await figma.create({ type: "FRAME", parentId: header.id, width: 32, height: 32, ... });
-// Title — MUST grow + center
-await figma.create({ type: "TEXT", parentId: header.id, content: "Title",
-  fontSize: 17, fontWeight: "Bold", fill: "#FFFFFF",
-  textAlign: "CENTER", layoutGrow: 1   // ← CRITICAL: both are needed
-});
-// Right action (77px)
-await figma.create({ type: "FRAME", parentId: header.id, ... });
-
-// WRONG — title has fixed width, off-center because side elements differ
-await figma.create({ type: "TEXT", parentId: header.id, content: "Title", ... });
-// ↑ Without layoutGrow, SPACE_BETWEEN places it between items but NOT screen-centered
-\`\`\`
-
-**This applies to:** modal headers, sheet headers, nav bars, any [action] [title] [action] pattern.
+All semantic colors must pair with white text (#FFFFFF) for WCAG AA (4.5:1).
 
 ---
 
-## COMPONENT REUSE RULE (MANDATORY — CRITICAL)
-Repeated UI elements MUST be created as **Figma Components** and reused via **instances (clone)**.
-Never recreate the same element from scratch across multiple screens.
+### Rule 20 — Component State Indicators
+| State | Visual change |
+|-------|--------------|
+| Default | Base |
+| Hover | opacity 0.8–0.9 |
+| Focused | 2px ring/stroke |
+| Disabled | opacity: 0.5 |
+| Loading | Spinner SVG |
 
-### Workflow — Component-First Design
+---
+
+## COMPONENT REUSE RULE (CRITICAL)
+
 **Before drawing ANY screen:**
-1. Check if a \`⚙️ Components\` frame exists on the current page via \`get_page_nodes\`
-2. If not → create it as the FIRST step, positioned away from screens (e.g. x: -600)
-3. Create master components inside it using \`figma.createComponent()\`
-4. On each screen, use \`figma.clone({ id: componentId })\` to place instances
+1. Check \`get_page_nodes\` for existing "⚙️ Components" frame
+2. If not → create it first (x: -600, outside visible screens)
+3. Create master components inside via \`figma.createComponent()\`
+4. Use \`figma.clone({ id: componentId })\` for instances
 
-### What MUST be a component
-| Element | Component name | Why |
-|---------|---------------|-----|
-| Bottom nav bar | \`nav/bottom-bar\` | Identical across every screen |
-| App header (logo + avatar) | \`nav/app-header\` | Same on every screen |
-| Status bar | \`nav/status-bar\` | Same on every screen |
-| CTA button variants | \`btn/primary\`, \`btn/ghost\` | Reused with different labels |
-| Idea card | \`card/idea\` | Repeated in lists |
-| Category badge | \`badge/category\` | Repeated in cards |
-| Icon containers | \`icon/circle-bg\` | Repeated pattern |
-| Home indicator | \`nav/home-indicator\` | Same on every screen |
+**Must be components:** bottom nav, app header, status bar, CTA buttons, cards, badges, icon containers.
 
-### Creating components (two-step: create frame → convert to component)
 \`\`\`js
-// 1. Create Components frame (once per project)
+// 1. Create Components frame once
 var compFrame = await figma.create({
   type: "FRAME", name: "⚙️ Components", x: -600, y: 0,
   width: 500, height: 800, fill: "#1A1A2E",
@@ -1518,46 +394,898 @@ var compFrame = await figma.create({
   primaryAxisSizingMode: "AUTO", counterAxisSizingMode: "FIXED"
 });
 
-// 2. Build the element as a normal FRAME first
-var navFrame = await figma.create({
-  type: "FRAME", name: "nav/bottom-bar",
-  parentId: compFrame.id,
-  width: 350, height: 64,
-  fill: "#0A0F24", cornerRadius: 22,
-  layoutMode: "HORIZONTAL", primaryAxisAlignItems: "SPACE_BETWEEN",
-  counterAxisAlignItems: "CENTER",
-  paddingLeft: 28, paddingRight: 28
-});
-// ... add children (icons, text, etc.) to navFrame ...
-
-// 3. Convert FRAME → COMPONENT (returns component with .id and .key)
+// 2. Build frame, then convert to component
+var navFrame = await figma.create({ type: "FRAME", name: "nav/bottom-bar",
+  parentId: compFrame.id, width: 350, height: 64, fill: "#0A0F24",
+  cornerRadius: 22, layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER",
+  paddingLeft: 28, paddingRight: 28 });
 var navComp = await figma.createComponent({ nodeId: navFrame.id, name: "nav/bottom-bar" });
-// navComp.id is now the master component ID
 
-// 4. Use instances on screens via clone
-var navInstance = await figma.clone({
-  id: navComp.id,
-  parentId: screenFrame.id,
-  x: 20, y: 746
-});
-// Cloning a component creates an INSTANCE — changes to master auto-propagate
+// 3. Clone on every screen
+var navInst = await figma.clone({ id: navComp.id, parentId: screenFrame.id, x: 20, y: 746 });
 \`\`\`
 
-### Rules
-- **NEVER** duplicate full elements (nav, header) by recreating them with \`figma.create()\` on each screen
-- **ALWAYS** check \`get_page_nodes\` for existing \`⚙️ Components\` frame before starting
-- **ALWAYS** check existing components with \`get_local_components\` before creating new ones
-- When a component needs different content (e.g. button label), clone first then \`figma.modify()\` the text child
-- Component frame should be positioned **outside visible screens** (negative x or far right)
-- Name components with **slash notation** for organization: \`nav/bottom-bar\`, \`btn/primary\`, \`card/idea\`
+**Rules:**
+- Name components with slash notation: \`nav/bottom-bar\`, \`btn/primary\`, \`card/idea\`
+- ALWAYS check \`get_local_components\` before creating new ones
+- Clone first then \`figma.modify()\` text children for variant content
+`;
+
+const SECTION_LAYOUT = `
+# figma-ui-mcp — Layout Rules
 
 ---
 
-## Images & Icons (Server-side helpers — NO bash/curl needed)
+## AUTO LAYOUT (PREFERRED — NON-NEGOTIABLE for complex containers)
 
-### figma.loadImage(url, opts) — Download image and place on canvas
 \`\`\`js
-// Thumbnail image
+await figma.create({
+  type: "FRAME", name: "Button", parentId: root.id,
+  x: 24, y: 100, width: 392, height: 52,
+  fill: "#6C5CE7", cornerRadius: 12,
+  layoutMode: "HORIZONTAL",           // "HORIZONTAL" | "VERTICAL"
+  primaryAxisAlignItems: "CENTER",    // main axis: "MIN"|"CENTER"|"MAX"|"SPACE_BETWEEN"
+  counterAxisAlignItems: "CENTER",    // cross axis: "MIN"|"CENTER"|"MAX"
+  padding: 16,
+  itemSpacing: 8,
+})
+\`\`\`
+
+**Common patterns:**
+\`\`\`
+// Button with centered text:
+layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER"
+
+// Card with icon + text row:
+layoutMode: "HORIZONTAL", primaryAxisAlignItems: "MIN", counterAxisAlignItems: "CENTER", paddingLeft: 16, itemSpacing: 12
+
+// Vertical stack:
+layoutMode: "VERTICAL", primaryAxisAlignItems: "MIN", counterAxisAlignItems: "MIN", itemSpacing: 8
+// children: layoutAlign: "STRETCH"
+
+// Centered icon in circle:
+layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER"
+\`\`\`
+
+**Child properties:**
+\`\`\`js
+await figma.create({ ..., layoutAlign: "STRETCH" })  // fill parent width in vertical layout
+await figma.create({ ..., layoutGrow: 1 })           // grow to fill available space
+\`\`\`
+
+**Modify frame to auto-layout:**
+\`\`\`js
+await figma.modify({ id: frameId, layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER" })
+\`\`\`
+
+**Always use Auto Layout for:** buttons, cards with icon+text rows, tab bar items, list items, badge pills.
+
+---
+
+## BUTTON / INPUT CONSTRUCTION RULE
+
+NEVER use RECTANGLE + TEXT as siblings. Always use FRAME with layoutMode:
+
+\`\`\`js
+// WRONG
+await figma.create({ type: "RECTANGLE", parentId: frame.id, x: 56, y: 808, width: 488, height: 58, fill: "#00C896", cornerRadius: 30 });
+await figma.create({ type: "TEXT", parentId: frame.id, x: 180, y: 827, content: "Submit" }); // not truly centered
+
+// CORRECT
+var btn = await figma.create({
+  type: "FRAME", parentId: frame.id, x: 56, y: 808, width: 488, height: 58,
+  fill: "#00C896", cornerRadius: 30,
+  layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER",
+});
+await figma.create({ type: "TEXT", parentId: btn.id, content: "Submit", fill: "#fff", fontSize: 16, fontWeight: "Bold" });
+\`\`\`
+
+Applies to: buttons, inputs, tabs, chips, badges, nav items — ALL elements with background + content.
+
+---
+
+## CARD / SCREEN LAYOUT RULE
+
+NEVER use absolute x/y for children inside a card. Use VERTICAL auto-layout:
+
+\`\`\`js
+// CORRECT — VERTICAL auto-layout card
+var card = await figma.create({
+  type: "FRAME", name: "Card", width: 480, height: 610,
+  layoutMode: "VERTICAL", primaryAxisAlignItems: "MIN",
+  counterAxisAlignItems: "MIN",        // NOT "STRETCH" — invalid. Use "MIN" + layoutAlign: "STRETCH" on children
+  paddingTop: 48, paddingBottom: 48, paddingLeft: 48, paddingRight: 48,
+  itemSpacing: 16,
+});
+
+// Full-width children: layoutAlign STRETCH (no width needed)
+await figma.create({ type: "FRAME", name: "Input", parentId: card.id,
+  height: 52, layoutAlign: "STRETCH",
+  layoutMode: "HORIZONTAL", counterAxisAlignItems: "CENTER",
+  paddingLeft: 20, paddingRight: 20 });
+
+// "or" divider row
+var dividerRow = await figma.create({ type: "FRAME", parentId: card.id,
+  height: 20, layoutAlign: "STRETCH",
+  layoutMode: "HORIZONTAL", primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER" });
+await figma.create({ type: "RECTANGLE", parentId: dividerRow.id, height: 1, layoutGrow: 1, fill: "#E0E0E0" });
+await figma.create({ type: "TEXT", parentId: dividerRow.id, content: "or", fontSize: 12, fill: "#888" });
+await figma.create({ type: "RECTANGLE", parentId: dividerRow.id, height: 1, layoutGrow: 1, fill: "#E0E0E0" });
+\`\`\`
+
+**Card build order:** create frame → add children without x/y → full-width: \`layoutAlign: "STRETCH"\` → growing spacers: \`layoutGrow: 1\`
+
+---
+
+## DOT + TEXT / ICON + TEXT ROW ALIGNMENT RULE
+
+ALWAYS use \`counterAxisAlignItems: "CENTER"\` for icon/dot next to text:
+\`\`\`
+CORRECT: layoutMode: "HORIZONTAL", counterAxisAlignItems: "CENTER", itemSpacing: 12
+WRONG:   counterAxisAlignItems: "MIN" → dot sits at top, misaligned
+\`\`\`
+
+**Multi-line exception:** if dot/icon aligns with FIRST line only:
+\`\`\`
+counterAxisAlignItems: "MIN"
+icon paddingTop = (textLineHeight - iconSize) / 2
+// e.g. text 22px, dot 8px → paddingTop = (22 - 8) / 2 = 7
+\`\`\`
+
+---
+
+## PROGRESS BAR RULE (CRITICAL)
+
+Progress bars = TWO overlapping rectangles. Auto-layout stacks them side-by-side, NOT overlapping.
+**ALWAYS wrap in a non-auto-layout frame:**
+
+\`\`\`js
+// CORRECT — no layoutMode on wrapper → children overlap via absolute x,y
+var pbWrap = await figma.create({
+  type: "FRAME", name: "progress-bar", parentId: autoLayoutParent.id,
+  width: 352, height: 6   // NO layoutMode
+});
+await figma.create({ type: "RECTANGLE", parentId: pbWrap.id, x: 0, y: 0, width: 352, height: 6, fill: "#E7EAF0", cornerRadius: 3 });
+await figma.create({ type: "RECTANGLE", parentId: pbWrap.id, x: 0, y: 0, width: 211, height: 6, fill: "#6C5CE7", cornerRadius: 3 });
+
+// WRONG — inside auto-layout: 352 + 211 = 563px total, not overlapping!
+\`\`\`
+
+Applies to: progress bars, score rings, slider tracks, overlay badges.
+
+---
+
+## BADGE / PILL / TAG RULE
+
+**Concern 1 — Text inside badge: use auto-layout CENTER/CENTER**
+\`\`\`js
+var badge = await figma.create({
+  type: "FRAME", name: "badge", parentId: parent.id,
+  x: 100, y: 10, width: 64, height: 20, fill: "#E8FBF5", cornerRadius: 10,
+  layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER"
+});
+await figma.create({ type: "TEXT", parentId: badge.id, content: "Free", fontSize: 10, fontWeight: "SemiBold", fill: "#00B894" });
+\`\`\`
+
+**Concern 2 — Badge position on card corner: parent is ROOT, not the card**
+\`\`\`js
+// badgeX = cardX + cardWidth - badgeWidth - 6
+// badgeY = cardY + 6
+var badge = await figma.create({ ..., parentId: rootFrame.id,
+  x: cardX + cardWidth - 64 - 6, y: cardY + 6, ... });
+// Badge is sibling of card, overlapping top-right corner via absolute positioning
+\`\`\`
+
+---
+
+## MOBILE BOTTOM ANCHORING RULE
+
+Bottom elements (tab bar, FAB) MUST be calculated from frame bottom:
+\`\`\`
+nav_bar_y = frameHeight - safeArea - navHeight  // e.g. 844 - 34 - 64 = 746
+cta_y     = nav_bar_y - gap - ctaHeight         // e.g. 746 - 12 - 56 = 678
+\`\`\`
+
+Standard iOS: safeArea = 34px, home indicator at y = frameH - 18.
+NEVER hardcode y for bottom elements without calculating from frameHeight.
+
+---
+
+## HUG vs STRETCH CONFLICT RULE
+
+HORIZONTAL child in VERTICAL parent that should fill width must use \`primaryAxisSizingMode: "FIXED"\`:
+\`\`\`js
+// CORRECT — child stretches in parent
+await figma.create({ type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisSizingMode: "FIXED",   // accept parent width
+  layoutAlign: "STRETCH" });        // fill parent cross-axis
+
+// WRONG — AUTO overrides STRETCH
+await figma.create({ type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisSizingMode: "AUTO",    // hugs content → ignores STRETCH
+  layoutAlign: "STRETCH" });
+\`\`\`
+
+---
+
+## CENTERED CONTENT MUST USE AUTO-LAYOUT
+
+NEVER use manual \`x = (containerW - childW) / 2\` — it breaks when content changes.
+
+\`\`\`js
+// CORRECT
+var card = await figma.create({ type: "FRAME", width: 108, height: 108, fill: "#0D1229", cornerRadius: 18,
+  layoutMode: "VERTICAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER",
+  paddingTop: 16, paddingBottom: 14, itemSpacing: 8 });
+// Children added without x/y — auto-centered
+
+// WRONG
+var card = await figma.create({ type: "FRAME", width: 108, height: 108 }); // no layoutMode
+await figma.create({ type: "FRAME", parentId: card.id, x: 34, y: 16, ... }); // manual math = fragile
+\`\`\`
+
+---
+
+## ILLUSTRATION CENTERING + LAYER ORDER RULE
+
+**Draw order: background → rings → center icon (last = on top)**
+\`\`\`js
+var centerX = 140, centerY = 130;
+
+// 1. Rings FIRST (bottom layers)
+await figma.create({ type: "ELLIPSE", parentId: area.id,
+  x: centerX - 110, y: centerY - 110, width: 220, height: 220 });
+await figma.create({ type: "ELLIPSE", parentId: area.id,
+  x: centerX - 80,  y: centerY - 80,  width: 160, height: 160 });
+
+// 2. Center icon LAST (top layer)
+await figma.create({ type: "FRAME", parentId: area.id,
+  x: centerX - 50, y: centerY - 50, width: 100, height: 100 });
+\`\`\`
+
+**Centering formula:**
+\`\`\`
+element_x = centerX - (element_width / 2)
+element_y = centerY - (element_height / 2)
+\`\`\`
+
+---
+
+## TEXT ALIGN vs LAYOUT ALIGN RULE
+
+\`layoutAlign: "STRETCH"\` controls box size. \`textAlign: "CENTER"\` controls content. Both must be set:
+
+\`\`\`js
+// CORRECT — box fills width AND content is centered
+await figma.create({ type: "TEXT", parentId: card.id,
+  content: "Centered heading", fontSize: 18, fill: "#FFFFFF",
+  textAlign: "CENTER",    // content alignment
+  layoutAlign: "STRETCH", // box fills parent width
+  lineHeight: 26 });
+
+// WRONG — box stretches but content stays LEFT (default)
+await figma.create({ type: "TEXT", parentId: card.id,
+  content: "Should center but won't", layoutAlign: "STRETCH" });
+\`\`\`
+
+---
+
+## TEXT WRAPPING IN AUTO-LAYOUT RULE
+
+Text inside auto-layout overflows unless constrained. Always use \`layoutAlign: "STRETCH"\` on text that should wrap:
+
+\`\`\`js
+// CORRECT
+await figma.create({ type: "TEXT", parentId: textFrame.id,
+  content: "Long text...", fontSize: 13, fill: "#E0E6F0", lineHeight: 18,
+  layoutAlign: "STRETCH"  // constrains width → enables wrapping
+});
+
+// WRONG — text renders at natural width, overflows parent
+await figma.create({ type: "TEXT", parentId: textFrame.id,
+  content: "Long text...", fontSize: 13 });  // no layoutAlign
+\`\`\`
+
+Use \`layoutAlign: "STRETCH"\` on: multi-line descriptions, paragraphs, text inside \`layoutGrow: 1\` parents.
+
+---
+
+## HEADER TITLE CENTERING RULE
+
+Pattern [Left action] [Title] [Right action] — title must use \`layoutGrow: 1\` + \`textAlign: "CENTER"\`:
+
+\`\`\`js
+var header = await figma.create({ type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER" });
+await figma.create({ type: "FRAME", parentId: header.id, width: 32, height: 32 }); // Left action
+await figma.create({ type: "TEXT", parentId: header.id, content: "Title",
+  fontSize: 17, fontWeight: "Bold", fill: "#FFFFFF",
+  textAlign: "CENTER", layoutGrow: 1 });     // BOTH needed
+await figma.create({ type: "FRAME", parentId: header.id, width: 77 });              // Right action
+\`\`\`
+
+Applies to: modal headers, nav bars, any [action][title][action] pattern.
+`;
+
+const SECTION_API = `
+# figma-ui-mcp — API Reference (Create / Modify / Read / Ops)
+
+---
+
+## Pages
+\`\`\`js
+await figma.listPages()                              // [{ id, name }, ...]
+await figma.setPage({ name: "Dashboard" })           // switch page
+await figma.createPage({ name: "Signals" })          // create (no-op if exists)
+\`\`\`
+
+---
+
+## Query nodes
+\`\`\`js
+await figma.query({ type: "FRAME" })                 // all frames on current page
+await figma.query({ name: "Sidebar" })               // by name
+await figma.query({ id: "123:456" })                 // by id
+// → [{ id, name, type, x, y, width, height, parentId }]
+\`\`\`
+
+---
+
+## Create — returns { id, name, type, x, y, width, height }
+
+### FRAME
+\`\`\`js
+var f = await figma.create({
+  type: "FRAME", name: "Screen",
+  x: 0, y: 0, width: 1440, height: 900,
+  fill: "#ffffff", cornerRadius: 0,
+  stroke: "#e2e8f0", strokeWeight: 1,
+  // Auto-layout (optional):
+  layoutMode: "VERTICAL",
+  primaryAxisAlignItems: "MIN", counterAxisAlignItems: "MIN",
+  padding: 16, itemSpacing: 12,
+  primaryAxisSizingMode: "FIXED",   // "FIXED" | "AUTO"
+  counterAxisSizingMode: "FIXED",
+  // Effects (optional):
+  effects: [{ type: "DROP_SHADOW", color: "#00000026", offset: {x:0,y:8}, radius: 24 }],
+  // Gradient fill (optional):
+  // fill: { type: "LINEAR_GRADIENT", angle: 135, stops: [{pos:0,color:"#7C3AED"},{pos:1,color:"#EC4899"}] }
+  // Individual corners (optional):
+  // topLeftRadius: 20, topRightRadius: 20, bottomLeftRadius: 0, bottomRightRadius: 0,
+  opacity: 1, visible: true,
+  insertIndex: 0,   // insert at specific position in parent (v2.5.7+)
+})
+\`\`\`
+
+### RECTANGLE
+\`\`\`js
+await figma.create({ type: "RECTANGLE", name: "Card",
+  parentId: f.id, x: 24, y: 80, width: 280, height: 120,
+  fill: "#1e293b", cornerRadius: 12, stroke: "#334155", strokeWeight: 1 })
+\`\`\`
+
+### ELLIPSE
+\`\`\`js
+await figma.create({ type: "ELLIPSE", name: "Dot",
+  parentId: f.id, x: 12, y: 12, width: 8, height: 8, fill: "#22c55e" })
+\`\`\`
+
+### LINE
+\`\`\`js
+await figma.create({ type: "LINE", name: "Divider",
+  parentId: f.id, x: 0, y: 64, width: 240, height: 0,
+  stroke: "#1e293b", strokeWeight: 1 })
+\`\`\`
+
+### TEXT
+\`\`\`js
+await figma.create({ type: "TEXT", name: "Heading",
+  parentId: f.id, x: 24, y: 24,
+  content: "Total Balance",    // also accepts: characters: "..."
+  fontSize: 14,
+  fontWeight: "SemiBold",      // Regular | Medium | SemiBold | Bold | Light
+  fill: "#f8fafc",             // also accepts: fontColor, fills array
+  lineHeight: 20,              // px
+  textAlign: "CENTER",         // LEFT | CENTER | RIGHT (auto-sets textAutoResize: "NONE" with width)
+  layoutAlign: "STRETCH",      // for wrapping text in auto-layout
+  layoutGrow: 1,               // for growing text in auto-layout
+})
+\`\`\`
+
+### VECTOR (SVG paths, arcs, curves)
+\`\`\`js
+// Diagonal line
+await figma.create({ type: "VECTOR", parentId: f.id,
+  x: 0, y: 0, width: 200, height: 100, d: "M 0 0 L 200 100",
+  stroke: "#ff0000", strokeWeight: 2, strokeCap: "ROUND" })
+
+// Arc (A command auto-converted to cubic Bézier)
+await figma.create({ type: "VECTOR", parentId: f.id,
+  x: 0, y: 0, width: 300, height: 300,
+  d: "M 150 7 A 143 143 0 1 1 29.26 226.62",
+  stroke: "#6C5CE7", strokeWeight: 12, strokeCap: "ROUND" })
+
+// Filled wave
+await figma.create({ type: "VECTOR", parentId: f.id,
+  x: 0, y: 0, width: 440, height: 80,
+  d: "M 0 40 C 110 0, 220 80, 330 40 C 385 20, 420 30, 440 40 L 440 80 L 0 80 Z",
+  fill: "#0e7c3a" })
+\`\`\`
+
+**SVG path cheatsheet:** M=move, L=line, H=horizontal, V=vertical, C=cubic, Q=quadratic, A=arc, Z=close
+
+---
+
+## Modify
+\`\`\`js
+await figma.modify({ id: f.id, fill: "#0f172a" })
+await figma.modify({ name: "Card", width: 300, cornerRadius: 16 })
+await figma.modify({ id: "123:456", content: "New text", fontSize: 16 })
+await figma.modify({ id: "123:456", fontFamily: "SF Pro", fontWeight: "Bold" })
+await figma.modify({ id: "123:456", fontColor: "#428DE7" })  // alias for fill on text
+await figma.modify({ id: "123:456", layoutMode: "NONE" })    // remove auto-layout
+\`\`\`
+
+---
+
+## Delete
+\`\`\`js
+await figma.delete({ id: "123:456" })
+await figma.delete({ name: "Old Frame" })
+await figma.delete({ ids: ["1:1", "1:2", "1:3"] })  // batch delete
+\`\`\`
+
+---
+
+## Components
+\`\`\`js
+await figma.listComponents()
+// → [{ id, name, key }]
+
+await figma.createComponent({ nodeId: "49:200", name: "btn/primary" })
+// → { id, name, key, width, height }
+
+await figma.instantiate({ componentId: comp.id, parentId: f.id, x: 0, y: 0 })
+await figma.instantiate({ componentName: "btn/primary", parentId: screen.id, x: 100, y: 200,
+  overrides: {
+    "Label":      { text: "Sign Up", fill: "#FFFFFF", fontSize: 16 },
+    "Background": { fill: "#6C5CE7", cornerRadius: 8 },
+    "Icon":       { visible: false }
+  }
+})
+\`\`\`
+
+---
+
+## Node Operations
+\`\`\`js
+await figma.clone({ id: "123:456", x: 500, y: 0, name: "Card Copy" })
+await figma.clone({ id: "123:456", parentId: otherFrame.id })
+
+const group = await figma.group({ nodeIds: ["1:2", "1:3"], name: "Header Group" })
+const { ungrouped } = await figma.ungroup({ id: group.id })
+
+await figma.flatten({ id: "1:2" })
+await figma.resize({ id: "1:2", width: 500, height: 300 })
+await figma.set_selection({ nodeIds: ["1:2", "1:3"] })
+
+await figma.set_viewport({ nodeId: "1:2" })           // zoom to node
+await figma.set_viewport({ nodeName: "Dashboard" })
+await figma.set_viewport({ center: { x: 500, y: 300 }, zoom: 0.5 })
+
+// Sandbox helpers (v2.5.10+)
+await figma.getNodeById("89:393")                     // read node detail by ID
+await figma.zoom_to_fit({ nodeIds: ["1:2"] })         // alias for set_viewport
+await figma.getCurrentPage()                          // returns current page info
+\`\`\`
+
+---
+
+## Batch — up to 50 mixed operations in one round-trip
+\`\`\`js
+const result = await figma.batch([
+  { operation: "create", params: { type: "RECTANGLE", parentId: f.id, width: 100, height: 100, fill: "#FF0000" } },
+  { operation: "create", params: { type: "TEXT", parentId: f.id, content: "Hello", fontSize: 14, fill: "#FFFFFF" } },
+  { operation: "modify", params: { id: "1:5", fill: "#00FF00" } },
+  { operation: "delete", params: { id: "1:99" } },
+  { operation: "delete", params: { ids: ["2:1", "2:2"] } },
+]);
+// → { results: [{index, operation, success, data}], total: 5, succeeded: 5 }
+\`\`\`
+
+---
+
+## Read Operations (also available in figma_write for chaining)
+\`\`\`js
+var { nodes } = await figma.get_selection();
+var { dataUrl } = await figma.screenshot({ id: f.id, scale: 2 });
+var frames = await figma.get_page_nodes();  // returns ARRAY directly — do NOT destructure
+
+var styles = await figma.get_styles();
+// → { paintStyles: [{id, name, hex}], textStyles: [{id, name, fontSize, fontFamily}] }
+
+var comps = await figma.get_local_components();
+// → { components: [{id, name, description, variantProperties}], componentSets: [...] }
+
+var vp = await figma.get_viewport();
+// → { center: {x,y}, zoom, bounds: {x,y,width,height} }
+
+var vars = await figma.get_variables();
+// → { collections: [{id, name, modes: [{id,name}], variables: [{id,name,resolvedType,values}]}] }
+
+// includeHidden support (default false)
+var { nodes: all } = await figma.get_selection({ includeHidden: true });
+var { tree } = await figma.get_design({ id: "1:2", includeHidden: true });
+var { results } = await figma.search_nodes({ type: "TEXT", includeHidden: true });
+\`\`\`
+
+**export_image:**
+\`\`\`js
+figma_read({ operation: "export_image", nodeId: "89:209", scale: 2, format: "png" })
+// → { base64: "...", format, width, height, sizeBytes }
+\`\`\`
+
+**get_node_detail:**
+\`\`\`js
+figma_read({ operation: "get_node_detail", nodeId: "89:393" })
+// → { id, name, type, x, y, width, height, fills, stroke, borderRadius, css: {display,flexDirection,...}, boundVariables }
+\`\`\`
+
+**get_css:**
+\`\`\`js
+figma_read({ operation: "get_css", nodeId: "89:393" })
+// → ready-to-paste CSS string: background, flex, border, radius, shadow, typography
+\`\`\`
+
+**Design-to-code operations:**
+\`\`\`js
+figma_read({ operation: "get_design_context", nodeId: "89:393" })
+// → AI-optimized payload: flex layout, var(--token) fills, typography, component instances
+
+figma_read({ operation: "get_component_map", nodeId: "89:393" })
+// → all instances with componentSetName, variantLabel, suggestedImport path
+
+figma_read({ operation: "get_unmapped_components", nodeId: "89:393" })
+// → components without description (no code mapping) → prompt user for import paths
+\`\`\`
+
+---
+
+## Prototyping & Scroll
+\`\`\`js
+// Click → navigate with Smart Animate
+await figma.setReactions({ id: btnId, reactions: [{
+  trigger: { type: "ON_CLICK" },
+  actions: [{ type: "NAVIGATE", destinationId: targetFrameId,
+    transition: { type: "SMART_ANIMATE", duration: 0.3, easing: { type: "EASE_IN_AND_OUT" } }
+  }]
+}] });
+await figma.getReactions({ id: nodeId })
+await figma.removeReactions({ id: nodeId })
+
+// Scroll behavior
+await figma.setScrollBehavior({ id: frameId, overflowDirection: "VERTICAL", clipsContent: true });
+// overflowDirection: "NONE" | "HORIZONTAL" | "VERTICAL" | "BOTH"
+
+// Component variants & swap
+await figma.setComponentProperties({ id: instanceId, properties: { "Size": "Large", "State": "Active" } });
+await figma.swapComponent({ id: instanceId, componentId: targetComponentId });
+await figma.getComponentProperties({ id: instanceId });
+\`\`\`
+
+---
+
+## Workflow — Apply Existing Project Styles (read first, then apply)
+\`\`\`js
+// Read all tokens at session start
+var vars = await figma.get_variables();
+var varMap = {};
+for (var ci = 0; ci < vars.collections.length; ci++)
+  for (var vi = 0; vi < vars.collections[ci].variables.length; vi++) {
+    var v = vars.collections[ci].variables[vi];
+    varMap[v.name] = v.id;
+  }
+
+var styles = await figma.get_styles();
+var colorMap = {}, textMap = {};
+styles.paintStyles.forEach(function(s) { colorMap[s.name] = s.hex; });
+styles.textStyles.forEach(function(s) { textMap[s.name] = s; });
+
+var comps = await figma.get_local_components();
+var compMap = {};
+comps.components.forEach(function(c) { compMap[c.name] = c.id; });
+
+var pages = await figma.get_page_nodes();
+var frameMap = {};
+pages.forEach(function(f) { frameMap[f.name] = f.id; });
+
+// Create using discovered values + bind variables
+var card = await figma.create({
+  type: "FRAME", name: "Card",
+  fill: colorMap["color/bg-surface"] || "#FFFFFF",
+  width: 360, height: 200, cornerRadius: 12,
+  layoutMode: "VERTICAL", padding: 16, itemSpacing: 12
+});
+if (varMap["bg-surface"])
+  await figma.applyVariable({ nodeId: card.id, field: "fill", variableId: varMap["bg-surface"] });
+
+// Light/Dark preview side by side
+var collection = vars.collections.find(function(c) { return c.name === "Design Tokens"; });
+var light = await figma.clone({ id: frameMap["Home"], x: 0,    name: "Preview/Light" });
+var dark  = await figma.clone({ id: frameMap["Home"], x: 1500, name: "Preview/Dark"  });
+await figma.setFrameVariableMode({ nodeId: light.id, collectionId: collection.id, modeName: "light" });
+await figma.setFrameVariableMode({ nodeId: dark.id,  collectionId: collection.id, modeName: "dark" });
+\`\`\`
+
+---
+
+## Workflow example — Draw a full screen
+\`\`\`js
+await figma.createPage({ name: "Dashboard" });
+await figma.setPage({ name: "Dashboard" });
+
+const root = await figma.create({
+  type: "FRAME", name: "Dashboard",
+  x: 0, y: 0, width: 1440, height: 900, fill: "#0f172a",
+});
+
+const sidebar = await figma.create({
+  type: "FRAME", name: "Sidebar",
+  parentId: root.id, x: 0, y: 0, width: 240, height: 900,
+  fill: "#1e293b", stroke: "#334155", strokeWeight: 1,
+});
+
+await figma.create({ type: "TEXT", name: "Nav Label",
+  parentId: sidebar.id, x: 48, y: 100,
+  content: "Dashboard", fontSize: 13, fontWeight: "Medium", fill: "#f8fafc" });
+
+console.log("Root frame id:", root.id);
+\`\`\`
+`;
+
+const SECTION_TOKENS = `
+# figma-ui-mcp — Design Tokens & Variables
+
+---
+
+## setupDesignTokens — Bootstrap complete token system (idempotent)
+
+One call creates all variables. Existing variables get updated; new ones are created.
+
+\`\`\`js
+const result = await figma.setupDesignTokens({
+  collectionName: "Design Tokens",
+
+  // COLOR variables
+  colors: {
+    "accent":       "#3B82F6",
+    "bg-base":      "#08090E",
+    "text-primary": "#F0F2F5",
+    "positive":     "#00DC82",
+  },
+
+  // FLOAT variables (spacing, radius, etc.)
+  numbers: {
+    "spacing-xs": 4, "spacing-sm": 8, "spacing-md": 16, "spacing-lg": 24,
+    "radius-sm": 8,  "radius-md": 12, "radius-lg": 16,
+  },
+
+  // FLOAT variables for typography (v2.5.4+)
+  fontSizes: {
+    "text-xs": 11, "text-sm": 12, "text-body": 14,
+    "text-heading-md": 16, "text-heading-lg": 20, "text-heading-xl": 24,
+  },
+
+  // STRING variables for fonts (v2.5.4+)
+  fonts: {
+    "font-primary": "Inter",
+    "font-display": "Playfair Display",
+  },
+
+  // Text styles that reference variables above — {curly-braces} binds to variable
+  textStyles: {
+    "text/heading-xl": { fontFamily: "{font-primary}", fontWeight: "Bold",
+                         fontSize: "{text-heading-xl}", lineHeight: 32, letterSpacing: -0.4 },
+    "text/body":       { fontFamily: "{font-primary}", fontWeight: "Regular",
+                         fontSize: "{text-body}", lineHeight: 20 },
+    "text/caption":    { fontFamily: "{font-primary}", fontWeight: "Regular",
+                         fontSize: "{text-xs}", lineHeight: 16 },
+  }
+});
+// → { collectionId, created: [...], updated: [...], textStyles: [...], totalVariables: N }
+
+// Multi-mode: Light + Dark
+await figma.setupDesignTokens({
+  collectionName: "Design Tokens",
+  modes: ["light", "dark"],
+  colors: {
+    "bg-base":      { light: "#FFFFFF",  dark: "#0F1117" },
+    "text-primary": { light: "#111827",  dark: "#F9FAFB" },
+    "accent":       { light: "#3B82F6",  dark: "#60A5FA" },
+  }
+});
+
+// Multi-mode typography: Compact / Comfortable / Large
+await figma.setupDesignTokens({
+  collectionName: "Typography",
+  modes: ["compact", "comfortable", "large"],
+  fontSizes: {
+    "text-body":       { compact: 12, comfortable: 14, large: 16 },
+    "text-heading-xl": { compact: 22, comfortable: 24, large: 28 },
+  }
+});
+// Switch frame mode:
+await figma.setFrameVariableMode({ nodeId, collectionId, modeName: "large" });
+\`\`\`
+
+---
+
+## applyTextStyle — Apply a text style by name (v2.5.4+)
+
+\`\`\`js
+var title = await figma.create({ type: "TEXT", content: "Dashboard", parentId: card.id });
+await figma.applyTextStyle({ nodeId: title.id, styleName: "text/heading-xl" });
+// → { nodeId, styleName, styleId }
+\`\`\`
+
+Why use instead of inline props: font changes propagate, mode switches work, consistent across screens.
+
+---
+
+## modifyVariable — Change variable value (all bound nodes update)
+
+\`\`\`js
+await figma.modifyVariable({ variableName: "accent", value: "#0EA5E9" });
+await figma.modifyVariable({ variableId: "VariableID:57:671", value: "#FF6B35" });
+await figma.modifyVariable({ variableName: "spacing-md", value: 20 });
+await figma.modifyVariable({ variableName: "font-primary", value: "SF Pro" }); // font swap
+\`\`\`
+
+---
+
+## applyVariable — Bind a variable to a node property
+
+\`\`\`js
+await figma.applyVariable({ nodeId: card.id, field: "fill",         variableId: varMap["accent"] });
+await figma.applyVariable({ nodeId: card.id, field: "fill",         variableName: "accent" }); // by name
+\`\`\`
+
+**Supported fields:**
+
+| Field | Variable type | Notes |
+|-------|--------------|-------|
+| \`fill\` / \`stroke\` | COLOR | Binds to first solid paint |
+| \`opacity\` | FLOAT | 0.0–1.0 |
+| \`width\` / \`height\` | FLOAT | |
+| \`cornerRadius\` | FLOAT | Alias → topLeftRadius |
+| \`topLeftRadius\` / \`topRightRadius\` / \`bottomLeftRadius\` / \`bottomRightRadius\` | FLOAT | Individual corners |
+| \`strokeWeight\` | FLOAT | |
+| \`itemSpacing\` | FLOAT | Auto-layout gap |
+| \`paddingTop\` / \`paddingBottom\` / \`paddingLeft\` / \`paddingRight\` | FLOAT | |
+| \`fontSize\` / \`letterSpacing\` / \`lineHeight\` | FLOAT | TEXT only |
+| \`fontFamily\` / \`fontStyle\` | STRING | v2.5.4+ font swap |
+| \`characters\` | STRING | v2.5.4+ bind text content |
+| \`visible\` | BOOLEAN | Show/hide |
+
+\`\`\`js
+// Complete card binding
+var bindings = [
+  { nodeId: card.id, field: "fill",        varName: "bg-surface" },
+  { nodeId: card.id, field: "cornerRadius", varName: "radius-md" },
+  { nodeId: card.id, field: "paddingTop",   varName: "spacing-md" },
+  { nodeId: card.id, field: "itemSpacing",  varName: "spacing-sm" },
+  { nodeId: title.id, field: "fill",        varName: "text-primary" },
+];
+for (var bi = 0; bi < bindings.length; bi++) {
+  var b = bindings[bi];
+  if (varMap[b.varName])
+    await figma.applyVariable({ nodeId: b.nodeId, field: b.field, variableId: varMap[b.varName] });
+}
+\`\`\`
+
+---
+
+## Low-level Variable API
+
+\`\`\`js
+// Create collection + variables + modes manually (prefer setupDesignTokens)
+var colors = await figma.createVariableCollection({ name: "Colors" });
+await figma.renameVariableMode({ collectionId: colors.id, modeId: colors.modes[0].id, newName: "Light" });
+var dark = await figma.addVariableMode({ collectionId: colors.id, modeName: "Dark" });
+
+var bgBase = await figma.createVariable({ name: "bg-base", collectionId: colors.id, resolvedType: "COLOR", value: "#FFFFFF" });
+await figma.setVariableValue({ variableId: bgBase.id, modeId: dark.modeId, value: "#0F1117" });
+
+await figma.applyVariable({ nodeId: card.id, field: "fill", variableId: bgBase.id });
+
+await figma.setFrameVariableMode({ nodeId: frame.id, collectionId: colors.id, modeName: "Dark" });
+await figma.clearFrameVariableMode({ nodeId: frame.id, collectionId: colors.id });
+
+await figma.removeVariableMode({ collectionId: colors.id, modeId: dark.modeId });
+\`\`\`
+
+---
+
+## Paint & Text Styles
+
+\`\`\`js
+await figma.createPaintStyle({ name: "color/primary", color: "#006FEE", description: "Primary brand" });
+// → { id, name, key, color }
+
+await figma.createTextStyle({ name: "text/heading-xl",
+  fontFamily: "Inter", fontWeight: "Bold", fontSize: 24, lineHeight: 32, letterSpacing: -0.5 });
+// → { id, name, key, fontSize }
+\`\`\`
+
+---
+
+## ensure_library & get_library_tokens
+
+\`\`\`js
+const lib = await figma.ensure_library();
+// → { id, existed } — creates "🎨 Design Library" frame if not present
+
+const tokens = await figma.get_library_tokens();
+// → { colors: [{name, hex}], textStyles: [{name, fontSize, fontWeight, fill}] }
+\`\`\`
+
+---
+
+## Effects, Gradients, Corner Radii, Hex Alpha
+
+\`\`\`js
+// Effects
+effects: [
+  { type: "DROP_SHADOW", color: "#00000026", offset: {x:0,y:8}, radius: 24, spread: 0 },
+  { type: "INNER_SHADOW", color: "#00000030", offset: {x:0,y:2}, radius: 4 },
+  { type: "LAYER_BLUR", radius: 12 },
+  { type: "BACKGROUND_BLUR", radius: 20 },  // needs fill with alpha < 1 (glass effect)
+]
+await figma.modify({ id: node, effects: [] });  // clear all
+
+// Gradient fill
+fill: { type: "LINEAR_GRADIENT", angle: 135,
+  stops: [{ pos: 0, color: "#7C3AED" }, { pos: 1, color: "#EC4899" }] }
+fill: { type: "RADIAL_GRADIENT",
+  stops: [{ pos: 0, color: "#FFFFFF" }, { pos: 1, color: "#00000000" }] }
+
+// Individual corner radii
+topLeftRadius: 20, topRightRadius: 20, bottomLeftRadius: 0, bottomRightRadius: 0
+
+// Hex alpha — 8-digit hex, alpha auto-applied
+fill: "#FFFFFF80"    // 50% white
+fill: "#6C5CE733"    // 20% accent
+// Also: rgba(255,255,255,0.5)
+\`\`\`
+
+---
+
+## Mixed Text Segments
+
+\`\`\`js
+// get_design / get_selection returns segments for mixed-style text:
+{
+  "type": "TEXT", "content": "8 đ 83 token", "mixedStyles": true,
+  "segments": [
+    { "text": "8 đ",      "fill": "#1E3150", "fontWeight": "Bold",    "fontSize": 14 },
+    { "text": "83 token", "fill": "#8E9AAD", "fontWeight": "Regular", "fontSize": 14 }
+  ]
+}
+\`\`\`
+`;
+
+const SECTION_ICONS = `
+# figma-ui-mcp — Images & Icons
+
+---
+
+## figma.loadImage(url, opts)
+
+Download image from URL, place on canvas:
+
+\`\`\`js
+// Hero image
 await figma.loadImage("https://images.unsplash.com/photo-xxx?w=440&h=248&fit=crop", {
   parentId: frame.id, x: 0, y: 0, width: 440, height: 248,
   name: "hero-image", scaleMode: "FILL"
@@ -1570,892 +1298,162 @@ await figma.loadImage("https://images.unsplash.com/photo-xxx?w=48&h=48&fit=crop"
 });
 \`\`\`
 
-### figma.loadIcon(name, opts) — Fetch SVG icon (auto fallback: Fluent → Bootstrap → Phosphor → Lucide)
-\`\`\`js
-await figma.loadIcon("chevron-left", { parentId: header.id, x: 16, y: 16, size: 22, fill: "#FFFFFF" });
-await figma.loadIcon("bookmark",     { parentId: header.id, x: 398, y: 16, size: 22, fill: "#1E3150" });
-await figma.loadIcon("play",         { parentId: btn.id, size: 24, fill: "#FFFFFF" });
-\`\`\`
+---
 
-### figma.loadIconIn(name, opts) — Icon inside centered circle background
-\`\`\`js
-// 40px circle with jade bg at 10% opacity, 20px icon inside centered
-await figma.loadIconIn("check", {
-  parentId: card.id, containerSize: 40, fill: "#00B894", bgOpacity: 0.1
-});
-\`\`\`
+## figma.loadIcon(name, opts)
 
-### Legacy (still works but prefer helpers above)
-\`type: "IMAGE"\` with \`imageData\` (base64) — use only when you already have base64 data.
-\`type: "SVG"\` with \`svg\` string — use only when you have custom SVG markup.
+Fetch SVG icon with 7-library auto-fallback (filled-first, iOS style preferred):
+
+\`\`\`js
+await figma.loadIcon("notifications", { parentId: header.id, x: 16, y: 16, size: 22, fill: "#FFFFFF" });
+await figma.loadIcon("bookmark",      { parentId: header.id, x: 398, y: 16, size: 22, fill: "#1E3150" });
+await figma.loadIcon("play",          { parentId: btn.id, size: 24, fill: "#FFFFFF" });
+\`\`\`
 
 ---
 
-## SVG Icons
+## figma.loadIconIn(name, opts)
 
-Use \`type: "SVG"\` with \`svg\` param containing SVG markup string.
-Replace \`fill="currentColor"\` or \`stroke="currentColor"\` with desired color before sending.
+Icon inside centered circle background:
 
-### ICON LIBRARY PRIORITY (MANDATORY — v2.5.5 updated)
-Fallback order prioritizes **iOS-style filled** first (replaces paid Icons8 ios-filled
-use case). \`figma.loadIcon()\` tries libraries in this order and returns the first match:
+\`\`\`js
+await figma.loadIconIn("checkmark", {
+  parentId: card.id, containerSize: 40, fill: "#00B894", bgOpacity: 0.1
+  // x, y for position (optional)
+});
+// Creates 40px circle + 20px icon centered inside
+\`\`\`
 
-| Priority | Library | Style | URL Pattern | Fill Type |
-|----------|---------|-------|-------------|-----------|
-| 1st | **Ionicons** (v7.4.0) | iOS filled (default) | \`https://unpkg.com/ionicons@7.4.0/dist/svg/{name}.svg\` | none (injected) |
-| 2nd | **Fluent UI** | Win11 Filled | \`https://unpkg.com/@fluentui/svg-icons/icons/{name}_24_filled.svg\` | \`fill\` |
-| 3rd | **Bootstrap** | Filled | \`https://unpkg.com/bootstrap-icons@1.11.3/icons/{name}-fill.svg\` | \`fill\` |
-| 4th | **Phosphor** | Filled | \`https://unpkg.com/@phosphor-icons/core@latest/assets/fill/{name}-fill.svg\` | \`fill\` |
-| 5th | **Tabler Filled** (v3.24) | Filled (4,500+ icons) | \`https://unpkg.com/@tabler/icons@3.24.0/icons/filled/{name}.svg\` | \`currentColor\` |
-| 6th | **Tabler Outline** | Outline | \`https://unpkg.com/@tabler/icons@3.24.0/icons/outline/{name}.svg\` | \`currentColor\` |
-| 7th | **Lucide** | Outline fallback | \`https://unpkg.com/lucide-static@0.577.0/icons/{name}.svg\` | \`stroke\` |
+---
 
-**Naming differences between libraries** (use the FIRST library's name when calling \`loadIcon\`):
+## ICON LIBRARY PRIORITY (MANDATORY)
 
-| Concept | Ionicons | Fluent UI | Bootstrap | Phosphor | Tabler Filled | Lucide |
-|---------|----------|-----------|-----------|----------|---------------|--------|
-| Home | \`home\` | \`home_24_filled\` | \`house-fill\` | \`house-fill\` | \`home\` | \`home\` |
-| Bell | \`notifications\` | \`alert_24_filled\` | \`bell-fill\` | \`bell-fill\` | \`bell\` | \`bell\` |
-| User | \`person\` | \`person_24_filled\` | \`person-fill\` | \`user-fill\` | \`user\` | \`user\` |
-| Star | \`star\` | \`star_24_filled\` | \`star-fill\` | \`star-fill\` | \`star\` | \`star\` |
-| Book | \`book\` | \`book_24_filled\` | \`book-fill\` | \`book-open-fill\` | \`book\` | \`book-open\` |
-| Search | \`search\` | \`search_24_filled\` | \`search\` | \`magnifying-glass-fill\` | \`search\` | \`search\` |
-| Settings | \`settings\` | \`settings_24_filled\` | \`gear-fill\` | \`gear-fill\` | \`settings\` | \`settings\` |
-| Check | \`checkmark\` | \`checkmark_24_filled\` | \`check-circle-fill\` | \`check-circle-fill\` | \`check\` | \`check\` |
-| Close | \`close\` | \`dismiss_24_filled\` | \`x-circle-fill\` | \`x-circle-fill\` | \`x\` | \`x\` |
-| Arrow L | \`chevron-back\` | \`arrow_left_24_filled\` | \`arrow-left\` | \`arrow-left-fill\` | \`arrow-left\` | \`arrow-left\` |
-| Arrow R | \`chevron-forward\` | \`arrow_right_24_filled\` | \`arrow-right\` | \`arrow-right-fill\` | \`arrow-right\` | \`arrow-right\` |
-| Fire | \`flame\` | \`fire_24_filled\` | \`fire\` | \`fire-fill\` | \`flame\` | \`flame\` |
-| Trophy | \`trophy\` | \`trophy_24_filled\` | \`trophy-fill\` | \`trophy-fill\` | \`trophy\` | \`trophy\` |
-| Clock | \`time\` | \`clock_24_filled\` | \`clock-fill\` | \`clock-fill\` | \`clock\` | \`clock\` |
-| Share | \`share\` | \`share_24_filled\` | \`share-fill\` | \`share-fill\` | \`share\` | \`share-2\` |
-| Lock | \`lock-closed\` | \`lock_closed_24_filled\` | \`lock-fill\` | \`lock-fill\` | \`lock\` | \`lock\` |
-| Gift | \`gift\` | \`gift_24_filled\` | \`gift-fill\` | \`gift-fill\` | \`gift\` | \`gift\` |
-| Heart | \`heart\` | \`heart_24_filled\` | \`heart-fill\` | \`heart-fill\` | \`heart\` | \`heart\` |
-| Compass | \`compass\` | \`compass_northwest_24_filled\` | \`compass-fill\` | \`compass-fill\` | \`compass\` | \`compass\` |
-| Grid | \`grid\` | \`grid_24_filled\` | \`grid-fill\` | \`grid-four-fill\` | \`grid-dots\` | \`grid-2x2\` |
-| Eye | \`eye\` | \`eye_24_filled\` | \`eye-fill\` | \`eye-fill\` | \`eye\` | \`eye\` |
-| Bookmark | \`bookmark\` | \`bookmark_24_filled\` | \`bookmark-fill\` | \`bookmark-simple-fill\` | \`bookmark\` | \`bookmark\` |
-| Play | \`play\` | \`play_24_filled\` | \`play-fill\` | \`play-fill\` | \`player-play\` | \`play\` |
-| Chat | \`chatbubble\` | \`chat_24_filled\` | \`chat-fill\` | \`chat-circle-fill\` | \`message\` | \`message-circle\` |
-| Lightning | \`flash\` | \`flash_24_filled\` | \`lightning-fill\` | \`lightning-fill\` | \`bolt\` | \`zap\` |
-| Cart | \`cart\` | \`cart_24_filled\` | \`cart-fill\` | \`shopping-cart-fill\` | \`shopping-cart\` | \`shopping-cart\` |
-| Camera | \`camera\` | \`camera_24_filled\` | \`camera-fill\` | \`camera-fill\` | \`camera\` | \`camera\` |
-| Image | \`image\` | \`image_24_filled\` | \`image-fill\` | \`image-fill\` | \`photo\` | \`image\` |
-| Menu | \`menu\` | \`navigation_24_filled\` | \`list\` | \`list-fill\` | \`menu-2\` | \`menu\` |
+\`figma.loadIcon()\` tries libraries in this order, returns first match:
 
-**Common Ionicons-specific quirks** (iOS naming):
-- Bell → \`notifications\`, Back arrow → \`chevron-back\`, Clock → \`time\`
-- Plus → \`add\`, Close → \`close\` (not \`x\`), Checkmark → \`checkmark\`
-- Fire → \`flame\`, Lightning → \`flash\`, Lock → \`lock-closed\`
-- Outline variants: append \`-outline\` (\`home-outline\`, \`heart-outline\`)
-- Sharp variants: append \`-sharp\` (\`home-sharp\`)
+| Priority | Library | Style | Fill Type |
+|----------|---------|-------|-----------|
+| 1st | **Ionicons** v7.4.0 | iOS filled | injected at \`<svg>\` root |
+| 2nd | **Fluent UI** | Win11 Filled | \`fill\` attr |
+| 3rd | **Bootstrap** | Filled | \`fill\` attr |
+| 4th | **Phosphor** | Filled | \`fill\` attr |
+| 5th | **Tabler Filled** v3.24 | Filled (4,500+) | \`currentColor\` → replaced |
+| 6th | **Tabler Outline** | Outline | \`currentColor\` → replaced |
+| 7th | **Lucide** | Outline fallback | \`stroke\` → replaced |
 
-### ICON COLORING RULE (MANDATORY)
-Always pass \`fill\` param when creating SVG icons. Different libraries handle color differently:
-- **Ionicons**: No default fill attr → plugin injects \`fill\` at \`<svg>\` root
-- **Fluent UI**: No default fill attr → MUST pass \`fill\` param to color vectors
-- **Bootstrap / Phosphor / Tabler**: Uses \`fill="currentColor"\` → sed replacement + \`fill\` param
-- **Lucide / Tabler outline**: Uses \`stroke="currentColor"\` → sed replacement + \`stroke\` param
+**Ionicons-specific naming** (iOS naming conventions):
 
-The plugin's SVG handler applies \`fill\` to ALL vector children, so always include it:
+| Concept | Ionicons name |
+|---------|--------------|
+| Bell | \`notifications\` |
+| Back arrow | \`chevron-back\` |
+| Forward | \`chevron-forward\` |
+| Clock | \`time\` |
+| Plus | \`add\` |
+| Close | \`close\` |
+| Checkmark | \`checkmark\` |
+| Fire | \`flame\` |
+| Lightning | \`flash\` |
+| Lock | \`lock-closed\` |
+| Chat | \`chatbubble\` |
+
+Outline variants: append \`-outline\` (\`home-outline\`). Sharp: append \`-sharp\`.
+
+**Common names across libraries:**
+
+| Concept | Ionicons | Fluent | Bootstrap | Lucide |
+|---------|----------|--------|-----------|--------|
+| Home | \`home\` | \`home_24_filled\` | \`house-fill\` | \`home\` |
+| User | \`person\` | \`person_24_filled\` | \`person-fill\` | \`user\` |
+| Star | \`star\` | \`star_24_filled\` | \`star-fill\` | \`star\` |
+| Search | \`search\` | \`search_24_filled\` | \`search\` | \`search\` |
+| Settings | \`settings\` | \`settings_24_filled\` | \`gear-fill\` | \`settings\` |
+| Heart | \`heart\` | \`heart_24_filled\` | \`heart-fill\` | \`heart\` |
+| Bookmark | \`bookmark\` | \`bookmark_24_filled\` | \`bookmark-fill\` | \`bookmark\` |
+| Play | \`play\` | \`play_24_filled\` | \`play-fill\` | \`play\` |
+| Menu | \`menu\` | \`navigation_24_filled\` | \`list\` | \`menu\` |
+| Cart | \`cart\` | \`cart_24_filled\` | \`cart-fill\` | \`shopping-cart\` |
+
+---
+
+## ICON COLORING RULE (MANDATORY)
+
+Always pass \`fill\` param. Different libraries handle color differently — the plugin normalizes all:
+
+| Context | Icon Color |
+|---------|-----------|
+| On white/light bg | Brand color or \`#1E3150\` |
+| On colored bg (button) | \`#FFFFFF\` |
+| On colored circle bg | Same as circle color |
+| Inactive/disabled | \`#8E9AAD\` |
+| Accent/CTA | \`#6C5CE7\` |
+| Success | \`#00B894\` |
+| Warning | \`#F0B429\` |
+| Danger | \`#FF6B6B\` |
+
 \`\`\`js
 figma.create({ type: "SVG", svg: "...", fill: "#6C5CE7", ... })
 \`\`\`
 
-Icon color must match its context:
-| Context | Icon Color | Example |
-|---------|-----------|---------|
-| On white/light bg | Brand color or \`#1E3150\` | Card icons, tab bar |
-| On colored bg (button) | \`#FFFFFF\` | Button icons |
-| On colored circle bg | Same as circle color | \`figma_icon_in\` |
-| Inactive/disabled | \`#8E9AAD\` | Inactive tab, muted |
-| Accent/CTA | \`#6C5CE7\` (purple) | Active state |
-| Success | \`#00B894\` (jade) | Check marks |
-| Warning/gold | \`#F0B429\` | Stars, rewards |
-| Danger/alert | \`#FF6B6B\` (coral) | Notifications |
+---
 
-### ICON SIZING RULE (MANDATORY)
-Icon must ALWAYS be smaller than its container. Use this ratio:
-\`\`\`
-icon_size = container_size * 0.5    (50% of container)
-\`\`\`
-| Container | Icon | Example |
-|-----------|------|---------|
-| 24px      | 12px | Small badge dot |
-| 32px      | 16px | Letter circle in quiz |
-| 36px      | 18px | Header action circle |
-| 40px      | 20px | Card icon circle |
-| 44px      | 22px | Standard icon bg |
-| 48px      | 24px | Large icon bg |
-| 56px      | 28px | Hero icon |
-| 64px      | 32px | Featured icon |
-| 80px      | 40px | Splash/celebration |
+## ICON SIZING RULE (MANDATORY)
 
-**NEVER** set icon_size >= container_size. If icon overflows container, it looks broken.
-When using \`figma_center\` wrapper for icon, calculate: \`figma_center(..., container_size, ...)\` then \`figma_icon(..., container_size * 0.5, ...)\`.
+Icon MUST be smaller than container. Rule: \`icon_size = container_size × 0.5\`
+
+| Container | Icon |
+|-----------|------|
+| 24px | 12px |
+| 32px | 16px |
+| 40px | 20px |
+| 44px | 22px |
+| 48px | 24px |
+| 56px | 28px |
+| 64px | 32px |
+| 80px | 40px |
+
+NEVER set icon_size >= container_size.
 
 ---
 
-All figma operations are async. Always use \`await\`.
+## SVG Icons (manual)
 
----
-
-## Pages
-
+Use \`type: "SVG"\` with raw SVG markup when you have custom SVG:
 \`\`\`js
-await figma.listPages()
-// → [{ id, name }, ...]
-
-await figma.setPage({ name: "Dashboard" })     // switch to existing page
-await figma.createPage({ name: "Signals" })    // create new page (no-op if exists)
+// Replace fill/stroke "currentColor" before sending
+var svg = '<svg viewBox="0 0 24 24"><path d="M..." fill="#6C5CE7"/></svg>';
+await figma.create({ type: "SVG", svg, parentId: f.id, x: 0, y: 0, width: 24, height: 24, fill: "#6C5CE7" });
 \`\`\`
 
 ---
 
-## Query nodes
+## export_image vs screenshot
+
+| | screenshot | export_image |
+|--|-----------|-------------|
+| Output | Inline image in Claude Code | base64 text string |
+| Format | PNG only | PNG or JPG |
+| Use case | "Show me the frame" | "Save this asset" |
 
 \`\`\`js
-await figma.query({ type: "FRAME" })           // all frames on current page
-await figma.query({ name: "Sidebar" })         // by name
-await figma.query({ id: "123:456" })           // by id
-// → [{ id, name, type, x, y, width, height, parentId }]
+figma_read({ operation: "screenshot", nodeId: "123:456", scale: 1 })   // inline preview
+figma_read({ operation: "export_image", nodeId: "123:456", scale: 2, format: "png" })  // save to disk
 \`\`\`
-
----
-
-## Create — returns { id, name, type, x, y, width, height }
-
-### FRAME  (artboard / container)
-\`\`\`js
-const f = await figma.create({
-  type: "FRAME", name: "Screen",
-  x: 0, y: 0, width: 1440, height: 900,
-  fill: "#ffffff",            // hex color (optional)
-  cornerRadius: 0,            // (optional)
-  stroke: "#e2e8f0",          // border color (optional)
-  strokeWeight: 1,
-})
-\`\`\`
-
-### RECTANGLE  (card, badge, divider)
-\`\`\`js
-await figma.create({
-  type: "RECTANGLE", name: "Card",
-  parentId: f.id,
-  x: 24, y: 80, width: 280, height: 120,
-  fill: "#1e293b", cornerRadius: 12,
-  stroke: "#334155", strokeWeight: 1,
-})
-\`\`\`
-
-### ELLIPSE  (avatar, dot, chart node)
-\`\`\`js
-await figma.create({
-  type: "ELLIPSE", name: "Status Dot",
-  parentId: f.id,
-  x: 12, y: 12, width: 8, height: 8,
-  fill: "#22c55e",
-})
-\`\`\`
-
-### LINE  (horizontal/vertical divider)
-\`\`\`js
-await figma.create({
-  type: "LINE", name: "Divider",
-  parentId: f.id,
-  x: 0, y: 64, width: 240, height: 0,
-  stroke: "#1e293b", strokeWeight: 1,
-})
-\`\`\`
-
-### TEXT
-\`\`\`js
-await figma.create({
-  type: "TEXT", name: "Heading",
-  parentId: f.id,
-  x: 24, y: 24,
-  content: "Total Balance",
-  fontSize: 14,
-  fontWeight: "SemiBold",     // Regular | Medium | SemiBold | Bold | Light
-  fill: "#f8fafc",
-  lineHeight: 20,             // pixels (optional)
-})
-\`\`\`
-
-### VECTOR  (diagonal lines, curves, bezier paths, arcs, custom shapes)
-Use SVG path data syntax (\`d\` attribute) to draw any shape: diagonal lines, curves, arcs, polygons, waves.
-\`\`\`js
-// Diagonal line from top-left to bottom-right
-await figma.create({
-  type: "VECTOR", name: "Diagonal",
-  parentId: f.id,
-  x: 0, y: 0, width: 200, height: 100,
-  d: "M 0 0 L 200 100",       // SVG path data
-  stroke: "#ff0000", strokeWeight: 2,
-})
-
-// Smooth bezier curve (cubic)
-await figma.create({
-  type: "VECTOR", name: "Smooth Curve",
-  parentId: f.id,
-  x: 0, y: 0, width: 300, height: 150,
-  d: "M 0 150 C 75 0, 225 0, 300 150",
-  stroke: "#0e7c3a", strokeWeight: 3,
-  strokeCap: "ROUND",         // NONE | ROUND | SQUARE | ARROW_LINES | ARROW_EQUILATERAL
-  strokeJoin: "ROUND",        // MITER | BEVEL | ROUND
-})
-
-// Quadratic bezier curve
-await figma.create({
-  type: "VECTOR", name: "Quad Curve",
-  parentId: f.id,
-  x: 0, y: 0, width: 200, height: 100,
-  d: "M 0 100 Q 100 0 200 100",
-  stroke: "#6366F1", strokeWeight: 2,
-})
-
-// Filled wave / decorative shape
-await figma.create({
-  type: "VECTOR", name: "Wave",
-  parentId: f.id,
-  x: 0, y: 0, width: 440, height: 80,
-  d: "M 0 40 C 110 0, 220 80, 330 40 C 385 20, 420 30, 440 40 L 440 80 L 0 80 Z",
-  fill: "#0e7c3a",
-})
-
-// Arc (partial ellipse)
-await figma.create({
-  type: "VECTOR", name: "Arc",
-  parentId: f.id,
-  x: 0, y: 0, width: 200, height: 100,
-  d: "M 0 100 A 100 100 0 0 1 200 100",
-  stroke: "#FF4560", strokeWeight: 3,
-  strokeCap: "ROUND",
-})
-
-// Multiple paths in one vector
-await figma.create({
-  type: "VECTOR", name: "Multi Path",
-  parentId: f.id,
-  x: 0, y: 0, width: 100, height: 100,
-  paths: [
-    { d: "M 0 0 L 100 100", windingRule: "NONZERO" },
-    { d: "M 100 0 L 0 100", windingRule: "NONZERO" },
-  ],
-  stroke: "#000000", strokeWeight: 2,
-})
-\`\`\`
-
-**SVG Path Data cheatsheet:**
-| Command | Meaning | Example |
-|---------|---------|---------|
-| \`M x y\` | Move to point | \`M 0 0\` — start at origin |
-| \`L x y\` | Line to point | \`L 100 50\` — diagonal line |
-| \`H x\` | Horizontal line | \`H 200\` — horizontal to x=200 |
-| \`V y\` | Vertical line | \`V 100\` — vertical to y=100 |
-| \`C x1 y1 x2 y2 x y\` | Cubic bezier | \`C 50 0, 150 100, 200 50\` — S-curve |
-| \`Q x1 y1 x y\` | Quadratic bezier | \`Q 100 0 200 100\` — simple curve |
-| \`A rx ry rot large-arc sweep x y\` | Arc | \`A 50 50 0 0 1 100 0\` — half circle |
-| \`Z\` | Close path | Connect back to start point |
-
-**Lowercase** = relative coordinates (e.g. \`l 100 50\` = line 100px right, 50px down from current point).
-
----
-
-## Modify
-
-\`\`\`js
-await figma.modify({ id: f.id, fill: "#0f172a" })
-await figma.modify({ name: "Card", width: 300, cornerRadius: 16 })
-await figma.modify({ id: "123:456", content: "New text", fontSize: 16 })
-await figma.modify({ id: "123:456", fontFamily: "SF Pro", fontWeight: "Bold" })
-\`\`\`
-
----
-
-## Delete
-
-\`\`\`js
-await figma.delete({ id: "123:456" })
-await figma.delete({ name: "Old Frame" })
-\`\`\`
-
----
-
-## Components
-
-\`\`\`js
-await figma.listComponents()
-// → [{ id, name, key }]
-
-await figma.instantiate({ componentId: "c:123", parentId: f.id, x: 0, y: 0 })
-\`\`\`
-
----
-
-## Read operations (also available in figma_write for chaining)
-
-\`\`\`js
-// Get selected node design data
-const { nodes } = await figma.get_selection();
-console.log(JSON.stringify(nodes[0], null, 2));
-
-// Screenshot a frame
-const { dataUrl } = await figma.screenshot({ id: f.id, scale: 2 });
-
-// Top-level frames on current page — returns ARRAY directly (not {nodes:[...]})
-var frames = await figma.get_page_nodes();
-// → [ {id, name, type, x, y, width, height, childCount}, ... ]
-// ✅ CORRECT: for (var i = 0; i < frames.length; i++) { ... }
-// ✅ CORRECT: frames.find(f => f.name === "Home")
-// ❌ WRONG:   const { nodes } = await figma.get_page_nodes()  ← destructuring fails
-
-// Get all local paint/text/effect/grid styles
-var styles = await figma.get_styles();
-// → {
-//     paintStyles: [ { id: "S:1", name: "color/accent", hex: "#6C5CE7", type: "PAINT" } ],
-//     textStyles:  [ { id: "S:2", name: "text/heading-xl", type: "TEXT",
-//                      fontSize: 24, fontFamily: "Inter", fontWeight: "Bold",
-//                      lineHeight: 32, letterSpacing: 0 } ],
-//     effectStyles: [ { id: "S:3", name: "shadow/card", type: "EFFECT", effects: 1 } ],
-//     gridStyles:   [ { id: "S:4", name: "grid/8pt", type: "GRID" } ]
-//   }
-// Use paintStyles[i].id with createPaintStyle or paintStyles[i].hex for fill values
-// Use textStyles[i].id with createTextStyle; textStyles[i].fontSize for token lookup
-
-// Get enhanced component listing with properties
-var comps = await figma.get_local_components();
-// → { components: [{id, name, key, description, width, height, variantProperties}],
-//     componentSets: [{id, name, key}], total: N }
-
-// Get current viewport position and zoom
-var vp = await figma.get_viewport();
-// → { center: {x, y}, zoom, bounds: {x, y, width, height} }
-
-// Read Figma local variables (Design Tokens)
-var vars = await figma.get_variables();
-// → { collections: [{
-//       id: "VC:1", name: "Design Tokens",
-//       modes: [ {id: "m:1", name: "light"}, {id: "m:2", name: "dark"} ],
-//       variables: [ {
-//         id: "V:10", name: "accent", resolvedType: "COLOR",
-//         values: { "m:1": "#6C5CE7", "m:2": "#A78BFA" },  // hex strings for COLOR
-//         description: ""
-//       }, {
-//         id: "V:11", name: "spacing-md", resolvedType: "FLOAT",
-//         values: { "m:1": 16 }, description: ""
-//       } ]
-//   }] }
-// Build lookup: var varMap = {}; vars.collections[0].variables.forEach(v => varMap[v.name] = v.id);
-
-// Get design tree with control over hidden layers (default: invisible nodes are SKIPPED)
-const { nodes } = await figma.get_selection();                      // hidden children excluded
-const { nodes: all } = await figma.get_selection({ includeHidden: true }); // include visible:false
-
-// get_design also supports includeHidden
-const { tree } = await figma.get_design({ id: "1:2", includeHidden: false }); // default
-const { tree: full } = await figma.get_design({ id: "1:2", includeHidden: true }); // all layers
-
-// search_nodes also skips hidden by default
-const { results } = await figma.search_nodes({ type: "TEXT" });              // visible only
-const { results: allText } = await figma.search_nodes({ type: "TEXT", includeHidden: true }); // + hidden
-\`\`\`
-
----
-
-## New write operations
-
-### Clone — duplicate a node
-\`\`\`js
-const copy = await figma.clone({ id: "123:456", x: 500, y: 0, name: "Card Copy" });
-// Optionally move to different parent:
-await figma.clone({ id: "123:456", parentId: otherFrame.id });
-\`\`\`
-
-### Group / Ungroup
-\`\`\`js
-// Group multiple nodes
-const group = await figma.group({ nodeIds: ["1:2", "1:3", "1:4"], name: "Header Group" });
-
-// Ungroup — children moved to parent, group removed
-const { ungrouped } = await figma.ungroup({ id: group.id });
-\`\`\`
-
-### Flatten — merge vectors
-\`\`\`js
-const flat = await figma.flatten({ id: "1:2" });
-\`\`\`
-
-### Resize
-\`\`\`js
-await figma.resize({ id: "1:2", width: 500, height: 300 });
-\`\`\`
-
-### Set Selection — programmatically select nodes
-\`\`\`js
-await figma.set_selection({ nodeIds: ["1:2", "1:3"] });
-\`\`\`
-
-### Set Viewport — navigate to specific area
-\`\`\`js
-// Zoom to fit a specific node
-await figma.set_viewport({ nodeId: "1:2" });
-await figma.set_viewport({ nodeName: "Dashboard" });
-
-// Manual position + zoom
-await figma.set_viewport({ center: { x: 500, y: 300 }, zoom: 0.5 });
-\`\`\`
-
-### delete — remove nodes (single or batch)
-\`\`\`js
-// Single delete — by id or name
-await figma.delete({ id: "1:23" });
-await figma.delete({ name: "Temp Frame" });
-// → { deleted: true, id, name, type }  or  { deleted: true, alreadyGone: true } if already removed
-
-// Batch delete — pass ids array (one round-trip)
-await figma.delete({ ids: ["1:1", "1:2", "1:3", "1:4"] });
-// → { deleted: true, count: 4, results: [{deleted, id}, ...] }
-\`\`\`
-
-### Batch — execute up to 50 mixed operations in one round-trip
-\`\`\`js
-// Supported operations: create, modify, delete, clone, append, resize, group, flatten
-const result = await figma.batch([
-  { operation: "create", params: { type: "RECTANGLE", parentId: f.id, width: 100, height: 100, fill: "#FF0000" } },
-  { operation: "create", params: { type: "TEXT", parentId: f.id, content: "Hello", fontSize: 14, fill: "#FFFFFF" } },
-  { operation: "modify", params: { id: "1:5", fill: "#00FF00" } },
-  { operation: "delete", params: { id: "1:99" } },                        // single delete in batch
-  { operation: "delete", params: { ids: ["2:1", "2:2", "2:3"] } },        // batch delete in batch
-]);
-// → { results: [{index, operation, success, data}], total: 5, succeeded: 5 }
-// Failed operations set success: false with error string — others still execute (no rollback)
-\`\`\`
-
----
-
-## 🔑 WORKFLOW: Apply Existing Project Styles & Variables
-
-**Use this when entering a project that already has a design system defined.**
-Read first, then apply — never hardcode colors that already exist as variables or styles.
-
-### Step 1 — Read what exists in the project
-
-\`\`\`js
-// Always run at the start of any design task on an existing project
-
-// A — Read Figma Variables (Design Tokens bound to nodes)
-var vars = await figma.get_variables();
-var varMap = {};   // name → id lookup
-for (var ci = 0; ci < vars.collections.length; ci++) {
-  var col = vars.collections[ci];
-  for (var vi = 0; vi < col.variables.length; vi++) {
-    var v = col.variables[vi];
-    varMap[v.name] = v.id;
-  }
-}
-// varMap now contains: { "accent": "V:1", "bg": "V:2", "spacing-md": "V:3", ... }
-
-// B — Read Paint/Text Styles (Figma local styles panel)
-var styles = await figma.get_styles();
-var colorMap = {};  // name → hex (for fill values)
-var styleIdMap = {}; // name → styleId (for style binding)
-for (var i = 0; i < styles.paintStyles.length; i++) {
-  colorMap[styles.paintStyles[i].name] = styles.paintStyles[i].hex;
-  styleIdMap[styles.paintStyles[i].name] = styles.paintStyles[i].id;
-}
-var textMap = {};   // name → { fontSize, fontFamily, fontWeight }
-for (var j = 0; j < styles.textStyles.length; j++) {
-  textMap[styles.textStyles[j].name] = styles.textStyles[j];
-}
-
-// C — Read existing components
-var comps = await figma.get_local_components();
-var compMap = {};  // name → id
-for (var k = 0; k < comps.components.length; k++) {
-  compMap[comps.components[k].name] = comps.components[k].id;
-}
-
-// D — Read top-level frames to understand page layout
-var pages = await figma.get_page_nodes();
-var frameMap = {};
-for (var fi = 0; fi < pages.length; fi++) {
-  frameMap[pages[fi].name] = pages[fi].id;
-}
-\`\`\`
-
-### Step 2a — Create new nodes using discovered colors (fill from variable/style)
-
-\`\`\`js
-// Use colorMap values as fill (fallback to hex from styles)
-var card = await figma.create({
-  type: "FRAME", name: "Card",
-  fill: colorMap["color/bg-surface"] || "#FFFFFF",   // use discovered hex
-  width: 360, height: 200,
-  cornerRadius: 12,
-  layoutMode: "VERTICAL",
-  paddingTop: 16, paddingBottom: 16, paddingLeft: 16, paddingRight: 16,
-  itemSpacing: 12,
-});
-
-// Then bind variable so future mode switches propagate
-if (varMap["bg-surface"]) {
-  await figma.applyVariable({ nodeId: card.id, field: "fill", variableId: varMap["bg-surface"] });
-}
-if (varMap["radius-md"]) {
-  await figma.applyVariable({ nodeId: card.id, field: "cornerRadius", variableId: varMap["radius-md"] });
-}
-\`\`\`
-
-### Step 2b — Create text using discovered text styles
-
-\`\`\`js
-var headingStyle = textMap["text/heading-lg"] || { fontSize: 20, fontFamily: "Inter", fontWeight: "Bold" };
-var bodyStyle    = textMap["text/body"]       || { fontSize: 14, fontFamily: "Inter", fontWeight: "Regular" };
-
-var title = await figma.create({
-  type: "TEXT", parentId: card.id,
-  content: "Card Title",
-  fontSize: headingStyle.fontSize,
-  fontWeight: headingStyle.fontWeight,
-  fill: colorMap["color/text-primary"] || "#1E3150",
-});
-// Bind color variable if available
-if (varMap["text-primary"]) {
-  await figma.applyVariable({ nodeId: title.id, field: "fill", variableId: varMap["text-primary"] });
-}
-\`\`\`
-
-### Step 2c — Instantiate existing components
-
-\`\`\`js
-// Check compMap before creating anything from scratch
-if (compMap["btn/primary"]) {
-  // Component exists — instantiate with overrides
-  await figma.instantiate({
-    componentId: compMap["btn/primary"],
-    parentId: card.id,
-    overrides: { "Label": { text: "Confirm" } }
-  });
-} else {
-  // Component doesn't exist — build from scratch, then convert to component
-  var btnFrame = await figma.create({ type: "FRAME", name: "btn/primary", ... });
-  await figma.createComponent({ nodeId: btnFrame.id, name: "btn/primary" });
-}
-\`\`\`
-
-### Step 3 — Apply variables to ALL bindable properties
-
-\`\`\`js
-// Complete binding pattern for a card component:
-var bindings = [
-  { nodeId: card.id,    field: "fill",        varName: "bg-surface" },
-  { nodeId: card.id,    field: "cornerRadius", varName: "radius-md" },
-  { nodeId: card.id,    field: "paddingTop",   varName: "spacing-md" },
-  { nodeId: card.id,    field: "paddingLeft",  varName: "spacing-md" },
-  { nodeId: card.id,    field: "itemSpacing",  varName: "spacing-sm" },
-  { nodeId: title.id,   field: "fill",         varName: "text-primary" },
-  { nodeId: title.id,   field: "fontSize",     varName: "font-heading" },
-  { nodeId: subtitle.id,field: "fill",         varName: "text-secondary" },
-  { nodeId: divider.id, field: "fill",         varName: "border" },
-];
-for (var bi = 0; bi < bindings.length; bi++) {
-  var b = bindings[bi];
-  if (varMap[b.varName]) {
-    await figma.applyVariable({ nodeId: b.nodeId, field: b.field, variableId: varMap[b.varName] });
-  }
-}
-\`\`\`
-
-### Step 4 — Switch between Light / Dark mode on a frame
-
-\`\`\`js
-// Pin a frame to a specific variable mode (Light or Dark preview)
-var collection = vars.collections.find(function(c) { return c.name === "Design Tokens"; });
-await figma.setFrameVariableMode({
-  nodeId: frameMap["Home Screen"],
-  collectionId: collection.id,
-  modeName: "dark"   // or "light" — must match exact mode name in collection
-});
-
-// Build side-by-side light/dark preview
-var lightPreview = await figma.clone({ id: frameMap["Home Screen"], x: 0,    name: "Preview/Light" });
-var darkPreview  = await figma.clone({ id: frameMap["Home Screen"], x: 1500, name: "Preview/Dark"  });
-await figma.setFrameVariableMode({ nodeId: lightPreview.id, collectionId: collection.id, modeName: "light" });
-await figma.setFrameVariableMode({ nodeId: darkPreview.id,  collectionId: collection.id, modeName: "dark" });
-\`\`\`
-
----
-
-### Design Tokens — Variables, Styles, Components (v1.7.0)
-
-#### createVariableCollection — create a named collection
-\`\`\`js
-// Create collections to organize variables
-var colors = await figma.createVariableCollection({ name: "Colors" });
-var spacing = await figma.createVariableCollection({ name: "Spacing" });
-// → { id: "VariableCollectionId:123", name: "Colors", modes: [{ id: "...", name: "Mode 1" }] }
-\`\`\`
-
-#### createVariable — create a variable in a collection
-\`\`\`js
-// COLOR variable — pass hex string, auto-converts to RGBA
-var bgBase = await figma.createVariable({
-  name: "bg-base",
-  collectionId: colors.id,    // or collection name: "Colors"
-  resolvedType: "COLOR",      // COLOR | FLOAT | STRING | BOOLEAN
-  value: "#08090E"
-});
-
-// FLOAT variable for spacing
-var spaceMd = await figma.createVariable({
-  name: "space-md",
-  collectionId: spacing.id,
-  resolvedType: "FLOAT",
-  value: 16
-});
-// → { id: "VariableID:456", name: "bg-base", resolvedType: "COLOR", collectionId: "..." }
-\`\`\`
-
-#### addVariableMode — add a mode to a collection (e.g. Light / Dark)
-\`\`\`js
-// Collections start with 1 default mode ("Mode 1"). Add more here.
-var darkMode = await figma.addVariableMode({ collectionId: colors.id, modeName: "Dark" });
-// → { modeId: "...", modeName: "Dark", collectionId: "...", modes: [{id, name}, ...] }
-
-// Rename the auto-created default mode
-await figma.renameVariableMode({ collectionId: colors.id, modeId: colors.modes[0].id, newName: "Light" });
-\`\`\`
-
-#### renameVariableMode — rename an existing mode
-\`\`\`js
-await figma.renameVariableMode({
-  collectionId: colors.id,
-  modeId: "123:0",           // modeId from collection.modes
-  newName: "Light"
-});
-// → { modeId: "123:0", modeName: "Light", modes: [...] }
-\`\`\`
-
-#### removeVariableMode — delete a mode from a collection
-\`\`\`js
-await figma.removeVariableMode({
-  collectionId: colors.id,
-  modeId: darkMode.modeId
-});
-// → { removedModeId: "...", modes: [...remaining modes] }
-\`\`\`
-
-#### setVariableValue — set variable value for a specific mode
-\`\`\`js
-// By modeId (fast)
-await figma.setVariableValue({
-  variableId: bgBase.id,
-  modeId: darkMode.modeId,
-  value: "#0F1117"           // hex auto-converts for COLOR variables
-});
-
-// By name (convenient)
-await figma.setVariableValue({
-  variableName: "bg-base",
-  collectionId: colors.id,   // optional, speeds up search
-  modeName: "Dark",
-  value: "#0F1117"
-});
-
-// FLOAT / STRING / BOOLEAN
-await figma.setVariableValue({ variableName: "radius-md", modeName: "Compact", value: 6 });
-await figma.setVariableValue({ variableName: "show-border", modeName: "Dark", value: true });
-\`\`\`
-
-#### Multi-mode Light/Dark full workflow
-\`\`\`js
-// 1. Create collection
-var colors = await figma.createVariableCollection({ name: "Colors" });
-
-// 2. Rename default mode → "Light", add "Dark"
-await figma.renameVariableMode({ collectionId: colors.id, modeId: colors.modes[0].id, newName: "Light" });
-var dark = await figma.addVariableMode({ collectionId: colors.id, modeName: "Dark" });
-
-// 3. Create variables (value in createVariable sets the FIRST / Light mode)
-var bgBase = await figma.createVariable({ name: "bg-base",      collectionId: colors.id, resolvedType: "COLOR", value: "#FFFFFF" });
-var accent  = await figma.createVariable({ name: "accent",       collectionId: colors.id, resolvedType: "COLOR", value: "#3B82F6" });
-var txtPrim = await figma.createVariable({ name: "text-primary", collectionId: colors.id, resolvedType: "COLOR", value: "#111827" });
-
-// 4. Set Dark mode values
-await figma.setVariableValue({ variableId: bgBase.id,  modeId: dark.modeId, value: "#0F1117" });
-await figma.setVariableValue({ variableId: accent.id,  modeId: dark.modeId, value: "#60A5FA" });
-await figma.setVariableValue({ variableId: txtPrim.id, modeId: dark.modeId, value: "#F9FAFB" });
-
-// 5. Bind variables to nodes as usual
-await figma.applyVariable({ nodeId: card.id, field: "fill", variableId: bgBase.id });
-// → Switching Figma mode (Light ↔ Dark) now updates all bound nodes automatically
-\`\`\`
-
-#### applyVariable — bind variable to a node property
-\`\`\`js
-// Bind fill color — change variable value later → ALL bound nodes update automatically
-await figma.applyVariable({ nodeId: card.id, field: "fill",         variableName: "bg-base" });
-await figma.applyVariable({ nodeId: card.id, field: "stroke",       variableName: "border-color" });
-await figma.applyVariable({ nodeId: card.id, field: "cornerRadius", variableName: "radius-md" });
-await figma.applyVariable({ nodeId: card.id, field: "paddingTop",   variableName: "spacing-lg" });
-await figma.applyVariable({ nodeId: card.id, field: "paddingLeft",  variableName: "spacing-md" });
-await figma.applyVariable({ nodeId: card.id, field: "itemSpacing",  variableName: "spacing-sm" });
-await figma.applyVariable({ nodeId: text.id, field: "fontSize",     variableName: "font-size-heading" });
-// Full field list: see ## applyVariable section above
-\`\`\`
-
-#### setFrameVariableMode — pin a frame to a specific variable mode
-\`\`\`js
-// Force a frame to always render in "Dark" mode regardless of document default
-await figma.setFrameVariableMode({
-  nodeId: darkFrame.id,
-  collectionId: colors.id,   // or collection name: "Colors"
-  modeName: "Dark"           // or modeId: "123:1"
-});
-// → { nodeId, nodeName, collectionId, collectionName, modeId, modeName, explicitVariableModes }
-
-// Useful for export workflows: set Light on one frame, Dark on another, then export both
-var lightFrame = await figma.create({ type: "FRAME", name: "Preview/Light", ... });
-var darkFrame  = await figma.create({ type: "FRAME", name: "Preview/Dark",  ... });
-await figma.setFrameVariableMode({ nodeId: lightFrame.id, collectionId: colors.id, modeName: "Light" });
-await figma.setFrameVariableMode({ nodeId: darkFrame.id,  collectionId: colors.id, modeName: "Dark"  });
-\`\`\`
-
-#### clearFrameVariableMode — remove explicit mode override, revert to parent/document default
-\`\`\`js
-await figma.clearFrameVariableMode({
-  nodeId: frame.id,
-  collectionId: colors.id   // or collection name
-});
-// → { nodeId, nodeName, collectionId, collectionName, explicitVariableModes }
-\`\`\`
-
-#### createPaintStyle — create reusable paint style
-\`\`\`js
-var primaryStyle = await figma.createPaintStyle({
-  name: "color/primary",     // use slash naming for organization
-  color: "#006FEE",
-  description: "Primary brand color"
-});
-// → { id: "S:...", name: "color/primary", key: "...", color: "#006FEE" }
-\`\`\`
-
-#### createTextStyle — create reusable text style
-\`\`\`js
-var headingStyle = await figma.createTextStyle({
-  name: "text/heading-xl",
-  fontFamily: "Inter",
-  fontWeight: "Bold",        // Regular | Medium | SemiBold | Bold | Heavy
-  fontSize: 24,
-  lineHeight: 32,            // px number, "auto", or "150%"
-  letterSpacing: -0.5,       // px
-  description: "Page headings"
-});
-// → { id: "S:...", name: "text/heading-xl", key: "...", fontSize: 24 }
-\`\`\`
-
-#### createComponent — convert frame to reusable component
-\`\`\`js
-// First create a frame with desired design
-var btnFrame = await figma.create({
-  type: "FRAME", name: "btn/primary",
-  width: 120, height: 40, fill: "#006FEE", cornerRadius: 12,
-  layoutMode: "HORIZONTAL", primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER",
-});
-await figma.create({ type: "TEXT", parentId: btnFrame.id, content: "Button", fontSize: 14, fontWeight: "SemiBold", fill: "#FFFFFF" });
-
-// Convert to component — now reusable via instantiate()
-var btnComp = await figma.createComponent({ nodeId: btnFrame.id, name: "btn/primary" });
-// → { id: "...", name: "btn/primary", key: "...", width: 120, height: 40 }
-
-// Use it everywhere
-var btn1 = await figma.instantiate({ componentId: btnComp.id, parentId: form.id, x: 0, y: 100 });
-var btn2 = await figma.instantiate({ componentId: btnComp.id, parentId: card.id, x: 16, y: 200 });
-// Edit original component → all instances update automatically
-\`\`\`
-
-#### Full Design Token Workflow
-\`\`\`js
-// 1. Create variable collections
-var colors = await figma.createVariableCollection({ name: "Brand Colors" });
-var spacing = await figma.createVariableCollection({ name: "Spacing" });
-
-// 2. Define variables
-await figma.createVariable({ name: "primary", collectionId: colors.id, resolvedType: "COLOR", value: "#006FEE" });
-await figma.createVariable({ name: "bg-card", collectionId: colors.id, resolvedType: "COLOR", value: "#FFFFFF" });
-await figma.createVariable({ name: "text-primary", collectionId: colors.id, resolvedType: "COLOR", value: "#1E3150" });
-await figma.createVariable({ name: "md", collectionId: spacing.id, resolvedType: "FLOAT", value: 16 });
-
-// 3. Create paint + text styles
-await figma.createPaintStyle({ name: "color/primary", color: "#006FEE" });
-await figma.createTextStyle({ name: "text/body", fontFamily: "Inter", fontWeight: "Regular", fontSize: 14, lineHeight: 22 });
-
-// 4. Build UI and bind variables
-var card = await figma.create({ type: "FRAME", width: 300, height: 200, fill: "#FFFFFF", cornerRadius: 12 });
-await figma.applyVariable({ nodeId: card.id, field: "fill", variableName: "bg-card" });
-
-// 5. Rebrand later? Just change the variable — everything updates!
-\`\`\`
-
----
-
-## Workflow example — Draw a full screen
-
-\`\`\`js
-// 1. Switch page
-await figma.createPage({ name: "Dashboard" });
-await figma.setPage({ name: "Dashboard" });
-
-// 2. Root frame
-const root = await figma.create({
-  type: "FRAME", name: "Dashboard",
-  x: 0, y: 0, width: 1440, height: 900, fill: "#0f172a",
-});
-
-// 3. Sidebar
-const sidebar = await figma.create({
-  type: "FRAME", name: "Sidebar",
-  parentId: root.id,
-  x: 0, y: 0, width: 240, height: 900,
-  fill: "#1e293b", stroke: "#334155", strokeWeight: 1,
-});
-
-// 4. Nav item
-const navItem = await figma.create({
-  type: "RECTANGLE", name: "Nav Active",
-  parentId: sidebar.id,
-  x: 8, y: 88, width: 224, height: 40,
-  fill: "#3b82f6", cornerRadius: 8, opacity: 0.15,
-});
-
-await figma.create({
-  type: "TEXT", name: "Nav Label",
-  parentId: sidebar.id,
-  x: 48, y: 100,
-  content: "Dashboard",
-  fontSize: 13, fontWeight: "Medium", fill: "#f8fafc",
-});
-
-// 5. Continue building sections…
-console.log("Root frame id:", root.id);
-\`\`\`
-
----
-
-## Figma Plugin Sandbox Limitations
-The plugin JS sandbox does NOT support:
-- Optional chaining \`?.\` → use \`x ? x.y : null\`
-- Nullish coalescing \`??\` → use \`x !== undefined ? x : default\`
-- Object spread \`{...obj}\` → use \`Object.assign({}, obj)\`
-- \`require\`, \`fetch\`, \`setTimeout\`, \`process\`, \`fs\`
-
----
-
-## Tips
-- Build iteratively: one section at a time
-- Use \`console.log(node.id)\` to inspect returned IDs
-- Use \`figma.query()\` to find existing nodes before modifying
-- Each \`figma.*\` call = one HTTP round-trip — keep code sequential
 `;
+
+// ─── Section router ────────────────────────────────────────────────────────────
+
+export function getDocs(section) {
+  if (!section) return SECTION_INDEX + "\n\n" + SECTION_DEFAULT;
+  switch (section.toLowerCase()) {
+    case "rules":   return SECTION_RULES;
+    case "layout":  return SECTION_LAYOUT;
+    case "api":     return SECTION_API;
+    case "tokens":  return SECTION_TOKENS;
+    case "icons":   return SECTION_ICONS;
+    default:
+      return `Unknown section: "${section}". Valid sections: rules | layout | api | tokens | icons\n\n` + SECTION_INDEX;
+  }
+}
+
+// Legacy export — returns default section (for backwards compatibility)
+export const DOCS = getDocs(null);

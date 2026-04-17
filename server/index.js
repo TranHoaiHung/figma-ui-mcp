@@ -9,7 +9,7 @@ import http from "node:http";
 import { BridgeServer, CONFIG } from "./bridge-server.js";
 import { executeCode } from "./code-executor.js";
 import { TOOLS } from "./tool-definitions.js";
-import { DOCS } from "./api-docs.js";
+import { getDocs } from "./api-docs.js";
 
 // ── Bridge connection strategy ─────────────────────────────────────────────
 // Try to start own bridge server. If port is already taken (another instance
@@ -103,7 +103,7 @@ if (existingHealth.pluginConnected) {
 }
 
 const server = new Server(
-  { name: "figma-ui-mcp", version: "2.5.10" },
+  { name: "figma-ui-mcp", version: "2.5.11" },
   { capabilities: { tools: {} } }
 );
 
@@ -211,7 +211,7 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, argumen
 
   // ── figma_docs ────────────────────────────────────────────────────────────
   if (name === "figma_docs") {
-    return { content: [{ type: "text", text: DOCS }] };
+    return { content: [{ type: "text", text: getDocs(args?.section) }] };
   }
 
   // ── figma_rules ───────────────────────────────────────────────────────────
