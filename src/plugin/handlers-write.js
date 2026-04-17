@@ -4,7 +4,7 @@ const handlers = {};
 
 handlers.status = async () => ({
   connected:   true,
-  version:     "2.1.0",
+  version:     "{{PLUGIN_VERSION}}",
   fileName:    figma.root.name,
   currentPage: figma.currentPage.name,
   pageCount:   figma.root.children.length,

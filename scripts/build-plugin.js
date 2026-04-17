@@ -2,6 +2,8 @@
 // No module system used: files are plain JS sharing a single scope when concatenated.
 import { readFileSync, writeFileSync } from "fs";
 
+const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+
 const files = [
   "src/plugin/utils.js",
   "src/plugin/svg-path-helpers.js",
@@ -27,6 +29,6 @@ const parts = files.map(f => {
   return `\n// ── ${f} ──\n${content}`;
 });
 
-const output = banner + parts.join("\n");
+const output = (banner + parts.join("\n")).replace(/\{\{PLUGIN_VERSION\}\}/g, version);
 writeFileSync("plugin/code.js", output);
 console.log(`✓ plugin/code.js written (${output.length} chars, ${output.split("\n").length} lines)`);
