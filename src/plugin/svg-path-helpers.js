@@ -74,8 +74,8 @@ function normalizeSvgPath(d) {
   if (!d || typeof d !== "string") return d;
   // Insert space before every command letter, replace commas with spaces
   var spaced = d.replace(/,/g, " ").replace(/([MLHVCSQTAZmlhvcsqtaz])/g, " $1 ").replace(/\s+/g, " ").trim();
-  // If no commands needing conversion, return early
-  if (!/[AaMmLlHhVvCcSsQqTt]/.test(spaced) || !/[Aamlhvcsqt]/.test(spaced) && !/[Aa]/.test(spaced)) {
+  // If no commands needing conversion (H, V, A, or any relative), return early
+  if (!/[HhVvAa]/.test(spaced) && !/[mlcsqt]/.test(spaced)) {
     return spaced;
   }
   // Tokenize: split on command letters while keeping them

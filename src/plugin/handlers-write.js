@@ -232,6 +232,9 @@ function buildVector(params, width, height, fill, stroke, strokeWeight) {
     } else {
       node.vectorPaths = [{ data: normalizeSvgPath(pathData), windingRule: params.windingRule || "NONZERO" }];
     }
+    // BUG-04: Figma resets bounding box to path geometry after setVectorPaths.
+    // Re-apply resize() so the node matches the requested dimensions.
+    if (width && height) node.resize(width, height);
     node.fills = fill ? solidFill(fill, params.fillOpacity) : [];
     if (stroke) { node.strokes = solidStroke(stroke); node.strokeWeight = strokeWeight; }
     if (params.strokeCap)  node.strokeCap  = params.strokeCap;

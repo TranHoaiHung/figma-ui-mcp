@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.5.17] — 2026-04-18
+
+### Fixed — BUG-04 (VECTOR dimensions) + BUG-11 (H/V SVG path commands)
+
+**BUG-11: H/V uppercase SVG path commands not normalized** (`src/plugin/svg-path-helpers.js`)
+- Root cause: early-return guard `!/[Aamlhvcsqt]/` was true for paths with only uppercase H/V — function returned the raw path unchanged, causing Figma to throw `Invalid command at H`
+- Fix: replaced faulty condition with `!/[HhVvAa]/.test() && !/[mlcsqt]/.test()` — now correctly identifies all paths needing conversion
+- Uppercase `H x` → `L x currentY`, `V y` → `L currentX y` now work correctly
+- Lowercase `h`/`v` (relative) already worked — confirmed no regression
+
+**BUG-04: VECTOR node dimensions reset by Figma after setVectorPaths** (`src/plugin/handlers-write.js`)
+- Figma recalculates the node bounding box from path geometry after `vectorPaths` is assigned, overwriting any prior `resize()` call
+- Fix: added `node.resize(width, height)` immediately after setting `vectorPaths` — Figma then scales the path geometry to fit the requested dimensions
+- Applies to both `paths` array and single `d` string inputs
+
+**BUG-09: `figma.getChildren(nodeId)` exposed in write sandbox** (`server/code-executor.js`)
+- Previously threw `figma.getChildren is not a function`
+- Now proxies to `get_node_detail` and returns the `children` array — or `[]` if node has no children
+- Enables `for` loops over children within a single `figma_write` call without needing a separate `figma_read`
+
+**BUG-10: `figma.getNode(id)` exposed in write sandbox** (`server/code-executor.js`)
+- Previously no way to read a node's properties inside `figma_write`
+- `figma.getNode(id)` proxies to `get_node_detail` — returns full node detail (same as `figma.getNodeById`)
+- `figma.getNodeById(id)` still works (unchanged)
+
+### Tests
+- `scripts/test-v2517.mjs` — 23 tests (BUG-11 ×13, BUG-04 ×7, BUG-05/15 regression ×3)
+- `scripts/test-bug0910.mjs` — 11 tests (BUG-09 ×8, BUG-10 ×2, regression ×1)
+- Full suite: **142 tests, 0 failures** (39 + 13 + 29 + 27 + 23 + 11)
+
+---
+
 ## [2.5.16] — 2026-04-18
 
 ### Docs — Known Figma Limitations + Non-negotiable rules update (`server/api-docs.js`)

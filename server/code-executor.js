@@ -130,6 +130,17 @@ function buildFigmaProxy(bridge) {
     return bridge.sendOperation("get_node_detail", { id });
   };
 
+  // ── BUG-09: figma.getChildren(nodeId) — returns children array ──────────
+  proxy.getChildren = async (nodeId) => {
+    const detail = await bridge.sendOperation("get_node_detail", { id: nodeId, depth: 1 });
+    return (detail && Array.isArray(detail.children)) ? detail.children : [];
+  };
+
+  // ── BUG-10: figma.getNode(id) — alias for getNodeById ───────────────────
+  proxy.getNode = async (id) => {
+    return bridge.sendOperation("get_node_detail", { id });
+  };
+
   // ── BUG-13: figma.zoom_to_fit(opts) — alias for set_viewport ──────────
   proxy.zoom_to_fit = async (opts = {}) => {
     var nodeIds = opts.nodeIds || (opts.nodeId ? [opts.nodeId] : []);
