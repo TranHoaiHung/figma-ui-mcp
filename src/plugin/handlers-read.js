@@ -53,9 +53,9 @@ handlers.get_design = async function(params) {
     var svgStartTime = Date.now();
     var SVG_TIME_BUDGET_MS = 5000; // max 5s for SVG inlining — prevent timeout on heavy files
     var SVG_MAX_ICONS = 10;
-    if (detailLevel !== "full") iconCount = 999; // skip inline SVG for non-full modes
+    var skipInlineSvg = (detailLevel !== "full");
     async function inlineSvgForIcons(node) {
-      if (!node) return;
+      if (!node || skipInlineSvg) return;
       if (iconCount >= SVG_MAX_ICONS || (Date.now() - svgStartTime) > SVG_TIME_BUDGET_MS) return;
       if (node.isIcon && node.id) {
         try {
@@ -190,15 +190,17 @@ handlers.scan_design = async function(params) {
     }
   }
 
-  // Build sections from top-level children
-  function countAssets(n, sec) {
-    if (!n || typeof n !== "object") return;
-    if (isLikelyIcon(n)) sec.iconCount++;
-    if (hasImageFill(n)) sec.imageCount++;
-    if ("children" in n && Array.isArray(n.children)) { for (var i = 0; i < n.children.length; i++) countAssets(n.children[i], sec); }
-  }
+  // Walk entire tree first — collects all nodes, colors, fonts, images, icons, components
+  walkCount(root);
 
+  // Build sections from top-level children — reuse data already collected by walkCount
   if ("children" in root) {
+    var sectionIconIds = {};
+    var sectionImageIds = {};
+    // Index icons/images by id for O(1) lookup
+    for (var ii = 0; ii < summary.icons.length; ii++) sectionIconIds[summary.icons[ii].id] = true;
+    for (var im = 0; im < summary.images.length; im++) sectionImageIds[summary.images[im].id] = true;
+
     for (var ci = 0; ci < root.children.length; ci++) {
       var child = root.children[ci];
       var section = {
@@ -206,30 +208,31 @@ handlers.scan_design = async function(params) {
         x: Math.round(child.x), y: Math.round(child.y),
         width: Math.round(child.width), height: Math.round(child.height),
         childCount: "children" in child ? child.children.length : 0,
+        iconCount: 0,
+        imageCount: 0,
       };
-      // Summarize text inside this section
       var sectionTexts = collectTextContent(child, 20);
       if (sectionTexts.length) section.textContent = sectionTexts;
-      section.iconCount = 0;
-      section.imageCount = 0;
-      // Quick count icons/images in section
-      countAssets(child, section);
+      // Count icons/images that belong to this section's subtree (by checking collected lists)
+      for (var si = 0; si < summary.icons.length; si++) {
+        if (summary.icons[si].id === child.id || (summary.icons[si].parentId && summary.icons[si].parentId === child.id)) section.iconCount++;
+      }
+      for (var sj = 0; sj < summary.images.length; sj++) {
+        if (summary.images[sj].id === child.id || (summary.images[sj].parentId && summary.images[sj].parentId === child.id)) section.imageCount++;
+      }
       summary.sections.push(section);
     }
   }
-
-  // Walk entire tree for comprehensive data
-  walkCount(root);
 
   // Sort colors by usage
   var colorEntries = Object.keys(summary.allColors).map(function(k) { return { color: k, count: summary.allColors[k] }; });
   colorEntries.sort(function(a, b) { return b.count - a.count; });
   summary.allColors = colorEntries.slice(0, 30); // top 30 colors
 
-  // Sort fonts by usage
+  // Sort fonts by usage, cap at 30 (same as allColors)
   var fontEntries = Object.keys(summary.allFonts).map(function(k) { return { font: k, count: summary.allFonts[k] }; });
   fontEntries.sort(function(a, b) { return b.count - a.count; });
-  summary.allFonts = fontEntries;
+  summary.allFonts = fontEntries.slice(0, 30);
 
   return summary;
 };
@@ -365,6 +368,24 @@ handlers.get_page_nodes = async () => {
   };
 };
 
+// Shared base64 encoder — Figma sandbox has no btoa/TextEncoder
+var _B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function uint8ArrayToBase64(bytes) {
+  var arr = (typeof Uint8Array !== "undefined" && !(bytes instanceof Uint8Array)) ? new Uint8Array(bytes) : bytes;
+  var b64 = "";
+  var len = arr.length;
+  for (var j = 0; j < len; j += 3) {
+    var b0 = arr[j];
+    var b1 = j + 1 < len ? arr[j + 1] : 0;
+    var b2 = j + 2 < len ? arr[j + 2] : 0;
+    b64 += _B64_CHARS[b0 >> 2];
+    b64 += _B64_CHARS[((b0 & 3) << 4) | (b1 >> 4)];
+    b64 += j + 1 < len ? _B64_CHARS[((b1 & 15) << 2) | (b2 >> 6)] : "=";
+    b64 += j + 2 < len ? _B64_CHARS[b2 & 63] : "=";
+  }
+  return b64;
+}
+
 // screenshot — export node as PNG base64 (v1.2.5)
 handlers.screenshot = async function(params) {
   var id = params && params.id ? params.id : null;
@@ -376,24 +397,14 @@ handlers.screenshot = async function(params) {
   var node = null;
   var i;
 
-  // Deep search by ID — check top-level first, then deep search
+  // Search by ID — deep search only (skip redundant top-level loop)
   if (id) {
-    for (i = 0; i < children.length; i++) {
-      if (children[i].id === id) { node = children[i]; break; }
-    }
-    if (!node) {
-      node = figma.currentPage.findOne(function(n) { return n.id === id; });
-    }
+    node = figma.currentPage.findOne(function(n) { return n.id === id; });
   }
 
-  // Deep search by name
+  // Search by name — deep search only
   if (node === null && nodeName) {
-    for (i = 0; i < children.length; i++) {
-      if (children[i].name === nodeName) { node = children[i]; break; }
-    }
-    if (!node) {
-      node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
-    }
+    node = figma.currentPage.findOne(function(n) { return n.name === nodeName; });
   }
   // Fallback: any exportable top-level node (FRAME, COMPONENT, COMPONENT_SET, SECTION)
   if (node === null) {
@@ -417,26 +428,8 @@ handlers.screenshot = async function(params) {
     return Promise.reject(new Error("[v1.9.1-export] " + exportErr.message + " type=" + node.type + " id=" + node.id));
   }
 
-  // Figma plugin sandbox: no btoa, no TextEncoder — manual base64
   try {
-    // exportAsync returns Uint8Array directly in Figma sandbox
-    var arr = bytes;
-    if (typeof Uint8Array !== "undefined" && !(bytes instanceof Uint8Array)) {
-      arr = new Uint8Array(bytes);
-    }
-    var CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    var b64 = "";
-    var len = arr.length;
-    for (var j = 0; j < len; j += 3) {
-      var b0 = arr[j];
-      var b1 = j + 1 < len ? arr[j + 1] : 0;
-      var b2 = j + 2 < len ? arr[j + 2] : 0;
-      b64 += CHARS[b0 >> 2];
-      b64 += CHARS[((b0 & 3) << 4) | (b1 >> 4)];
-      b64 += j + 1 < len ? CHARS[((b1 & 15) << 2) | (b2 >> 6)] : "=";
-      b64 += j + 2 < len ? CHARS[b2 & 63] : "=";
-    }
-    return { dataUrl: "data:image/png;base64," + b64, nodeId: node.id, width: node.width, height: node.height };
+    return { dataUrl: "data:image/png;base64," + uint8ArrayToBase64(bytes), nodeId: node.id, width: node.width, height: node.height };
   } catch(encodeErr) {
     return Promise.reject(new Error("[v1.9.1-encode] " + encodeErr.message));
   }
@@ -511,21 +504,7 @@ handlers.export_image = async function(params) {
   try { figma.viewport.scrollAndZoomIntoView([node]); } catch(e) { /* non-fatal */ }
 
   var bytes = await node.exportAsync({ format: format, constraint: { type: "SCALE", value: scale } });
-  var arr = (typeof Uint8Array !== "undefined" && !(bytes instanceof Uint8Array)) ? new Uint8Array(bytes) : bytes;
-
-  // Manual base64 encode (Figma sandbox has no btoa)
-  var CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  var b64 = "";
-  var len = arr.length;
-  for (var j = 0; j < len; j += 3) {
-    var b0 = arr[j];
-    var b1 = j + 1 < len ? arr[j + 1] : 0;
-    var b2 = j + 2 < len ? arr[j + 2] : 0;
-    b64 += CHARS[b0 >> 2];
-    b64 += CHARS[((b0 & 3) << 4) | (b1 >> 4)];
-    b64 += j + 1 < len ? CHARS[((b1 & 15) << 2) | (b2 >> 6)] : "=";
-    b64 += j + 2 < len ? CHARS[b2 & 63] : "=";
-  }
+  var b64 = uint8ArrayToBase64(bytes);
 
   return {
     base64: b64,
@@ -534,6 +513,6 @@ handlers.export_image = async function(params) {
     height: Math.round(node.height * scale),
     nodeId: node.id,
     nodeName: node.name,
-    sizeBytes: len,
+    sizeBytes: bytes.length,
   };
 };

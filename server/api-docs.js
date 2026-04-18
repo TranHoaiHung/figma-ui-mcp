@@ -784,16 +784,28 @@ await figma.create({ type: "TEXT", name: "Heading",
   parentId: f.id, x: 24, y: 24,
   content: "Total Balance",    // also accepts: characters: "..."
   fontSize: 14,
-  fontWeight: "SemiBold",      // Regular | Medium | SemiBold | Bold | Light
+  fontWeight: "SemiBold",      // Regular | Medium | SemiBold | Bold | Light | Heavy | Black | ExtraBold
   fill: "#f8fafc",             // also accepts: fontColor, fills array
   lineHeight: 20,              // px
   textAlign: "CENTER",         // LEFT | CENTER | RIGHT (auto-sets textAutoResize: "NONE" with width)
+  width: 200, height: 40,      // both specified → fixed box (textAutoResize: "NONE"), size respected
   layoutAlign: "STRETCH",      // for wrapping text in auto-layout
   layoutGrow: 1,               // for growing text in auto-layout
 })
 \`\`\`
 
+**TEXT sizing rules:**
+- \`width\` + \`height\` both set → fixed box, dimensions respected (textAutoResize: "NONE")
+- \`width\` only → auto-height wrapping (textAutoResize: "HEIGHT")
+- Neither → hug content (textAutoResize: "WIDTH_AND_HEIGHT", default)
+
+**Font baseline offset (Inter quirk):** Auto-layout CENTER may appear ~3-4px shifted upward due to Inter ascender whitespace.
+Workaround: add \`paddingBottom: 3\` to the wrapper frame to visually re-center text.
+
 ### VECTOR (SVG paths, arcs, curves)
+
+> ⚠️ **Known limitation:** Figma recalculates VECTOR bounding box from actual path geometry, ignoring specified \`width\`/\`height\`. For circular arcs that must align with an ELLIPSE, use \`ELLIPSE\` with \`arcData\` instead — it respects dimensions exactly.
+
 \`\`\`js
 // Diagonal line
 await figma.create({ type: "VECTOR", parentId: f.id,
@@ -811,6 +823,12 @@ await figma.create({ type: "VECTOR", parentId: f.id,
   x: 0, y: 0, width: 440, height: 80,
   d: "M 0 40 C 110 0, 220 80, 330 40 C 385 20, 420 30, 440 40 L 440 80 L 0 80 Z",
   fill: "#0e7c3a" })
+
+// ✅ PREFERRED for circular progress rings — use ELLIPSE + arcData (respects exact width/height)
+await figma.create({ type: "ELLIPSE", parentId: f.id,
+  x: 20, y: 20, width: 130, height: 130,
+  fill: "#00000000", stroke: "#428DE7", strokeWeight: 14,
+  arcData: { startAngle: -1.5708, endAngle: -1.5708 + 0.72 * 2 * Math.PI, innerRadius: 0 }})
 \`\`\`
 
 **SVG path cheatsheet:** M=move, L=line, H=horizontal, V=vertical, C=cubic, Q=quadratic, A=arc, Z=close

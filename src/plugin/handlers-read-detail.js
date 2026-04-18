@@ -16,6 +16,9 @@ handlers.get_node_detail = async function(params) {
     width: Math.round(node.width), height: Math.round(node.height),
   };
 
+  // clipsContent resolved here so get_css does not need a second node fetch
+  try { if ("clipsContent" in node && node.clipsContent) detail.clipsContent = true; } catch(e) {}
+
   // Fill(s)
   try {
     if (node.fills && node.fills.length) {
@@ -265,10 +268,12 @@ handlers.get_css = async function(params) {
   var detail = await handlers.get_node_detail(params);
   var lines = [];
 
-  // Position (absolute when no auto-layout parent context is known)
-  if (detail.x !== undefined) lines.push("position: absolute;");
-  if (detail.x !== undefined) lines.push("left: " + detail.x + "px;");
-  if (detail.y !== undefined) lines.push("top: " + detail.y + "px;");
+  // Position — only emit absolute positioning for non-auto-layout nodes (flex children use flow)
+  if (!detail.css) {
+    lines.push("position: absolute;");
+    if (detail.x !== undefined) lines.push("left: " + detail.x + "px;");
+    if (detail.y !== undefined) lines.push("top: " + detail.y + "px;");
+  }
   if (detail.width !== undefined) lines.push("width: " + detail.width + "px;");
   if (detail.height !== undefined) lines.push("height: " + detail.height + "px;");
 
@@ -334,11 +339,8 @@ handlers.get_css = async function(params) {
   // Rotation
   if (detail.rotation) lines.push("transform: rotate(" + detail.rotation + "deg);");
 
-  // Overflow clip
-  try {
-    var nd = params.id || params.nodeId ? await findNodeByIdAsync(params.id || params.nodeId) : null;
-    if (nd && "clipsContent" in nd && nd.clipsContent) lines.push("overflow: hidden;");
-  } catch(e) {}
+  // Overflow clip — reuse clipsContent resolved in get_node_detail (no second node fetch)
+  if (detail.clipsContent) lines.push("overflow: hidden;");
 
   return {
     nodeId: detail.id,
@@ -367,15 +369,13 @@ handlers.get_design_context = async function(params) {
   if (!node) throw new Error("No node specified and nothing selected. Pass nodeId or select a node.");
 
   // Build variable name lookup: variableId → name
+  // Use getLocalVariablesAsync (single call) instead of per-ID fetches — avoids O(n²) await loop
   var varNameMap = {};
   try {
-    var localCols = await figma.variables.getLocalVariableCollectionsAsync();
-    for (var ci = 0; ci < localCols.length; ci++) {
-      var col = localCols[ci];
-      for (var vi = 0; vi < col.variableIds.length; vi++) {
-        var v = await figma.variables.getVariableByIdAsync(col.variableIds[vi]);
-        if (v) varNameMap[v.id] = v.name;
-      }
+    var localVars = await figma.variables.getLocalVariablesAsync();
+    for (var lvi = 0; lvi < localVars.length; lvi++) {
+      var lv = localVars[lvi];
+      if (lv) varNameMap[lv.id] = lv.name;
     }
   } catch(e) {}
 
@@ -508,13 +508,16 @@ handlers.get_design_context = async function(params) {
   var context = nodeContext(node, 0);
 
   // Summary tokens used in this subtree (for code scaffolding)
-  var usedColors = new Set(), usedTextStyles = new Set(), usedComponents = new Set();
+  // Use plain objects instead of Set — Figma sandbox ES5 compatibility
+  var usedColors = {}, usedTextStyles = {}, usedComponents = {};
   function collectUsed(nd) {
     if (!nd) return;
-    if (nd.fill && nd.fill.indexOf("var(--") === 0) usedColors.add(nd.fill);
-    if (nd.text && nd.text.style) usedTextStyles.add(nd.text.style);
-    if (nd.component) usedComponents.add(nd.component.set || nd.component.name);
-    if (nd.children) nd.children.forEach(collectUsed);
+    if (nd.fill && nd.fill.indexOf("var(--") === 0) usedColors[nd.fill] = 1;
+    if (nd.text && nd.text.style) usedTextStyles[nd.text.style] = 1;
+    if (nd.component) usedComponents[nd.component.set || nd.component.name] = 1;
+    if (nd.children) {
+      for (var cui = 0; cui < nd.children.length; cui++) collectUsed(nd.children[cui]);
+    }
   }
   collectUsed(context);
 
@@ -524,9 +527,9 @@ handlers.get_design_context = async function(params) {
     type: node.type,
     context: context,
     summary: {
-      tokensUsed: Array.from(usedColors),
-      textStylesUsed: Array.from(usedTextStyles),
-      componentsUsed: Array.from(usedComponents),
+      tokensUsed: Object.keys(usedColors),
+      textStylesUsed: Object.keys(usedTextStyles),
+      componentsUsed: Object.keys(usedComponents),
     },
     hint: "Use context.layout for flex CSS, context.fill for token-resolved colors, context.component for React component mapping, context.text.style for typography class names.",
   };
@@ -574,7 +577,8 @@ handlers.get_component_map = async function(params) {
       } catch(e) {}
       // Suggested import path based on component name convention
       var cname = entry.componentSetName || entry.componentName || "";
-      entry.suggestedImport = cname ? "import { " + cname.split("/").pop().replace(/[^a-zA-Z0-9]/g, "") + " } from '@/components/" + cname.split("/").pop().replace(/[^a-zA-Z0-9]/g, "") + "'" : null;
+      var cnameLast = cname ? cname.split("/").slice(-1)[0].replace(/[^a-zA-Z0-9]/g, "") : "";
+      entry.suggestedImport = cname ? "import { " + cnameLast + " } from '@/components/" + cnameLast + "'" : null;
       instances.push(entry);
     }
     if (nd.children) nd.children.forEach(walkInstances);

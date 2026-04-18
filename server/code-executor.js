@@ -217,16 +217,23 @@ function buildFigmaProxy(bridge) {
   };
 
   // ── figma.loadIconIn(name, opts) ────────────────────────────────────────
-  // Icon inside a centered circle background (icon at 50% container size)
-  // opts: { parentId, containerSize, fill, bgOpacity }
+  // Icon inside a centered circle background (icon at 50% container size).
+  // opts: { parentId, containerSize, fill, bgOpacity, iconSize, paddingBottom,
+  //         layoutAlign, layoutGrow, x, y, name }
+  // BUG-05 fix: expose iconSize (defaults to containerSize/2) and paddingBottom
+  // so callers can compensate for vertical misalignment when loadIconIn sits
+  // next to a TEXT node in HORIZONTAL auto-layout. The icon container is always
+  // cSize tall; if text is shorter, Figma vertically centers by the tallest child
+  // which is correct — but callers can pass paddingBottom on the parent wrapper
+  // to shift baseline alignment after the fact.
   proxy.loadIconIn = async (iconName, opts = {}) => {
     const cSize = opts.containerSize || 40;
     const fill = opts.fill || "#6C5CE7";
-    const bgOpacity = opts.bgOpacity || 0.1;
-    const iSize = Math.floor(cSize / 2);
+    const bgOpacity = opts.bgOpacity !== undefined ? opts.bgOpacity : 0.1;
+    const iSize = opts.iconSize || Math.floor(cSize / 2);
 
     // Create container circle with auto-layout centering
-    const container = await bridge.sendOperation("create", {
+    const createParams = {
       type: "FRAME",
       name: opts.name || `icon-${iconName}-wrap`,
       parentId: opts.parentId,
@@ -240,7 +247,11 @@ function buildFigmaProxy(bridge) {
       layoutMode: "HORIZONTAL",
       primaryAxisAlignItems: "CENTER",
       counterAxisAlignItems: "CENTER",
-    });
+    };
+    if (opts.layoutAlign !== undefined) createParams.layoutAlign = opts.layoutAlign;
+    if (opts.layoutGrow !== undefined) createParams.layoutGrow = opts.layoutGrow;
+
+    const container = await bridge.sendOperation("create", createParams);
 
     // Load icon inside container
     await proxy.loadIcon(iconName, {

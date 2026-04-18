@@ -1,5 +1,58 @@
 # Changelog
 
+## [2.5.14] — 2026-04-18
+
+### Fixed — Bug fixes (BUG-01..05) + Code quality pass
+
+**Bug fixes (plugin sandbox)**
+
+- **BUG-01**: TEXT nodes with both `width` and `height` specified now correctly set `textAutoResize = "NONE"` before `resize()` — previously Figma shrunk the box to content
+- **BUG-02**: `fontWeight` values `"Black"`, `"ExtraBold"`, `"UltraBold"` now map correctly to Figma font styles (`Bold`, `Extra Bold`) — previously fell back to `Regular`
+- **BUG-04**: `arcData` on ELLIPSE nodes now forwarded to Figma correctly for circular ring/arc shapes
+- **BUG-05**: `loadIconIn` — `bgOpacity: 0` now respected (was silently defaulted to `0.1` due to `||` falsy trap); `iconSize` param exposed (default `floor(containerSize/2)`); `layoutAlign`/`layoutGrow` pass-through added
+
+**handlers-write.js refactor**
+
+- `handlers.create` refactored from chained `if-else` to `switch(type)` dispatch
+- Extracted shared helpers: `applyCommonProps()`, `applyAutoLayout()`, `applyChildLayout()`
+- Module-level `_B64_LOOKUP` IIFE (not rebuilt per `buildImage` call)
+- Base64 decode: `|| 0` falsy trap fixed → `!== undefined` check (was silently corrupting `'A'` = index 0)
+- `handlers.query`: throws descriptive error when called with no criteria
+- `handlers.instantiate`: `x=0`/`y=0` falsy trap fixed (`!== undefined` guard)
+- `handlers.modify`: auto-layout guard now checks actual `node.layoutMode !== "NONE"` state
+
+**handlers-read-detail.js fixes**
+
+- `get_css`: no longer makes a second `findNodeByIdAsync` call — reuses `detail.clipsContent` already loaded
+- Variable name resolution: replaced O(n²) nested `getVariableByIdAsync` loop with single `getLocalVariablesAsync()` call
+- `Set`/`Array.from`/`forEach` replaced with plain objects + for-loops (ES5 sandbox compatibility)
+- `suggestedImport`: single `split("/").slice(-1)` instead of double split
+- `position: absolute` now only emitted for non-flex nodes (was always emitted)
+
+**handlers-read.js fixes**
+
+- Shared `uint8ArrayToBase64()` helper extracted — replaces two inline duplicate base64 loops in `screenshot` and `export_image`
+- `screenshot`: redundant top-level loop before `findOne` removed — deep-search only
+- `get_design`: magic `999` sentinel replaced with `skipInlineSvg` boolean flag
+- `scan_design`: removed `countAssets()` double-traversal — `walkCount` now runs first, sections derive counts from already-collected data; `allFonts` capped at 30 (same as `allColors`)
+
+**handlers-tokens.js fixes**
+
+- `findCollectionAsync()` helper extracted — replaces 6 duplicated "load all → loop → match" blocks
+- `findVariableAsync()` helper extracted — uses `getLocalVariablesAsync()` (1 call) instead of per-variable `getVariableByIdAsync()` calls in inner loops (O(n) → O(1))
+- `setFrameVariableMode`: `Array.find` replaced with for-loop (ES5 sandbox compatibility)
+- `modifyVariable`: now accepts `modeId`/`modeName` params — was always writing to `mode[0]`
+- `hexToRgbA()` helper: preserves alpha channel from 8-char hex (`#RRGGBBAA`); used in `createVariable`, `setVariableValue`, `modifyVariable`, `setupDesignTokens`
+
+### Tests
+
+- `scripts/test-v2514.mjs` — 39 tests (BUG-01..05, write refactor)
+- `scripts/test-v2514-read.mjs` — 13 tests (read handler fixes)
+- `scripts/test-tokens.mjs` — 29 tests (token handler fixes)
+- **115 new tests, 0 failures; full regression (34 + 39 + 13 + 29 = 115) passes**
+
+---
+
 ## [2.5.11] — 2026-04-17
 
 ### Changed — Sectioned `figma_docs` (fixes MCP token-limit error)

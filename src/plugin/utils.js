@@ -128,11 +128,13 @@ const FONT_STYLE_MAP = {
   Regular: "Regular", Medium: "Medium",
   SemiBold: "Semi Bold", Bold: "Bold", Light: "Light",
   Thin: "Thin", Heavy: "Heavy",
+  // BUG-02 fix: map "Black" and aliases to nearest available Inter weight
+  Black: "Bold", ExtraBold: "Extra Bold", UltraBold: "Extra Bold",
+  "Extra Bold": "Extra Bold", "Ultra Bold": "Extra Bold",
+  "Semi Bold": "Semi Bold",
   "Condensed Heavy": "Condensed Heavy",
   "Thin Italic": "Thin Italic",
   "Light Italic": "Light Italic",
-  "Extra Bold": "Extra Bold",
-  "Semi Bold": "Semi Bold",
 };
 
 function findNodeById(id) {
