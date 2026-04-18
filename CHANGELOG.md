@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.5.16] — 2026-04-18
+
+### Docs — Known Figma Limitations + Non-negotiable rules update (`server/api-docs.js`)
+
+Added inline guidance for 8 platform-level behaviors that cannot be fixed at plugin level.
+AI users reading `figma_docs { section: "icons" }` now see the full limitations reference.
+
+**New rules in quick-start checklist (Critical Rules):**
+- ❌ `counterAxisAlignItems: "STRETCH"` is invalid — use `"MIN"` + `layoutAlign: "STRETCH"` on children (BUG-07)
+- ❌ `figma.getChildren()` / `figma.read()` not available in `figma_write` sandbox — use `figma_read` tool (BUG-09/10)
+- ❌ H/V commands in SVG `d` string not supported by Figma parser — replace with `L` + explicit coords (BUG-11)
+- ❌ `layoutGrow: 1` conflicts with `primaryAxisAlignItems: "CENTER"` — use `"SPACE_BETWEEN"` or manual padding (BUG-14)
+- ❌ Variables from previous `figma_write` call not available — sandbox isolated per call, redeclare all constants (BUG-08)
+
+**New "Known Figma Limitations" section (in `SECTION_ICONS`):**
+
+| Bug | Title | Workaround |
+|-----|-------|-----------|
+| BUG-03 | Inter baseline offset (~3–4px shift) | Add `paddingBottom: 3` to wrapper |
+| BUG-04 | VECTOR ignores width/height | Use ELLIPSE + arcData instead |
+| BUG-07 | `counterAxisAlignItems: "STRETCH"` throws | Use `"MIN"` + child `layoutAlign` |
+| BUG-08 | Sandbox isolated per `figma_write` | Redeclare all constants in each call |
+| BUG-09/10 | `figma.getChildren` not in sandbox | Use `figma_read` tool separately |
+| BUG-11 | H/V SVG path commands rejected | Replace with `L x y` |
+| BUG-12 | Emoji misaligns in auto-layout | Use `figma.loadIcon()` SVG instead |
+| BUG-14 | `layoutGrow` + `"CENTER"` conflict | Use `"SPACE_BETWEEN"` |
+
+**Fixed `api-docs.js` syntax error** — unescaped backticks in prose lines of the new section caused `SyntaxError: Unexpected identifier` at runtime. All inline code spans now correctly escaped as `\`...\``.
+
+---
+
 ## [2.5.15] — 2026-04-18
 
 ### Fixed — BUG-06, BUG-13/15/16/17/19 from field reports

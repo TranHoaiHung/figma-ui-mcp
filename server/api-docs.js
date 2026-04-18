@@ -62,12 +62,16 @@ await figma.ensure_library();
 
 **Non-negotiable rules:**
 - ❌ NEVER hardcode hex in \`fill\`/\`stroke\` — always use \`applyVariable\` after create
-- ❌ NEVER use emoji as icons — use \`figma.loadIcon(name, {size, fill})\`
+- ❌ NEVER use emoji as icons — use \`figma.loadIcon(name, {size, fill})\` (BUG-12: emoji misaligns & color-shifts in Figma)
 - ❌ NEVER set icon size >= container size — icon = container × 0.5
 - ❌ NEVER draw background image AFTER other elements — background FIRST, content on top
 - ❌ NEVER put overlapping rectangles inside auto-layout (progress bars) — use non-layout wrapper
 - ❌ NEVER use \`opacity: 0\` on wrapper frame — hides ALL children. Use \`fillOpacity: 0\` instead.
-- ❌ NEVER use \`counterAxisAlignItems: "STRETCH"\` — use \`"MIN"\` on parent + \`layoutAlign: "STRETCH"\` on each child.
+- ❌ NEVER use \`counterAxisAlignItems: "STRETCH"\` — use \`"MIN"\` on parent + \`layoutAlign: "STRETCH"\` on each child (BUG-07)
+- ❌ NEVER call \`figma.getChildren()\`, \`figma.getNodeChildren()\`, or \`figma.read()\` — not available in sandbox. Use \`figma_read\` tool instead (BUG-09/10)
+- ❌ NEVER use H or V commands in SVG path \`d\` string — use \`L\` with explicit coords instead (BUG-11: \`H 100\` → \`L 100 currentY\`)
+- ❌ NEVER mix \`layoutGrow: 1\` with \`primaryAxisAlignItems: "CENTER"\` — grow consumes all space before CENTER applies, children shift (BUG-14). Use \`"SPACE_BETWEEN"\` or manual padding instead.
+- ❌ NEVER reuse variables/constants from a previous \`figma_write\` call — each call is an isolated sandbox (BUG-08). Redeclare all constants at the top of each call.
 - ✅ ALWAYS use auto-layout with \`counterAxisAlignItems: "CENTER"\` for icon+text rows
 - ✅ ALWAYS draw background first (bottom layer), then overlays, then content
 - ✅ For centered TEXT: pass BOTH \`width\` AND \`textAlign: "CENTER"\` — plugin auto-sets \`textAutoResize: "NONE"\`
@@ -1459,6 +1463,159 @@ Use \`type: "SVG"\` with raw SVG markup when you have custom SVG:
 // Replace fill/stroke "currentColor" before sending
 var svg = '<svg viewBox="0 0 24 24"><path d="M..." fill="#6C5CE7"/></svg>';
 await figma.create({ type: "SVG", svg, parentId: f.id, x: 0, y: 0, width: 24, height: 24, fill: "#6C5CE7" });
+\`\`\`
+
+---
+
+## Known Figma Limitations (read before building)
+
+These are **Figma platform behaviors** — not plugin bugs. Understanding them prevents wasted iterations.
+
+---
+
+### BUG-03 — Inter baseline offset (visual centering off by ~3–4px)
+
+Auto-layout \`CENTER\` is mathematically correct but Inter font has extra ascender whitespace — text appears shifted upward visually.
+
+**Workaround:** Add \`paddingBottom: 3\` or \`paddingBottom: 4\` to the wrapper frame:
+\`\`\`js
+await figma.create({ type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER",
+  paddingBottom: 3,   // ← compensate Inter baseline
+  width: 120, height: 40, fill: "#6C5CE7" });
+\`\`\`
+Applies to: buttons, tab bar items, icon+label rows — any container where Inter text must appear perfectly centered.
+
+---
+
+### BUG-04 — VECTOR bounding box ignores width/height
+
+Figma recalculates VECTOR dimensions from actual path geometry. Explicit \`width\`/\`height\` are ignored — the node gets the path's bounding box instead.
+
+**Do NOT use VECTOR for circular arcs.** Use ELLIPSE + arcData:
+\`\`\`js
+// ❌ VECTOR arc — width/height ignored, misaligns with sibling ELLIPSE
+await figma.create({ type: "VECTOR", x:20, y:20, width:130, height:130,
+  d: "M 65 7 A 58 58 0 1 1 12.4 107.4", stroke: "#428DE7", strokeWeight: 14 });
+// → actual node: width=95, height=114 (path bounding box, not 130×130)
+
+// ✅ ELLIPSE + arcData — always respects width/height
+await figma.create({ type: "ELLIPSE", x:20, y:20, width:130, height:130,
+  fill: "#00000000", stroke: "#428DE7", strokeWeight: 14,
+  arcData: { startingAngle: -1.5708, endingAngle: -1.5708 + 0.72*2*Math.PI, innerRadius: 0 }});
+\`\`\`
+
+---
+
+### BUG-07 — counterAxisAlignItems "STRETCH" is not a valid value
+
+Figma plugin API does not support \`counterAxisAlignItems: "STRETCH"\`. It throws immediately.
+
+**Correct pattern:**
+\`\`\`js
+// ❌ Throws error
+await figma.create({ type: "FRAME", layoutMode: "VERTICAL",
+  counterAxisAlignItems: "STRETCH" });
+
+// ✅ Use "MIN" on container + layoutAlign: "STRETCH" on each child
+var col = await figma.create({ type: "FRAME", layoutMode: "VERTICAL",
+  counterAxisAlignItems: "MIN", width: 300, height: 200 });
+await figma.create({ type: "FRAME", parentId: col.id, height: 52,
+  layoutAlign: "STRETCH" });   // ← child fills parent width
+\`\`\`
+
+---
+
+### BUG-08 — figma_write sandbox is isolated per call
+
+Every \`figma_write\` execution runs in a **fresh JavaScript sandbox**. Variables, constants, and helper functions defined in one call are gone in the next.
+
+**Rule:** Redeclare all constants at the top of every \`figma_write\` call:
+\`\`\`js
+// Must repeat this in EVERY figma_write call that needs these values
+var COLORS = { accent: "#6C5CE7", bg: "#0F1117", text: "#E8ECF4" };
+var frameId = "123:456";   // re-query if you don't have the ID from this call
+\`\`\`
+
+---
+
+### BUG-09/10 — figma.getChildren / figma.read not available in sandbox
+
+\`figma.getChildren(nodeId)\`, \`figma.getNodeChildren()\`, and \`figma.read(...)\` are not exposed in the write sandbox. Calling them throws \`figma.getChildren is not a function\`.
+
+**Correct pattern:** Use separate \`figma_read\` tool calls:
+\`\`\`js
+// ❌ Inside figma_write — crashes
+var children = await figma.getChildren("123:456");
+
+// ✅ Use figma_read tool BEFORE the figma_write call
+// figma_read({ operation: "get_design", nodeId: "123:456", depth: 2 })
+// → inspect children, collect IDs, then use IDs in figma_write
+\`\`\`
+
+---
+
+### BUG-11 — SVG path H and V commands not supported
+
+Figma's path parser does not support horizontal (\`H\`) or vertical (\`V\`) line commands. Using them throws \`Invalid command at H\`.
+
+**Replace before using:**
+| SVG command | Replace with |
+|-------------|-------------|
+| \`H 100\` | \`L 100 {currentY}\` |
+| \`V 50\` | \`L {currentX} 50\` |
+| \`h 20\` | \`l 20 0\` |
+| \`v -10\` | \`l 0 -10\` |
+
+\`\`\`js
+// ❌ Throws: Invalid command at H
+await figma.create({ type: "VECTOR", d: "M 0 8 H 14 M 2 8 L 7 3" });
+
+// ✅ Replace H with L
+await figma.create({ type: "VECTOR", d: "M 0 8 L 14 8 M 2 8 L 7 3" });
+\`\`\`
+
+---
+
+### BUG-12 — Emoji in TEXT nodes misalign in auto-layout
+
+Emoji characters (🔔 📋 ⌂ ✉ ☰) render as colored OS glyphs in Figma, not plain text. Problems:
+1. Different ascender/descender metrics → shifted vertically in auto-layout
+2. Glyph size ≠ fontSize (unreliable sizing)
+3. Platform-variant rendering (macOS vs Windows vs web)
+
+**Always use SVG icons instead:**
+\`\`\`js
+// ❌ Never — emoji misaligns and renders inconsistently
+await figma.create({ type: "TEXT", content: "⌂", fontSize: 20 });
+
+// ✅ Always — SVG icon is pixel-perfect and colorable
+await figma.loadIcon("home", { parentId: tabId, size: 20, fill: "#428DE7" });
+\`\`\`
+
+---
+
+### BUG-14 — layoutGrow:1 conflicts with primaryAxisAlignItems:"CENTER"
+
+\`"CENTER"\` distributes remaining space equally around children. \`layoutGrow: 1\` on a child consumes **all** remaining space before CENTER applies — children shift to one side instead of centering.
+
+**Rule:** Never combine \`layoutGrow\` with \`primaryAxisAlignItems: "CENTER"\`.
+
+\`\`\`js
+// ❌ Spacer + CENTER — dots shift, centering broken
+await figma.create({ type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "CENTER" });
+await figma.create({ type: "FRAME", parentId: rowId, layoutGrow: 1 }); // breaks centering
+
+// ✅ Option A: SPACE_BETWEEN (distributes equally, no spacer needed)
+await figma.create({ type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "SPACE_BETWEEN" });
+
+// ✅ Option B: "MIN" + paddingLeft for manual centering
+await figma.create({ type: "FRAME", layoutMode: "HORIZONTAL",
+  primaryAxisAlignItems: "MIN", paddingLeft: 60 });
+
+// ✅ Option C: absolute x positions — skip auto-layout entirely for dot rows
 \`\`\`
 
 ---
