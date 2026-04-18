@@ -121,7 +121,14 @@ function buildRectangle(params, width, height, fill, stroke, strokeWeight) {
 function buildEllipse(params, width, height, fill, stroke, strokeWeight) {
   var node = figma.createEllipse();
   applyCommonProps(node, params, width, height, fill, stroke, strokeWeight);
-  if (params.arcData) node.arcData = params.arcData;
+  if (params.arcData) {
+    var arc = params.arcData;
+    node.arcData = {
+      startingAngle: arc.startingAngle !== undefined ? arc.startingAngle : (arc.startAngle !== undefined ? arc.startAngle : 0),
+      endingAngle:   arc.endingAngle   !== undefined ? arc.endingAngle   : (arc.endAngle   !== undefined ? arc.endAngle   : Math.PI * 2),
+      innerRadius:   arc.innerRadius   !== undefined ? arc.innerRadius   : 0,
+    };
+  }
   return node;
 }
 
@@ -354,6 +361,21 @@ handlers.create = async (params) => {
     }
   } else {
     applyChildLayout(node, params);
+  }
+
+  // BUG-13/16/17/19: Re-apply TEXT sizing after appendChild — Figma auto-layout can reset
+  // textAutoResize to WIDTH_AND_HEIGHT after parenting, causing the node to flash to 100x100.
+  if (type === "TEXT") {
+    var textAutoResize = params.textAutoResize;
+    if (!textAutoResize) {
+      if (width && height)  textAutoResize = "NONE";
+      else if (width)       textAutoResize = "HEIGHT";
+    }
+    if (textAutoResize) {
+      node.textAutoResize = textAutoResize;
+      if (textAutoResize === "NONE") node.resize(width, height);
+      else if (textAutoResize === "HEIGHT") node.resize(width, node.height);
+    }
   }
 
   // x/y set after appendChild — Figma resets position on reparent

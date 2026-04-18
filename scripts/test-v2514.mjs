@@ -99,7 +99,8 @@ console.log("\nBUG-04: ELLIPSE arcData forwarded correctly");
   `, bridge);
   assert("ELLIPSE with arcData succeeds", r.success, r.error);
   assert("arcData forwarded to bridge", captured && captured.arcData !== undefined);
-  assert("arcData.startAngle correct", captured && Math.abs(captured.arcData.startAngle - (-1.5708)) < 0.001);
+  // BUG-06 fix: keys normalized to startingAngle/endingAngle
+  assert("arcData.startingAngle correct", captured && Math.abs(captured.arcData.startingAngle - (-1.5708)) < 0.001);
   assert("arcData.innerRadius=0", captured && captured.arcData.innerRadius === 0);
 }
 

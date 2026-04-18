@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.5.15] — 2026-04-18
+
+### Fixed — BUG-06, BUG-13/15/16/17/19 from field reports
+
+**BUG-06: `arcData` key normalization** (`server/code-executor.js`, `src/plugin/handlers-write.js`)
+- Both `startAngle`/`endAngle` (common SVG naming) and `startingAngle`/`endingAngle` (Figma API naming) are now accepted — auto-normalized server-side before forwarding to plugin
+- Missing keys default: `startingAngle=0`, `endingAngle=2π`, `innerRadius=0`
+- Eliminated the confusing `Required value missing at .startingAngle` error when using SVG-style key names
+
+**BUG-13/16/17/19: TEXT node 100×100 default destroys auto-layout** (`src/plugin/handlers-write.js`)
+- After `parent.appendChild(node)`, TEXT nodes now re-apply `textAutoResize` + `resize()` immediately
+- Prevents Figma auto-layout engine from locking child positions based on the 100×100 default size
+- Fixes: badge numbers at x/y=-42 (BUG-19), invisible text in small frames (BUG-17), sibling overflow after modify (BUG-16), auto-layout container wrong size (BUG-13)
+
+**BUG-15: `loadIconIn` double-nested wrapper** (`server/code-executor.js`)
+- New `noContainer: true` option — places icon directly into `parentId` without creating an extra wrapper frame
+- Use when the caller already created the intended container frame; prevents the outer→inner wrap shrink chain (28px → 14px → 7px icon)
+- Fixed `x=0`/`y=0` falsy trap (`|| 0` → `!== undefined`) so icons placed at origin are correctly positioned
+
+### Tests
+- `scripts/test-v2515.mjs` — 27 new tests (BUG-06 normalization ×8, BUG-13/16/17/19 ×4, BUG-15 ×9, regressions ×6)
+- Full suite: **142 tests, 0 failures** (34 + 39 + 13 + 29 + 27)
+
+---
+
 ## [2.5.14] — 2026-04-18
 
 ### Fixed — Bug fixes (BUG-01..05) + Code quality pass

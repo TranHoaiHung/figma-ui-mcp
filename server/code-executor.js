@@ -97,12 +97,33 @@ function httpFetch(url, maxBytes = 10_000_000, redirectsLeft = 3) {
   });
 }
 
+// Normalize arcData keys: startAngle/endAngle (SVG-style) → startingAngle/endingAngle (Figma API)
+// Applied server-side so tests and real plugin both behave consistently.
+function normalizeArcData(arcData) {
+  if (!arcData || typeof arcData !== "object") return arcData;
+  return {
+    startingAngle: arcData.startingAngle !== undefined ? arcData.startingAngle
+                 : (arcData.startAngle   !== undefined ? arcData.startAngle : 0),
+    endingAngle:   arcData.endingAngle   !== undefined ? arcData.endingAngle
+                 : (arcData.endAngle     !== undefined ? arcData.endAngle   : Math.PI * 2),
+    innerRadius:   arcData.innerRadius   !== undefined ? arcData.innerRadius : 0,
+  };
+}
+
 // ─── Build figma proxy with helper methods ────────────────────────────────────
 function buildFigmaProxy(bridge) {
   const proxy = { notify: (msg) => Promise.resolve(msg) };
   for (const op of ALL_OPS) {
     proxy[op] = (params = {}) => bridge.sendOperation(op, params);
   }
+
+  // Override create to normalize arcData keys before forwarding to plugin
+  proxy.create = (params = {}) => {
+    if (params.arcData) {
+      params = Object.assign({}, params, { arcData: normalizeArcData(params.arcData) });
+    }
+    return bridge.sendOperation("create", params);
+  };
 
   // ── BUG-12: figma.getNodeById(id) — read node detail by ID ────────────
   proxy.getNodeById = async (id) => {
@@ -218,27 +239,38 @@ function buildFigmaProxy(bridge) {
 
   // ── figma.loadIconIn(name, opts) ────────────────────────────────────────
   // Icon inside a centered circle background (icon at 50% container size).
-  // opts: { parentId, containerSize, fill, bgOpacity, iconSize, paddingBottom,
-  //         layoutAlign, layoutGrow, x, y, name }
-  // BUG-05 fix: expose iconSize (defaults to containerSize/2) and paddingBottom
-  // so callers can compensate for vertical misalignment when loadIconIn sits
-  // next to a TEXT node in HORIZONTAL auto-layout. The icon container is always
-  // cSize tall; if text is shorter, Figma vertically centers by the tallest child
-  // which is correct — but callers can pass paddingBottom on the parent wrapper
-  // to shift baseline alignment after the fact.
+  // opts: { parentId, containerSize, fill, bgOpacity, iconSize,
+  //         layoutAlign, layoutGrow, x, y, name, noContainer }
+  //
+  // BUG-15 fix: noContainer:true loads icon directly into parentId without
+  // creating an extra wrapper — use when caller already created the container
+  // frame. Prevents double-nesting (outer 28px → inner 14px → icon 7px).
+  //
+  // BUG-05 fix: bgOpacity:0 respected (was ||0.1 falsy trap — fixed to !== undefined).
+  // iconSize exposed (defaults to floor(containerSize/2)).
   proxy.loadIconIn = async (iconName, opts = {}) => {
     const cSize = opts.containerSize || 40;
     const fill = opts.fill || "#6C5CE7";
     const bgOpacity = opts.bgOpacity !== undefined ? opts.bgOpacity : 0.1;
     const iSize = opts.iconSize || Math.floor(cSize / 2);
 
+    // BUG-15: noContainer skips wrapper creation — icon goes directly into parentId
+    if (opts.noContainer) {
+      await proxy.loadIcon(iconName, {
+        parentId: opts.parentId,
+        size: iSize,
+        fill,
+      });
+      return { id: opts.parentId };
+    }
+
     // Create container circle with auto-layout centering
     const createParams = {
       type: "FRAME",
-      name: opts.name || `icon-${iconName}-wrap`,
+      name: opts.name || ("icon-" + iconName + "-wrap"),
       parentId: opts.parentId,
-      x: opts.x || 0,
-      y: opts.y || 0,
+      x: opts.x !== undefined ? opts.x : 0,
+      y: opts.y !== undefined ? opts.y : 0,
       width: cSize,
       height: cSize,
       fill,
@@ -249,7 +281,7 @@ function buildFigmaProxy(bridge) {
       counterAxisAlignItems: "CENTER",
     };
     if (opts.layoutAlign !== undefined) createParams.layoutAlign = opts.layoutAlign;
-    if (opts.layoutGrow !== undefined) createParams.layoutGrow = opts.layoutGrow;
+    if (opts.layoutGrow  !== undefined) createParams.layoutGrow  = opts.layoutGrow;
 
     const container = await bridge.sendOperation("create", createParams);
 

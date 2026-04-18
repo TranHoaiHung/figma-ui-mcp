@@ -825,10 +825,12 @@ await figma.create({ type: "VECTOR", parentId: f.id,
   fill: "#0e7c3a" })
 
 // ✅ PREFERRED for circular progress rings — use ELLIPSE + arcData (respects exact width/height)
+// arcData keys: startingAngle / endingAngle / innerRadius
+// Both startAngle/endAngle AND startingAngle/endingAngle are accepted (auto-normalized)
 await figma.create({ type: "ELLIPSE", parentId: f.id,
   x: 20, y: 20, width: 130, height: 130,
   fill: "#00000000", stroke: "#428DE7", strokeWeight: 14,
-  arcData: { startAngle: -1.5708, endAngle: -1.5708 + 0.72 * 2 * Math.PI, innerRadius: 0 }})
+  arcData: { startingAngle: -1.5708, endingAngle: -1.5708 + 0.72 * 2 * Math.PI, innerRadius: 0 }})
 \`\`\`
 
 **SVG path cheatsheet:** M=move, L=line, H=horizontal, V=vertical, C=cubic, Q=quadratic, A=arc, Z=close
@@ -1335,12 +1337,29 @@ await figma.loadIcon("play",          { parentId: btn.id, size: 24, fill: "#FFFF
 Icon inside centered circle background:
 
 \`\`\`js
+// Standard: creates 40px circle wrapper + 20px icon centered inside
 await figma.loadIconIn("checkmark", {
   parentId: card.id, containerSize: 40, fill: "#00B894", bgOpacity: 0.1
-  // x, y for position (optional)
 });
-// Creates 40px circle + 20px icon centered inside
+
+// noContainer: true — load icon directly into an existing styled frame (avoids double-wrap)
+// Use when you already created the wrapper frame yourself (BUG-15 prevention)
+await figma.loadIconIn("arrow-right", {
+  parentId: myWrapperFrameId,  // frame you already created at desired size
+  containerSize: 28,           // icon size = containerSize/2 = 14px
+  fill: "#FFFFFF",
+  noContainer: true            // places icon directly — no extra wrapper created
+});
+
+// Transparent background (no tint circle)
+await figma.loadIconIn("arrow-left", {
+  parentId: btnId, containerSize: 32, fill: "#FFFFFF", bgOpacity: 0
+});
 \`\`\`
+
+**⚠️ BUG-15 warning:** If you pass a pre-styled wrapper frame as \`parentId\` WITHOUT \`noContainer:true\`,
+\`loadIconIn\` will create an additional inner wrap inside it → icon shrinks to 25% of container size.
+Use \`noContainer: true\` when the parent is already the intended icon container.
 
 ---
 
