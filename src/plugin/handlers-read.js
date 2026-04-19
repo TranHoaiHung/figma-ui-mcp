@@ -251,6 +251,7 @@ handlers.search_nodes = async function(params) {
     fontFamily: p.fontFamily || null,    // "Inter"
     fontWeight: p.fontWeight || null,    // "Bold"
     fontSize: p.fontSize || null,        // 14
+    text: p.text || null,               // exact or partial TEXT content match
     hasImage: p.hasImage || false,       // true = nodes with image fills
     hasIcon: p.hasIcon || false,         // true = likely icon nodes
     includeHidden: p.includeHidden || false, // false = skip visible:false nodes (default)
@@ -282,8 +283,11 @@ handlers.search_nodes = async function(params) {
       var nodeFill = getFillHex(node);
       if (!nodeFill || nodeFill.toLowerCase() !== criteria.fill.toLowerCase()) return false;
     }
+    // BUG-16: text filter only applies to TEXT nodes; non-TEXT nodes are excluded when text is set
+    if (criteria.text && node.type !== "TEXT") return false;
     if (node.type === "TEXT") {
       try {
+        if (criteria.text && node.characters.indexOf(criteria.text) === -1) return false;
         if (criteria.fontFamily && node.fontName && node.fontName.family !== criteria.fontFamily) return false;
         if (criteria.fontWeight && node.fontName && node.fontName.style !== criteria.fontWeight) return false;
         if (criteria.fontSize && node.fontSize !== criteria.fontSize) return false;

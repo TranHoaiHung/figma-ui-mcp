@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.5.19] — 2026-04-19
+
+### Fixed — BUG-13/16/17/18/19 from field reports
+
+**BUG-18/19: `strokeColor` param silently ignored on FRAME/ELLIPSE** (`src/plugin/handlers-write.js`)
+- `strokeColor` is now accepted as alias for `stroke` in both `create` and `modify`
+- Fixes invisible borders on checkbox FRAMEs and ring ELLIPSEs with `fillOpacity:0`
+- `strokeAlign` also forwarded correctly in both paths
+
+**BUG-17: `strokeDashPattern` not forwarded** (`src/plugin/handlers-write.js`)
+- `strokeDashPattern: [6, 4]` now forwarded to Figma's `dashPattern` field via `applyCommonProps`
+- Works on FRAME, RECTANGLE, ELLIPSE — any node using `applyCommonProps`
+
+**BUG-13: FRAME with `layoutMode` + no explicit size defaults to 100×100** (`src/plugin/handlers-write.js`)
+- When `width`/`height` are omitted on a FRAME that has `layoutMode`, plugin now sets
+  `primaryAxisSizingMode: "AUTO"` / `counterAxisSizingMode: "AUTO"` — Figma hug-sizes to children
+- Explicit `width`/`height` still work exactly as before (no regression)
+- Fixes nested body columns rendering at `100×100` with wrong `y` offsets inside card auto-layout
+
+**BUG-16: `search_nodes` `text:` param not supported** (`src/plugin/handlers-read.js`)
+- Added `text` to search criteria — matches TEXT nodes whose `characters` contains the given string
+- Non-TEXT nodes are excluded when `text` filter is active
+- Works in both `figma_read` tool and `figma.search_nodes()` inside `figma_write` sandbox
+
+### Tests
+- `scripts/test-v2519.mjs` — 24 new tests (BUG-18/19 ×7, BUG-17 ×2, BUG-13 ×5, BUG-16 ×3, regressions ×7)
+- Full suite: **207 tests, 0 failures** (39+13+29+27+23+11+41+24)
+
+---
+
 ## [2.5.18] — 2026-04-19
 
 ### Tests — Multi-session / multi-tab verification (`scripts/test-multi-session.mjs`)

@@ -54,7 +54,13 @@ handlers.query = async ({ type, name, id }) => {
 function applyCommonProps(node, params, width, height, fill, stroke, strokeWeight) {
   node.resize(width, height);
   node.fills = fill ? buildFillArray(fill, params.fillOpacity) : [];
-  if (stroke) { node.strokes = solidStroke(stroke, params.strokeOpacity); node.strokeWeight = strokeWeight; }
+  if (stroke) {
+    node.strokes = solidStroke(stroke, params.strokeOpacity);
+    node.strokeWeight = strokeWeight;
+    if (params.strokeAlign) node.strokeAlign = params.strokeAlign;
+    // BUG-17: forward strokeDashPattern to Figma dashPattern
+    if (params.strokeDashPattern && Array.isArray(params.strokeDashPattern)) node.dashPattern = params.strokeDashPattern;
+  }
   if (params.effects) applyEffects(node, params.effects);
 }
 
@@ -285,11 +291,20 @@ handlers.create = async (params) => {
 
   const {
     type, parentId, name,
-    x = 0, y = 0, width = 100, height = 100,
-    fill, stroke, strokeWeight = 1, cornerRadius,
+    x = 0, y = 0,
+    strokeWeight = 1, cornerRadius,
     fontSize = 14, fontWeight = "Regular", lineHeight,
     opacity, visible,
   } = params;
+  // BUG-13: FRAME with layoutMode and no explicit size → hug content (AUTO sizing)
+  // Fall back to 100×100 only for non-layout nodes (RECTANGLE, ELLIPSE, etc.)
+  var hasExplicitWidth  = params.width  !== undefined;
+  var hasExplicitHeight = params.height !== undefined;
+  var width  = hasExplicitWidth  ? params.width  : 100;
+  var height = hasExplicitHeight ? params.height : 100;
+  var fill = params.fill;
+  // BUG-18/19: accept both `stroke` and `strokeColor` aliases
+  var stroke = params.stroke || params.strokeColor || null;
 
   let parent = figma.currentPage;
   if (parentId) {
@@ -337,6 +352,13 @@ handlers.create = async (params) => {
   if (name)    node.name    = name;
   if (opacity !== undefined) node.opacity = opacity;
   if (visible !== undefined) node.visible = visible;
+
+  // BUG-13: FRAME with layoutMode and no explicit width/height → switch to hug-content sizing
+  // Must happen before appendChild so auto-layout parent measures correct child size
+  if ((type === "FRAME" || type === "GROUP") && params.layoutMode && params.layoutMode !== "NONE") {
+    if (!hasExplicitWidth)  { node.primaryAxisSizingMode   = "AUTO"; }
+    if (!hasExplicitHeight) { node.counterAxisSizingMode   = "AUTO"; }
+  }
 
   if (parent !== figma.currentPage) {
     if (parent.removed) {
@@ -404,9 +426,13 @@ handlers.modify = async (params) => {
     existingFills[0].opacity = params.fillOpacity;
     node.fills = existingFills;
   }
-  if (params.stroke !== undefined && "strokes" in node) {
-    node.strokes = solidStroke(params.stroke, params.strokeOpacity);
+  // BUG-18: accept both `stroke` and `strokeColor` aliases in modify
+  var modifyStroke = params.stroke !== undefined ? params.stroke : (params.strokeColor !== undefined ? params.strokeColor : undefined);
+  if (modifyStroke !== undefined && "strokes" in node) {
+    node.strokes = solidStroke(modifyStroke, params.strokeOpacity);
     if (params.strokeWeight !== undefined) node.strokeWeight = params.strokeWeight;
+    if (params.strokeAlign !== undefined) node.strokeAlign = params.strokeAlign;
+    if (params.strokeDashPattern && Array.isArray(params.strokeDashPattern)) node.dashPattern = params.strokeDashPattern;
   }
   if (params.x       !== undefined) node.x = params.x;
   if (params.y       !== undefined) node.y = params.y;
