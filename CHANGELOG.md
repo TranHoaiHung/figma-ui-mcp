@@ -1,6 +1,29 @@
 # Changelog
 
-## [2.5.17] — 2026-04-18
+## [2.5.18] — 2026-04-19
+
+### Tests — Multi-session / multi-tab verification (`scripts/test-multi-session.mjs`)
+
+Added comprehensive test suite proving multi-tab isolation works correctly with no regressions.
+
+**Scenarios covered (41 tests):**
+- Session created on first poll; metadata (fileName, connected, lastPollAgoMs) correct
+- Two tabs → two independent session objects, no shared state
+- Explicit `sessionId` routes op to correct tab even when both tabs are polling simultaneously
+- Cross-contamination: op addressed to tab-A never lands in tab-B regardless of poll timing
+- `isPluginConnected(sessionId)` returns true/false per individual session
+- `clearQueue(sessionId)` clears only the target session; sibling session queue untouched
+- `/sessions` and `/health` HTTP endpoints return correct per-session metadata
+- 3 tabs simultaneous: each op resolves to the correct tab with distinct node IDs
+- Response settle in reverse order: opA and opB resolve to correct caller regardless of which response arrives first
+
+### Tests
+- `scripts/test-multi-session.mjs` — 41 new tests
+- Full suite: **183 tests, 0 failures** (39 + 13 + 29 + 27 + 23 + 11 + 41)
+
+---
+
+## [2.5.17] — 2026-04-19
 
 ### Fixed — BUG-04 (VECTOR dimensions) + BUG-11 (H/V SVG path commands)
 
