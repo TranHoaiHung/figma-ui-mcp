@@ -85,6 +85,23 @@ figma_read({ operation: "get_design", nodeId: "1:2", includeHidden: true })
 figma_read({ operation: "search_nodes", type: "TEXT", includeHidden: true })
 \`\`\`
 
+**Multi-tab (2+ Figma files open simultaneously):**
+\`figma_status\` returns a \`sessions\` array — each entry has \`id\` (sessionId) + \`fileName\`.
+When user is working across multiple files, confirm which file to target, then pin \`sessionId\` for EVERY subsequent call.
+Without it, ops go to whichever tab polled most recently — **not deterministic**.
+\`\`\`js
+// Step 1 — inspect sessions from figma_status:
+// sessions: [
+//   { id: "abc123", fileName: "Dashboard", connected: true },
+//   { id: "def456", fileName: "Onboarding", connected: true }
+// ]
+
+// Step 2 — pin sessionId on every call:
+figma_write({ code: "...", sessionId: "abc123" })
+figma_read({ operation: "get_selection", sessionId: "abc123" })
+figma_read({ operation: "screenshot", nodeId: "1:2", sessionId: "abc123" })
+\`\`\`
+
 ---
 
 ## ⚑ MANDATORY DESIGN SYSTEM RULES (Rules 0–9)
