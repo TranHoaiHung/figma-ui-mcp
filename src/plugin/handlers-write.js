@@ -636,3 +636,135 @@ handlers.instantiate = async function(params) {
 
   return nodeToInfo(inst);
 };
+
+// ─── INSTANCE PROPERTY OPERATIONS ─────────────────────────────────────────────
+// These three ops were on the WRITE_OPS / READ_OPS allowlist since v2.4.0 but
+// never had plugin-side handlers — calls would fail with `Unknown operation
+// "setComponentProperties"`. Without setComponentProperties in particular,
+// addComponentProperty + bindComponentPropertyToText (PR #8) couldn't be
+// exercised end-to-end: instance text overrides had no way to flow through
+// the bound property, so auto-layout never recalculated.
+
+// Resolve "label" → "label#5:0" against the instance's main component.
+// Figma's InstanceNode.setProperties requires fully-qualified names.
+async function resolveInstancePropertyName(instance, propertyName) {
+  var main = instance.mainComponent;
+  if (!main && typeof instance.getMainComponentAsync === "function") {
+    main = await instance.getMainComponentAsync();
+  }
+  if (!main) return null;
+  var defs = main.componentPropertyDefinitions;
+  if (!defs) return null;
+  if (defs[propertyName]) return propertyName;
+  var keys = Object.keys(defs);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].split("#")[0] === propertyName) return keys[i];
+  }
+  return null;
+}
+
+// setComponentProperties — set property values on a component instance.
+// Wraps Figma's InstanceNode.setProperties({ "name#id": value, ... }).
+// Values: TEXT/VARIANT → string, BOOLEAN → boolean, INSTANCE_SWAP → component key string.
+// Accepts bare property names (e.g. "label") and resolves to "label#5:0".
+handlers.setComponentProperties = async function(params) {
+  var nodeId = params.id || params.nodeId;
+  var properties = params.properties;
+
+  if (!nodeId) throw new Error("id is required");
+  if (!properties || typeof properties !== "object") {
+    throw new Error("properties object is required");
+  }
+
+  var node = await findNodeByIdAsync(nodeId);
+  if (!node) throw new Error("Node not found: " + nodeId);
+  if (node.type !== "INSTANCE") {
+    throw new Error("setComponentProperties requires an INSTANCE node, got: " + node.type);
+  }
+
+  var resolvedMap = {};
+  var unresolved = [];
+  var keys = Object.keys(properties);
+  for (var i = 0; i < keys.length; i++) {
+    var name = keys[i];
+    var resolved = await resolveInstancePropertyName(node, name);
+    if (!resolved) {
+      unresolved.push(name);
+      continue;
+    }
+    resolvedMap[resolved] = properties[name];
+  }
+
+  if (unresolved.length > 0) {
+    var available = [];
+    var main = node.mainComponent || (typeof node.getMainComponentAsync === "function" ? await node.getMainComponentAsync() : null);
+    if (main && main.componentPropertyDefinitions) {
+      available = Object.keys(main.componentPropertyDefinitions);
+    }
+    throw new Error(
+      "Unknown component property: " + unresolved.join(", ") +
+      ". Available on main component: " + (available.length ? available.join(", ") : "(none — call addComponentProperty first)")
+    );
+  }
+
+  node.setProperties(resolvedMap);
+
+  return {
+    id: node.id,
+    name: node.name,
+    properties: node.componentProperties,
+    appliedKeys: Object.keys(resolvedMap),
+  };
+};
+
+// getComponentProperties — read current property values from an instance.
+// Returns Figma's InstanceNode.componentProperties as-is.
+handlers.getComponentProperties = async function(params) {
+  var nodeId = params.id || params.nodeId;
+  if (!nodeId) throw new Error("id is required");
+
+  var node = await findNodeByIdAsync(nodeId);
+  if (!node) throw new Error("Node not found: " + nodeId);
+  if (node.type !== "INSTANCE") {
+    throw new Error("getComponentProperties requires an INSTANCE node, got: " + node.type);
+  }
+
+  return {
+    id: node.id,
+    name: node.name,
+    properties: node.componentProperties,
+  };
+};
+
+// swapComponent — point an instance at a different main component.
+// Wraps Figma's InstanceNode.swapComponent(targetComponent).
+// Different from INSTANCE_SWAP component properties (which are nested swaps
+// inside a main component's slots) — this swaps the instance's own main.
+handlers.swapComponent = async function(params) {
+  var nodeId = params.id || params.nodeId;
+  var componentId = params.componentId || params.targetComponentId;
+
+  if (!nodeId) throw new Error("id is required");
+  if (!componentId) throw new Error("componentId is required");
+
+  var instance = await findNodeByIdAsync(nodeId);
+  if (!instance) throw new Error("Instance not found: " + nodeId);
+  if (instance.type !== "INSTANCE") {
+    throw new Error("swapComponent source must be an INSTANCE, got: " + instance.type);
+  }
+
+  var target = await findNodeByIdAsync(componentId);
+  if (!target) throw new Error("Target component not found: " + componentId);
+  if (target.type !== "COMPONENT") {
+    throw new Error("swapComponent target must be a COMPONENT, got: " + target.type);
+  }
+
+  instance.swapComponent(target);
+
+  return {
+    id: instance.id,
+    name: instance.name,
+    newMainComponentId: target.id,
+    newMainComponentName: target.name,
+  };
+};
