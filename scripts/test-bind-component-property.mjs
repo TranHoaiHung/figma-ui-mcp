@@ -201,7 +201,7 @@ console.log("\nLayer B: unbindComponentProperty");
   assert(".visible cleared", !target.componentPropertyReferences.visible);
 }
 
-// — unbind last field sets refs to null —
+// — unbind last field clears to empty object (Figma rejects null) —
 {
   const target = buildNode("n:9", "t", "TEXT");
   target.componentPropertyReferences = { characters: "label#1" };
@@ -209,7 +209,9 @@ console.log("\nLayer B: unbindComponentProperty");
   const h = loadHandlers(mockFigma);
 
   await h.unbindComponentProperty({ nodeId: "n:9", field: "characters" });
-  assert("last field cleared → refs null", target.componentPropertyReferences === null);
+  assert("last field cleared → refs is empty object",
+    target.componentPropertyReferences !== null &&
+    Object.keys(target.componentPropertyReferences).length === 0);
 }
 
 // — unbind when nothing bound is a no-op —

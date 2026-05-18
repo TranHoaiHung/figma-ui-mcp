@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.5.23] — 2026-05-19
+
+### Fixed — `unbindComponentProperty` rejected by Figma when clearing last field
+
+Setting `node.componentPropertyReferences = null` threw at runtime:
+`Property "node.componentPropertyReferences.value" failed validation: Expected object, received null`
+
+Caught during live Figma smoke test of v2.5.22 — mock tests didn't exercise the Figma validator.
+
+**Fix:** assign empty object `{}` instead of `null` when unbinding the last field. Effectively clears all references and Figma accepts it.
+
+### Tests
+- `scripts/test-bind-component-property.mjs` updated to assert empty-object behavior
+- Full suite: **292 tests, 0 failures**
+
+---
+
 ## [2.5.22] — 2026-05-18
 
 ### Added — Component property definitions on master components (merged from PR #8 by muhammadmahad-debug)
