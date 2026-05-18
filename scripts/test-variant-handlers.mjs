@@ -131,30 +131,46 @@ function makeMockMaster(name, defs = {}) {
   };
 }
 
-function makeMockInstance(name, master, propValues = {}) {
-  // Effective master for property-type lookups: prefer sync field, fall back to
-  // whatever getMainComponentAsync returned. Mirrors Figma's dynamic-page setup.
+// Default mode: "dynamic-page" — matches plugin/manifest.json, which is the
+// actual runtime our users see. Sync `.mainComponent` access throws; only
+// getMainComponentAsync() is allowed. Pass mode: "legacy" to simulate older
+// Figma runtimes where the sync getter works.
+function makeMockInstance(name, master, opts = {}) {
+  const mode = opts.mode || "dynamic-page";
+  const propValues = opts.propValues || {};
+  // Store master in a closure so we can simulate the dynamic-page-throws-on-sync
+  // behavior even though tests still need to inspect what the handler "saw".
+  let storedMaster = master;
   const inst = {
     id: "inst:" + name,
     name,
     type: "INSTANCE",
-    mainComponent: master,
     componentProperties: { ...propValues },
     _lastSetProperties: null,
     _lastSwap: null,
+    async getMainComponentAsync() { return storedMaster; },
     setProperties(props) {
       this._lastSetProperties = props;
-      const m = this.mainComponent || this._asyncMain || null;
-      const defs = (m && m.componentPropertyDefinitions) || {};
+      const defs = (storedMaster && storedMaster.componentPropertyDefinitions) || {};
       Object.keys(props).forEach(k => {
         inst.componentProperties[k] = { type: defs[k] ? defs[k].type : "TEXT", value: props[k] };
       });
     },
     swapComponent(target) {
       this._lastSwap = target;
-      this.mainComponent = target;
+      storedMaster = target;
     },
   };
+  if (mode === "legacy") {
+    inst.mainComponent = storedMaster;
+  } else {
+    // dynamic-page: sync getter throws, matching Figma's actual behavior.
+    Object.defineProperty(inst, "mainComponent", {
+      get() {
+        throw new Error("Cannot call with documentAccess: dynamic-page. Use node.getMainComponentAsync instead.");
+      },
+    });
+  }
   return inst;
 }
 
@@ -202,20 +218,40 @@ console.log("\nLayer B: setComponentProperties — mixed types in one call");
   assert("BOOLEAN set", inst._lastSetProperties["expanded#2:0"] === true);
 }
 
-console.log("\nLayer B: setComponentProperties — uses async main component lookup if sync property is absent");
+// Regression: all happy-path tests above run against mock instances in
+// `dynamic-page` mode by default — sync `.mainComponent` access throws,
+// matching Figma's real behavior. The handler must reach the master through
+// getMainComponentAsync only. This test guards the explicit "never read sync
+// .mainComponent in setComponentProperties" invariant.
+console.log("\nLayer B: setComponentProperties — never touches sync .mainComponent under dynamic-page");
 {
-  const master = makeMockMaster("AsyncCard", { "label#1:0": { type: "TEXT", defaultValue: "x" } });
-  const inst = makeMockInstance("async-1", null /* no sync mainComponent */);
-  // Simulate dynamic-page: mainComponent is null but getMainComponentAsync works.
-  inst.mainComponent = null;
-  inst._asyncMain = master; // so the mock setProperties can still find defs
-  inst.getMainComponentAsync = async () => master;
+  const master = makeMockMaster("DynamicPageBtn", { "label#1:0": { type: "TEXT", defaultValue: "x" } });
+  // Default mode is dynamic-page: sync getter throws if read.
+  const inst = makeMockInstance("dp-1", master);
   ctx.__mockNodes.set(inst.id, inst);
 
-  await handlers.setComponentProperties({
-    id: inst.id, properties: { label: "OK" },
-  });
-  assert("resolved via async main lookup", inst._lastSetProperties["label#1:0"] === "OK");
+  let threw = false;
+  try {
+    await handlers.setComponentProperties({ id: inst.id, properties: { label: "OK" } });
+  } catch (e) {
+    threw = true;
+    assert("did NOT throw the dynamic-page sync error", !/documentAccess: dynamic-page/.test(e.message),
+      "caught: " + e.message);
+  }
+  assert("handler completed under dynamic-page", !threw);
+  assert("setProperties was called with resolved name", inst._lastSetProperties && inst._lastSetProperties["label#1:0"] === "OK");
+}
+
+console.log("\nLayer B: setComponentProperties — legacy runtime (sync .mainComponent works) still supported");
+{
+  const master = makeMockMaster("LegacyBtn", { "label#1:0": { type: "TEXT", defaultValue: "x" } });
+  const inst = makeMockInstance("legacy-1", master, { mode: "legacy" });
+  // Drop the async getter to simulate an older Figma plugin runtime without it.
+  delete inst.getMainComponentAsync;
+  ctx.__mockNodes.set(inst.id, inst);
+
+  await handlers.setComponentProperties({ id: inst.id, properties: { label: "Legacy OK" } });
+  assert("legacy sync mainComponent fallback works", inst._lastSetProperties["label#1:0"] === "Legacy OK");
 }
 
 console.log("\nLayer B: setComponentProperties — validation");
@@ -265,7 +301,7 @@ console.log("\nLayer B: getComponentProperties — happy path");
 {
   const master = makeMockMaster("Button", { "label#5:0": { type: "TEXT", defaultValue: "Click" } });
   const inst = makeMockInstance("btn-get", master, {
-    "label#5:0": { type: "TEXT", value: "Hello" },
+    propValues: { "label#5:0": { type: "TEXT", value: "Hello" } },
   });
   ctx.__mockNodes.set(inst.id, inst);
 

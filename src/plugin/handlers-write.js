@@ -645,13 +645,21 @@ handlers.instantiate = async function(params) {
 // exercised end-to-end: instance text overrides had no way to flow through
 // the bound property, so auto-layout never recalculated.
 
-// Resolve "label" → "label#5:0" against the instance's main component.
-// Figma's InstanceNode.setProperties requires fully-qualified names.
-async function resolveInstancePropertyName(instance, propertyName) {
-  var main = instance.mainComponent;
-  if (!main && typeof instance.getMainComponentAsync === "function") {
-    main = await instance.getMainComponentAsync();
+// Under documentAccess: dynamic-page (set in plugin/manifest.json), reading
+// `instance.mainComponent` synchronously THROWS — it doesn't return null.
+// Always go through getMainComponentAsync when available; fall back to the
+// sync getter only for older plugin runtimes that don't have the async API.
+async function getMainComponentSafe(instance) {
+  if (typeof instance.getMainComponentAsync === "function") {
+    return await instance.getMainComponentAsync();
   }
+  return instance.mainComponent;
+}
+
+// Resolve "label" → "label#5:0" using the already-fetched main component's
+// componentPropertyDefinitions. Caller passes `main` so we don't re-fetch it
+// per key.
+function resolvePropertyNameAgainstMain(main, propertyName) {
   if (!main) return null;
   var defs = main.componentPropertyDefinitions;
   if (!defs) return null;
@@ -682,12 +690,16 @@ handlers.setComponentProperties = async function(params) {
     throw new Error("setComponentProperties requires an INSTANCE node, got: " + node.type);
   }
 
+  // Fetch main once — dynamic-page-safe — and reuse for every property lookup
+  // plus the diagnostic on unknown names.
+  var main = await getMainComponentSafe(node);
+
   var resolvedMap = {};
   var unresolved = [];
   var keys = Object.keys(properties);
   for (var i = 0; i < keys.length; i++) {
     var name = keys[i];
-    var resolved = await resolveInstancePropertyName(node, name);
+    var resolved = resolvePropertyNameAgainstMain(main, name);
     if (!resolved) {
       unresolved.push(name);
       continue;
@@ -696,11 +708,8 @@ handlers.setComponentProperties = async function(params) {
   }
 
   if (unresolved.length > 0) {
-    var available = [];
-    var main = node.mainComponent || (typeof node.getMainComponentAsync === "function" ? await node.getMainComponentAsync() : null);
-    if (main && main.componentPropertyDefinitions) {
-      available = Object.keys(main.componentPropertyDefinitions);
-    }
+    var available = (main && main.componentPropertyDefinitions)
+      ? Object.keys(main.componentPropertyDefinitions) : [];
     throw new Error(
       "Unknown component property: " + unresolved.join(", ") +
       ". Available on main component: " + (available.length ? available.join(", ") : "(none — call addComponentProperty first)")
