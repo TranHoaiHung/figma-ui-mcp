@@ -22,6 +22,8 @@ export const TOOLS = [
       "Prototyping: setReactions, getReactions, removeReactions (click/hover/press → navigate/overlay/swap with Smart Animate transitions). " +
       "Scroll: setScrollBehavior (overflowDirection: NONE/HORIZONTAL/VERTICAL/BOTH). " +
       "Variants: setComponentProperties, swapComponent, getComponentProperties. " +
+      "Component property definitions (master-side, required for instance text overrides to recalc auto-layout): " +
+      "addComponentProperty (TEXT/BOOLEAN/INSTANCE_SWAP), bindComponentPropertyToText, removeComponentProperty. " +
       "The code runs in a sandboxed VM: no access to require, process, fs, fetch, or network.",
     inputSchema: {
       type: "object",

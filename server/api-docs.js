@@ -1013,6 +1013,30 @@ await figma.setScrollBehavior({ id: frameId, overflowDirection: "VERTICAL", clip
 await figma.setComponentProperties({ id: instanceId, properties: { "Size": "Large", "State": "Active" } });
 await figma.swapComponent({ id: instanceId, componentId: targetComponentId });
 await figma.getComponentProperties({ id: instanceId });
+
+// Component property definitions (master-side) — required so instance text
+// overrides actually trigger auto-layout recalculation. Without binding a TEXT
+// property to the child text layer, setting characters on the instance only
+// changes content data; the layout won't re-measure for flexible width.
+//
+// Step 1: create the property on the master component
+var prop = await figma.addComponentProperty({
+  componentId: btnComponentId,
+  name: "label",
+  type: "TEXT",                       // "TEXT" | "BOOLEAN" | "INSTANCE_SWAP"
+  defaultValue: "Click me",
+});
+// → { propertyName: "label#5:0", requestedName: "label", type: "TEXT", ... }
+
+// Step 2: bind the property to the child TEXT node — this is the step that
+// makes auto-layout actually re-measure on instance override.
+await figma.bindComponentPropertyToText({
+  textNodeId: btnLabelTextId,
+  propertyName: "label",              // bare name OK — resolved to "label#5:0"
+});
+
+// Cleanup
+await figma.removeComponentProperty({ componentId: btnComponentId, propertyName: "label" });
 \`\`\`
 
 ---

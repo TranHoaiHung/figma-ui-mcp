@@ -33,6 +33,10 @@ const WRITE_OPS = [
   "setScrollBehavior",
   // Component variant swapping (v2.4.0)
   "setComponentProperties", "swapComponent",
+  // Component property definitions on master (v2.5.22)
+  // — addComponentProperty + bindComponentPropertyToText is what makes instance
+  //   text overrides actually re-measure auto-layout.
+  "addComponentProperty", "bindComponentPropertyToText", "removeComponentProperty",
 ];
 
 const READ_OPS = [
