@@ -37,6 +37,8 @@ const WRITE_OPS = [
   // — addComponentProperty + bindComponentPropertyToText is what makes instance
   //   text overrides actually re-measure auto-layout.
   "addComponentProperty", "bindComponentPropertyToText", "removeComponentProperty",
+  // Generic property binding (v2.5.22) — supports .visible (BOOLEAN) and .mainComponent (INSTANCE_SWAP)
+  "bindComponentProperty", "unbindComponentProperty",
 ];
 
 const READ_OPS = [

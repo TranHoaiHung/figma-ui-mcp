@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.5.22] — 2026-05-18
+
+### Added — Component property definitions on master components (merged from PR #8 by muhammadmahad-debug)
+
+**New handlers — master-side property API:**
+- `addComponentProperty` — create TEXT / BOOLEAN / INSTANCE_SWAP property on a `COMPONENT` or `COMPONENT_SET`. Validates `defaultValue` per type, rejects `VARIANT` with a clear message (variants live on component sets via `combineAsVariants()`).
+- `bindComponentPropertyToText` — bind a child TEXT node's `.characters` to a TEXT property. **This is the step that makes auto-layout actually re-measure on instance override** — Figma only reflows when text arrives via a bound property, not from a raw `characters` write.
+- `removeComponentProperty` — delete a property definition. Bare-name → `name#id` resolution works here too.
+
+**New handlers — generic binding (this release):**
+- `bindComponentProperty` — generic version supporting all three reference fields: `.characters` (TEXT property, TEXT node), `.visible` (BOOLEAN property, any node), `.mainComponent` (INSTANCE_SWAP property, INSTANCE node). Preserves existing references on the same node, validates field/type match, walks up to find owning component automatically.
+- `unbindComponentProperty` — remove a single field binding; other refs on the node preserved. Sets refs to `null` when last field cleared (Figma quirk: empty object doesn't clear).
+
+Resolves the long-standing limitation where instance text overrides changed content but never reflowed auto-layout. Now buttons grow to fit longer labels when `setComponentProperties` is used on the instance — exactly the workflow needed for proper component libraries.
+
+### Tests
+- `scripts/test-component-properties.mjs` — 47 tests (TEXT/BOOLEAN/INSTANCE_SWAP creation, bare-name resolution, binding edge cases, validation)
+- `scripts/test-bind-component-property.mjs` — 22 tests (proxy forwarding ×4, BOOLEAN binding ×3, INSTANCE_SWAP binding ×2, TEXT binding ×2, preservation ×2, validation ×4, unbind ×3, no-op ×1, last-field-clear ×1)
+- Full suite: **292 tests, 0 failures** (39+13+29+27+23+11+41+24+16+47+22)
+
+---
+
 ## [2.5.21] — 2026-05-05
 
 ### Fixed — BUG-01/02/03/04 from field reports
