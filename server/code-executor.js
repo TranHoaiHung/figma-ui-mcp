@@ -39,6 +39,10 @@ const WRITE_OPS = [
   "addComponentProperty", "bindComponentPropertyToText", "removeComponentProperty",
   // Generic property binding (v2.5.22) — supports .visible (BOOLEAN) and .mainComponent (INSTANCE_SWAP)
   "bindComponentProperty", "unbindComponentProperty",
+  // Dynamic-page document access (v2.5.24)
+  // — required so user code can opt-in to figma.loadAllPagesAsync() before
+  //   cross-page queries. Without it, figma.root.findOne misses unloaded pages.
+  "loadAllPagesAsync",
 ];
 
 const READ_OPS = [

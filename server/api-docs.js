@@ -895,6 +895,12 @@ await figma.instantiate({ componentName: "btn/primary", parentId: screen.id, x: 
     "Icon":       { visible: false }
   }
 })
+
+// Cross-page document access (documentAccess: dynamic-page)
+// listComponents and instantiate auto-call loadAllPagesAsync internally.
+// If you run figma.query() / figma.modify() / your own findOne against a
+// component that lives on an unvisited page, call this first or it will miss.
+await figma.loadAllPagesAsync();   // → { loaded: true, pageCount: N }
 \`\`\`
 
 ---
