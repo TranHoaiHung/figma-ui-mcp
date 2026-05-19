@@ -1041,8 +1041,57 @@ await figma.bindComponentPropertyToText({
   propertyName: "label",              // bare name OK — resolved to "label#5:0"
 });
 
+// Step 3: instantiate + drive the property — auto-layout will reflow here
+var inst = await figma.instantiate({ componentName: "btn/primary", x: 100, y: 200 });
+await figma.setComponentProperties({
+  id: inst.id,
+  properties: { "label": "A much longer button label" }   // bare name resolved
+});
+// → button width grows to fit the longer text (v2.5.24+ auto-promotes TEXT to HUG sizing)
+
+// Read current property values on an instance
+var props = await figma.getComponentProperties({ id: inst.id });
+// → { id, name, properties: { "label#5:0": { type: "TEXT", value: "..." } } }
+
 // Cleanup
 await figma.removeComponentProperty({ componentId: btnComponentId, propertyName: "label" });
+
+// ── Generic bindComponentProperty (BOOLEAN + INSTANCE_SWAP) — v2.5.22+ ─────
+// bindComponentPropertyToText is TEXT-only. For BOOLEAN visibility or
+// INSTANCE_SWAP icon slots, use the generic bindComponentProperty:
+//
+//   field          | required property type | accepted node type
+//   ---------------+------------------------+---------------------
+//   "characters"   | TEXT                   | TEXT
+//   "visible"      | BOOLEAN                | any node
+//   "mainComponent"| INSTANCE_SWAP          | INSTANCE
+
+// BOOLEAN — toggle icon visibility from instance
+await figma.addComponentProperty({
+  componentId: cardComponentId, name: "showIcon", type: "BOOLEAN", defaultValue: true
+});
+await figma.bindComponentProperty({
+  nodeId: iconNodeId, field: "visible", propertyName: "showIcon"
+});
+
+// INSTANCE_SWAP — swap nested icon component from instance
+await figma.addComponentProperty({
+  componentId: cardComponentId, name: "icon", type: "INSTANCE_SWAP",
+  defaultValue: "abc123def456"   // component key
+});
+await figma.bindComponentProperty({
+  nodeId: iconInstanceId, field: "mainComponent", propertyName: "icon"
+});
+
+// Unbind a single field — preserves other refs on the same node
+await figma.unbindComponentProperty({ nodeId: iconNodeId, field: "visible" });
+
+// ── Cross-page component lookup (dynamic-page document access) — v2.5.24 ──
+// Under documentAccess: dynamic-page, figma.root.findOne only sees pages the
+// user has visited this session. listComponents and instantiate handle this
+// automatically. For your own cross-page queries, call loadAllPagesAsync first:
+await figma.loadAllPagesAsync();
+var nodes = await figma.query({ namePattern: "btn/*" });
 \`\`\`
 
 ---

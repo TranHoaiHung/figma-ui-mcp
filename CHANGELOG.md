@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.5.24] — 2026-05-19
+
+### Added — Complete component property workflow (merged PRs #8, #9, #10, #11 by @muhammadmahad-debug)
+
+This release closes a major gap: **instance text overrides now actually re-measure auto-layout**. Buttons grow to fit longer labels, cards reflow when content changes — exactly the workflow needed for proper component libraries.
+
+**The chain that makes it work:**
+
+1. **Master-side property definitions** (PR #8 — `addComponentProperty`, `bindComponentPropertyToText`, `removeComponentProperty`) — create TEXT / BOOLEAN / INSTANCE_SWAP properties on a `COMPONENT` or `COMPONENT_SET`, bind a child TEXT's `.characters` so override values flow through the property pipeline.
+2. **Generic property binding** (v2.5.22 follow-up — `bindComponentProperty`, `unbindComponentProperty`) — single API covering all three reference fields (`.characters`, `.visible`, `.mainComponent`) with type validation and preservation of co-existing refs.
+3. **Cross-page component lookup under dynamic-page access** (PR #9 — `loadAllPagesAsync`) — `instantiate` now calls `await figma.loadAllPagesAsync()` before `findOne`, mirroring what `listComponents` already did. Also exposes `figma.loadAllPagesAsync()` to user code so arbitrary cross-page queries work.
+4. **Missing variant/property handlers shipped** (PR #10 — `setComponentProperties`, `getComponentProperties`, `swapComponent`) — these had been on the executor allowlist since v2.4.0 but no plugin-side handler ever existed (silently failed for 2 years). Now driving instance property overrides actually works end-to-end.
+5. **Modern per-child layout sizing + auto-promote** (PR #11 — `layoutSizingHorizontal`/`layoutSizingVertical` params on create/modify, auto-promote TEXT to HUG on content change) — Figma's modern `layoutSizingHorizontal: "FIXED" | "HUG" | "FILL"` beats legacy `textAutoResize` for children of auto-layout. When `modify({content: "..."})` targets a TEXT inside a hug-axis parent, the text axis is auto-promoted to HUG so the parent reflows. Explicit user params override the magic.
+
+**Fix in this release:** `unbindComponentProperty` setting `componentPropertyReferences = null` was rejected by Figma's validator (`Expected object, received null`) — caught during live smoke test of v2.5.22. Now assigns empty object `{}` which Figma accepts.
+
+### Live smoke test verified
+
+End-to-end on a real Figma multi-page file:
+- Button master → addComponentProperty TEXT → bindComponentPropertyToText → instantiate → setComponentProperties with longer label → **button width grew 140px → 244px** (+104px reflow).
+- Card master with BOOLEAN `showIcon` → bindComponentProperty `.visible` → unbind + rebind → setComponentProperties `false` → icon hidden in instance.
+
+### Tests
+- `test-component-properties.mjs` — 47 tests (PR #8)
+- `test-bind-component-property.mjs` — 22 tests (v2.5.22 follow-up + v2.5.23 empty-object fix)
+- `test-dynamic-page.mjs` — 15 tests (PR #9)
+- `test-variant-handlers.mjs` — 46 tests (PR #10)
+- `test-layout-sizing-axes.mjs` — 15 tests (PR #11)
+- **Full suite: 368 tests, 0 failures**
+
+### Credits
+Massive thanks to **@muhammadmahad-debug** — 4 high-quality PRs, all backed by mock tests + plugin-side vm tests + rebuild + docs updates.
+
+---
+
 ## [2.5.23] — 2026-05-19
 
 ### Fixed — `unbindComponentProperty` rejected by Figma when clearing last field
@@ -9,11 +44,7 @@ Setting `node.componentPropertyReferences = null` threw at runtime:
 
 Caught during live Figma smoke test of v2.5.22 — mock tests didn't exercise the Figma validator.
 
-**Fix:** assign empty object `{}` instead of `null` when unbinding the last field. Effectively clears all references and Figma accepts it.
-
-### Tests
-- `scripts/test-bind-component-property.mjs` updated to assert empty-object behavior
-- Full suite: **292 tests, 0 failures**
+**Fix:** assign empty object `{}` instead of `null` when unbinding the last field.
 
 ---
 

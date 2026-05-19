@@ -74,6 +74,7 @@ The MCP server starts a small HTTP server bound to `localhost:38451`. The Figma 
 | **Prototyping** | `setReactions` — click/hover/press → navigate/overlay/swap with Smart Animate. |
 | **Scroll behavior** | `setScrollBehavior` — HORIZONTAL / VERTICAL / BOTH overflow. |
 | **Variants & instance swap** | `setComponentProperties` / `swapComponent` — variants + instance swap. |
+| **Component property definitions** *(v2.5.24)* | `addComponentProperty` + `bindComponentProperty` — create TEXT / BOOLEAN / INSTANCE_SWAP properties on master components. Instance text overrides now actually re-measure auto-layout (button grows to fit longer label). |
 | **Multi-instance** | Multiple Figma tabs connect simultaneously via sessions. |
 
 Full version history: see [CHANGELOG.md](CHANGELOG.md).
