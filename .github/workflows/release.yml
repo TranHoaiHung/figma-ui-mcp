@@ -54,14 +54,19 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # ── Tag the commit ─────────────────────────────────────────────────────
+      # ── Tag the commit (idempotent — skip if maintainer already pushed) ────
       - name: Create git tag
         if: steps.check.outputs.skip == 'false'
         run: |
+          VERSION="v${{ steps.pkg.outputs.version }}"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v${{ steps.pkg.outputs.version }}"
-          git push origin "v${{ steps.pkg.outputs.version }}"
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q "$VERSION"; then
+            echo "Tag $VERSION already exists on origin — skipping."
+          else
+            git tag "$VERSION"
+            git push origin "$VERSION"
+          fi
 
       # ── Extract this version's section from CHANGELOG.md ───────────────────
       - name: Extract changelog
@@ -73,16 +78,21 @@ jobs:
             > /tmp/release-notes.md
           cat /tmp/release-notes.md
 
-      # ── Create GitHub Release with changelog notes ─────────────────────────
+      # ── Create GitHub Release (idempotent — skip if exists) ────────────────
       - name: Create GitHub Release
         if: steps.check.outputs.skip == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ steps.pkg.outputs.version }}" \
-            --title "v${{ steps.pkg.outputs.version }}" \
-            --notes-file /tmp/release-notes.md \
-            --latest
+          VERSION="v${{ steps.pkg.outputs.version }}"
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists — skipping."
+          else
+            gh release create "$VERSION" \
+              --title "$VERSION" \
+              --notes-file /tmp/release-notes.md \
+              --latest
+          fi
 
       # ── Publish to MCP Registry ──────────────────────────────────────────
       - name: Update server.json version
