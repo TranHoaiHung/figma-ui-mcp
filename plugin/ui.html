@@ -222,6 +222,8 @@
       parent.postMessage({ pluginMessage: req }, "*");
     }
 
+    var activeAbortController = null;   // exposed so reconnect() can cancel an in-flight long poll
+
     async function poll() {
       while (polling) {
         try {
@@ -232,11 +234,11 @@
           if (qs.length) pollUrl += "?" + qs.join("&");
           // Use short timeout when reconnecting, long poll when stable
           var fetchTimeout = consecutiveErrors > 0 ? SHORT_POLL_TIMEOUT : LONG_POLL_TIMEOUT;
-          var controller = new AbortController();
-          var timeoutId = setTimeout(function() { controller.abort(); }, fetchTimeout);
+          activeAbortController = new AbortController();
+          var timeoutId = setTimeout(function() { activeAbortController.abort(); }, fetchTimeout);
           var res;
-          try { res = await fetch(pollUrl, { signal: controller.signal }); }
-          finally { clearTimeout(timeoutId); }
+          try { res = await fetch(pollUrl, { signal: activeAbortController.signal }); }
+          finally { clearTimeout(timeoutId); activeAbortController = null; }
           if (!res.ok) { setStatus("yellow", "Bridge not responding"); consecutiveErrors++; await sleep(getBackoff()); continue; }
 
           var body = await res.json();
@@ -271,10 +273,28 @@
 
     function reconnect() {
       polling = false;
+      // Abort the in-flight long poll so the loop exits immediately,
+      // otherwise it sits inside `await fetch(...)` for up to 12s.
+      if (activeAbortController) {
+        try { activeAbortController.abort(); } catch (e) {}
+      }
       consecutiveErrors = 0;
       setStatus("yellow", "Reconnecting...");
       setTimeout(function() { polling = true; poll(); }, 300);
     }
+
+    // Tab visibility — when user returns to Figma after a long pause,
+    // immediately force-reconnect so they don't wait for the next poll cycle
+    // (browsers throttle background fetch to ~1Hz; HEALTH_TTL may have expired).
+    document.addEventListener("visibilitychange", function() {
+      if (document.visibilityState === "visible" && everConnected) {
+        // Only force-reconnect if a poll is in-flight or we recently errored.
+        if (consecutiveErrors > 0 || activeAbortController) {
+          log("Tab visible — forcing reconnect", "info");
+          reconnect();
+        }
+      }
+    });
 
     function changePort() {
       var input = prompt("Enter bridge port (default 38451):", currentPort);

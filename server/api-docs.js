@@ -1075,9 +1075,12 @@ await figma.bindComponentProperty({
 });
 
 // INSTANCE_SWAP — swap nested icon component from instance
+// defaultValue MUST be the local node ID of a COMPONENT (e.g. "123:456"),
+// NOT a published component key. Get it from createComponent(...).id or listComponents().
+var iconMaster = await figma.createComponent({ nodeId: iconFrameId, name: "icon/star" });
 await figma.addComponentProperty({
   componentId: cardComponentId, name: "icon", type: "INSTANCE_SWAP",
-  defaultValue: "abc123def456"   // component key
+  defaultValue: iconMaster.id    // ← node ID, not published key
 });
 await figma.bindComponentProperty({
   nodeId: iconInstanceId, field: "mainComponent", propertyName: "icon"

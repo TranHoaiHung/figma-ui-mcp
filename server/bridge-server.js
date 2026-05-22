@@ -9,9 +9,9 @@ export const CONFIG = {
   OP_TIMEOUT_MS: 60_000,
   MAX_BODY_BYTES: 5_000_000,
   MAX_QUEUE: 50,
-  HEALTH_TTL_MS: 60_000,
+  HEALTH_TTL_MS: 120_000,    // 2 min — survives browser tab throttling (~1Hz background polls)
   LONG_POLL_MS: 8_000,       // short for Figma iframe compat (some envs limit fetch ~10s)
-  SESSION_EXPIRE_MS: 300_000, // remove idle sessions after 5 min
+  SESSION_EXPIRE_MS: 1_800_000, // 30 min — keep session around when user steps away briefly
 };
 
 // Operation-specific timeouts
@@ -377,17 +377,20 @@ export class BridgeServer {
         req.on("error", function() { resolve(false); });
         req.on("timeout", function() { req.destroy(); resolve(false); });
       });
-      if (isZombie) {
-        try {
-          var m = await import("node:child_process");
-          var pid = m.execSync("lsof -ti tcp:" + port + " 2>/dev/null", { encoding: "utf8" }).trim();
-          if (pid) {
-            m.execSync("kill " + pid + " 2>/dev/null");
-            process.stderr.write("[figma-ui-mcp] Killed zombie on port " + port + " (PID " + pid + ")\n");
-            await new Promise(function(r) { setTimeout(r, 200); });
+      if (!isZombie) return;   // someone else's healthy bridge — leave it alone
+      // Zombie detected — kill ALL PIDs holding the port (was: only first PID)
+      try {
+        var m = await import("node:child_process");
+        var pids = m.execSync("lsof -ti tcp:" + port + " 2>/dev/null", { encoding: "utf8" })
+          .trim().split(/\s+/).filter(function(p) { return p && parseInt(p, 10) !== process.pid; });
+        if (pids.length > 0) {
+          for (var i = 0; i < pids.length; i++) {
+            try { m.execSync("kill -9 " + pids[i] + " 2>/dev/null"); } catch(e) {}
           }
-        } catch(e) { /* ignore */ }
-      }
+          process.stderr.write("[figma-ui-mcp] Killed " + pids.length + " zombie(s) on port " + port + ": " + pids.join(",") + "\n");
+          await new Promise(function(r) { setTimeout(r, 300); });
+        }
+      } catch(e) { /* ignore */ }
     } catch(e) { /* ignore */ }
   }
 

@@ -840,8 +840,11 @@ function resolveComponentPropertyName(componentNode, propertyName) {
 //   the child TEXT node's `characters` is driven by the property — this is what
 //   actually triggers auto-layout to re-measure when an instance overrides it.
 // For BOOLEAN: defaultValue is a boolean. Bind via `componentPropertyReferences.visible`.
-// For INSTANCE_SWAP: defaultValue is a component key (string). options.preferredValues
-//   accepts [{ type: "COMPONENT" | "COMPONENT_SET", key }]. Bind via `.mainComponent`.
+// For INSTANCE_SWAP: defaultValue is a node ID (string) of a COMPONENT — NOT a published
+//   component key. The plugin API resolves the ID against the local document.
+//   Auto-corrects published-key strings (no ":") by looking up the local component.
+//   options.preferredValues accepts [{ type: "COMPONENT" | "COMPONENT_SET", key }].
+//   Bind a child INSTANCE via `.mainComponent`.
 handlers.addComponentProperty = async function(params) {
   var componentId = params.componentId || params.nodeId || params.id;
   var name = params.name || params.propertyName;
@@ -872,7 +875,21 @@ handlers.addComponentProperty = async function(params) {
     throw new Error("BOOLEAN properties require a boolean defaultValue");
   }
   if (type === "INSTANCE_SWAP" && typeof defaultValue !== "string") {
-    throw new Error("INSTANCE_SWAP properties require a component key string as defaultValue");
+    throw new Error("INSTANCE_SWAP properties require a node ID string as defaultValue " +
+      "(e.g. \"123:456\"). NOT a published component key.");
+  }
+
+  // BUG: callers sometimes pass a published component key (no \":\") which Figma
+  // silently accepts but breaks instance swap. Auto-resolve key → local node ID.
+  if (type === "INSTANCE_SWAP" && defaultValue.indexOf(":") === -1) {
+    var localComp = null;
+    try { localComp = await figma.importComponentByKeyAsync(defaultValue); } catch (e) {}
+    if (!localComp) {
+      throw new Error("INSTANCE_SWAP defaultValue \"" + defaultValue + "\" looks like a " +
+        "published component key, not a node ID. Pass the local component's node ID instead " +
+        "(e.g. \"123:456\"). Get it from createComponent(...).id or listComponents().");
+    }
+    defaultValue = localComp.id;
   }
 
   var uniqueName = options

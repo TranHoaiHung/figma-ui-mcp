@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.5.25] — 2026-05-19
+
+### Fixed — Connection stability + INSTANCE_SWAP defaultValue
+
+**Connection stability (bridge-server.js + plugin/ui.html)**
+
+Field report: *"Cứ lâu lâu nó bị disconnect xong phải đợi connect lại, có khi không connect, chạy npx lại cũng không connect được luôn."* Four root causes fixed:
+
+- `HEALTH_TTL_MS` raised 60s → **120s**: previously sessions were marked disconnected when browsers throttled background tabs to ~1Hz polling. The plugin's long-poll cycle (8–12s) plus throttling could push the gap past 60s when the tab wasn't focused. 120s covers all reasonable throttle modes.
+- `SESSION_EXPIRE_MS` raised 5min → **30min**: ops queued while user stepped away (lunch, meeting) no longer vanish when they return. Sessions still expire eventually so memory doesn't grow unbounded.
+- `reconnect()` now **aborts the in-flight long poll** via `AbortController` instead of just flipping a flag and waiting up to 12s for the existing `await fetch()` to settle. Previously could create overlapping poll loops.
+- `#killStaleBridges()` now **kills ALL PIDs holding the port**, not just the first one returned by `lsof`. Multiple zombie processes (from repeated `npx figma-ui-mcp` runs) are reclaimed together. Excludes our own PID.
+- Plugin now listens for `visibilitychange` — when the Figma tab becomes visible after a long pause and a poll is in flight or recently errored, it force-reconnects immediately instead of waiting for the next throttled poll cycle.
+
+**INSTANCE_SWAP defaultValue clarification (handlers-tokens.js)**
+
+Field report: *"Plugin wants the nodeId (not the published key) as INSTANCE_SWAP default. Docs are misleading."* Confirmed — the Figma plugin API expects a local node ID (e.g. `"123:456"`), not a published component key. Previous code accepted either as a string and silently broke instance swap when a key was passed.
+
+- Comments + error messages now clearly say "node ID, not published key"
+- When a key-like string (no `":"`) is passed, the plugin now auto-resolves via `figma.importComponentByKeyAsync()` before falling back to a clear error message pointing at `createComponent(...).id` / `listComponents()`
+- `api-docs.js` example updated — uses `iconMaster.id` from `createComponent()` instead of a fake published key string
+
+### Tests
+- `test-component-properties.mjs` — 7 new tests covering node ID accepted-as-is, published key auto-resolution, unknown key error path
+- Full suite: **375 tests, 0 failures**
+
+---
+
 ## [2.5.24] — 2026-05-19
 
 ### Added — Complete component property workflow (merged PRs #8, #9, #10, #11 by @muhammadmahad-debug)

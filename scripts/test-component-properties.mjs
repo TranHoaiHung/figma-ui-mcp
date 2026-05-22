@@ -168,6 +168,7 @@ function loadPluginContext() {
       getStyleByIdAsync: async () => null,
       getStyleById: () => null,
       loadFontAsync: async () => {},
+      importComponentByKeyAsync: async () => null,
       currentPage: { findAll: () => [] },
       root: { findAll: () => [] },
     },
@@ -214,11 +215,13 @@ console.log("\nLayer B: addComponentProperty — BOOLEAN + INSTANCE_SWAP happy p
   ctx.__mockNodes.set(comp.id, comp);
   const b = await handlers.addComponentProperty({ componentId: comp.id, name: "showIcon", type: "BOOLEAN", defaultValue: true });
   assert("BOOLEAN succeeds", b.propertyName.startsWith("showIcon#"));
+  // defaultValue MUST be a node ID (contains ":"), not a published key
   const i = await handlers.addComponentProperty({
-    componentId: comp.id, name: "iconSwap", type: "INSTANCE_SWAP", defaultValue: "abc123",
+    componentId: comp.id, name: "iconSwap", type: "INSTANCE_SWAP", defaultValue: "200:1",
     options: { preferredValues: [{ type: "COMPONENT", key: "abc123" }] },
   });
-  assert("INSTANCE_SWAP succeeds", i.propertyName.startsWith("iconSwap#"));
+  assert("INSTANCE_SWAP succeeds with node ID", i.propertyName.startsWith("iconSwap#"));
+  assert("INSTANCE_SWAP defaultValue forwarded as-is (node ID)", i.defaultValue === "200:1");
   assert("INSTANCE_SWAP options forwarded to Figma",
     comp._lastAddArgs.options && Array.isArray(comp._lastAddArgs.options.preferredValues));
 }
@@ -264,6 +267,45 @@ console.log("\nLayer B: addComponentProperty — validation");
   await handlers.addComponentProperty({ componentId: "does-not-exist", name: "x", type: "TEXT", defaultValue: "y" })
     .then(() => assert("missing component rejected", false))
     .catch(e => assert("missing component rejected", /Component not found/.test(e.message)));
+}
+
+console.log("\nLayer B: INSTANCE_SWAP — node ID vs published key");
+{
+  const comp = makeMockComponent("Card");
+  ctx.__mockNodes.set(comp.id, comp);
+
+  // 1. Node ID (contains ":") — accepted as-is, no importComponentByKeyAsync call
+  let importCalled = false;
+  ctx.figma.importComponentByKeyAsync = async (k) => { importCalled = true; return null; };
+
+  const ok = await handlers.addComponentProperty({
+    componentId: comp.id, name: "iconA", type: "INSTANCE_SWAP", defaultValue: "300:5"
+  });
+  assert("node ID accepted without importComponentByKeyAsync", !importCalled);
+  assert("INSTANCE_SWAP with node ID succeeds", ok.propertyName.startsWith("iconA#"));
+
+  // 2. Published key (no ":") — calls importComponentByKeyAsync to resolve to local node
+  importCalled = false;
+  ctx.figma.importComponentByKeyAsync = async (k) => {
+    importCalled = true;
+    return k === "abc123def456" ? { id: "300:99", name: "imported-icon", type: "COMPONENT" } : null;
+  };
+
+  const resolved = await handlers.addComponentProperty({
+    componentId: comp.id, name: "iconB", type: "INSTANCE_SWAP", defaultValue: "abc123def456"
+  });
+  assert("published key triggers importComponentByKeyAsync", importCalled);
+  assert("INSTANCE_SWAP with resolved key succeeds", resolved.propertyName.startsWith("iconB#"));
+  assert("defaultValue was rewritten to local node ID", resolved.defaultValue === "300:99");
+
+  // 3. Unknown key — clear error message
+  ctx.figma.importComponentByKeyAsync = async () => null;
+  await handlers.addComponentProperty({
+    componentId: comp.id, name: "iconC", type: "INSTANCE_SWAP", defaultValue: "unknown-key"
+  })
+    .then(() => assert("unknown key rejected", false))
+    .catch(e => assert("unknown key rejected with helpful message",
+      /looks like a published component key/.test(e.message)));
 }
 
 console.log("\nLayer B: bindComponentPropertyToText — happy path + name resolution");
