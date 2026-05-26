@@ -573,7 +573,10 @@ handlers.setupDesignTokens = async function(params) {
   var created = [];
   var skipped = [];
 
-  // Helper: apply scalar OR {modeName: value} spec to variable
+  // Helper: apply scalar OR {modeName: value} spec to variable.
+  // BUG-NUM-01/FONT-02: scalar values now apply to ALL modes (was: only default mode).
+  // Previously, scalar numbers/strings on multi-mode collections left other modes at 0/null,
+  // causing FLOAT to read as 0 in non-default modes and STRING to resolve as "String value".
   function applyVariableValue(variable, valueSpec, mapValueFn) {
     if (valueSpec && typeof valueSpec === "object" && !Array.isArray(valueSpec)) {
       var keys = Object.keys(valueSpec);
@@ -582,7 +585,11 @@ handlers.setupDesignTokens = async function(params) {
         variable.setValueForMode(mid, mapValueFn(valueSpec[keys[k]]));
       }
     } else {
-      variable.setValueForMode(defaultModeId, mapValueFn(valueSpec));
+      // Scalar — apply to every mode so non-default modes don't end up with placeholder values
+      var mapped = mapValueFn(valueSpec);
+      for (var mk = 0; mk < collection.modes.length; mk++) {
+        variable.setValueForMode(collection.modes[mk].modeId, mapped);
+      }
     }
   }
 
@@ -683,8 +690,19 @@ handlers.setupDesignTokens = async function(params) {
       try {
         await figma.loadFontAsync({ family: familyLiteral, style: styleLiteral });
       } catch (fontErr) {
-        await figma.loadFontAsync({ family: familyLiteral, style: "Regular" });
-        styleLiteral = "Regular";
+        // BUG-FONT-01: system fonts like "SF Mono", "SF Pro" aren't in Figma's font registry.
+        // Suggest a cloud-available replacement instead of cryptic "could not be loaded".
+        try {
+          await figma.loadFontAsync({ family: familyLiteral, style: "Regular" });
+          styleLiteral = "Regular";
+        } catch (regularErr) {
+          var hint = "";
+          var lower = familyLiteral.toLowerCase();
+          if (lower.indexOf("sf mono") !== -1)  hint = " Figma cloud doesn't have SF Mono (macOS system font). Use JetBrains Mono, Roboto Mono, or Fira Code.";
+          else if (lower.indexOf("sf pro") !== -1) hint = " Figma cloud doesn't have SF Pro (macOS system font). Use Inter, Manrope, or DM Sans.";
+          else if (lower.indexOf("system-ui") !== -1 || lower.indexOf("-apple-system") !== -1) hint = " CSS system-ui keyword isn't a real font in Figma. Use Inter (closest cross-platform match).";
+          throw new Error('Font "' + familyLiteral + ' ' + styleLiteral + '" not available in Figma.' + hint + ' Text style "' + styleName + '" not created.');
+        }
       }
       style.fontName = { family: familyLiteral, style: styleLiteral };
 
@@ -716,6 +734,14 @@ handlers.setupDesignTokens = async function(params) {
         style.letterSpacing = { unit: "PIXELS", value: Number(spec.letterSpacing) };
       }
 
+      // BUG-TS-01: explicit unbind when caller passes a literal font name,
+      // so re-running setupDesignTokens without `fonts:` clears stale STRING bindings.
+      if (typeof resolvedFamily === "string") {
+        try { style.setBoundVariable("fontFamily", null); } catch (e) {}
+      }
+      if (typeof resolvedStyle === "string") {
+        try { style.setBoundVariable("fontStyle", null); } catch (e) {}
+      }
       if (typeof resolvedFamily !== "string" && resolvedFamily && resolvedFamily.resolvedType === "STRING") {
         try { style.setBoundVariable("fontFamily", resolvedFamily); } catch (e) {}
       }

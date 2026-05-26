@@ -1,5 +1,60 @@
 # Changelog
 
+## [2.5.26] — 2026-05-25
+
+### Fixed — 10 bugs from field report (Clean Master Plus project)
+
+**BUG-NUM-01 (HIGH): FLOAT scalar variables only applied to default mode** (`src/plugin/handlers-tokens.js`)
+- `numbers: { "radius-md": 12 }` on a multi-mode collection (`["light", "dark"]`) set 12 only in light; dark mode kept its initial value (0).
+- Same root cause affected `fontSizes`. Result: dark-mode UI had zero corner radius, zero spacing.
+- **Fix:** scalar values in `applyVariableValue` now write to every mode in the collection, not just the default. Per-mode object syntax (`{ light: 4, dark: 8 }`) still routes per-mode unchanged.
+
+**BUG-FONT-02 (CRITICAL): STRING font variables resolved as "String value" placeholder** (`src/plugin/handlers-tokens.js`)
+- Same root cause as BUG-NUM-01 but with disastrous consequences: text styles bound to a STRING font variable rendered as font literally named `"String value"` → invisible text + broken layout.
+- **Fix:** same `applyVariableValue` change — scalar STRING values propagate to all modes.
+
+**BUG-MODE-01 (HIGH): `setFrameVariableMode` crashed with `unloaded font "String value Medium"`**
+- Direct consequence of BUG-FONT-02 — auto-resolved by the fix.
+
+**BUG-TS-01 (HIGH): re-running `setupDesignTokens` didn't clear stale STRING font bindings** (`src/plugin/handlers-tokens.js`)
+- Calling `setupDesignTokens` a second time with literal `fontFamily: "Inter"` (no `fonts:` key) left the existing text style still bound to the previous STRING variable.
+- **Fix:** when caller passes a literal font name, plugin now explicitly unbinds `fontFamily`/`fontStyle` before assigning the new literal.
+
+**BUG-FONT-01 (HIGH): system fonts produced cryptic error** (`src/plugin/handlers-tokens.js`)
+- `setupDesignTokens` with `fontFamily: "SF Mono"` (or `SF Pro`, `system-ui`) failed with generic `font could not be loaded` — Figma cloud doesn't carry macOS system fonts.
+- **Fix:** error now suggests the correct cloud-available replacement:
+  - `SF Mono` → JetBrains Mono, Roboto Mono, Fira Code
+  - `SF Pro` → Inter, Manrope, DM Sans
+  - `system-ui` / `-apple-system` → Inter
+
+**BUG-TEXT-01 (HIGH): TEXT nodes stuck at 100×100 when only `width` or no dimensions passed** (`src/plugin/handlers-write.js`)
+- Default values `width: 100, height: 100` in `handlers.create` destructuring made every TEXT node default to a 100×100 fixed box. Vertical overflow + parent frame bloat.
+- **Fix:** distinguish missing vs. zero. When neither width/height passed → `textAutoResize: "WIDTH_AND_HEIGHT"` (natural shrink-wrap). When only width → `"HEIGHT"` + resize to actual node height. Post-`appendChild` re-apply uses `hasExplicitWidth/hasExplicitHeight` instead of falsy check on default 100.
+
+**BUG-DEL-01 (CRITICAL): deleting frames containing components silently lost variables** (`src/plugin/handlers-write.js`)
+- `figma.delete({ id: <frame containing COMPONENT masters> })` ran without warning; user reports variable collections + text styles also vanished afterwards (Figma edge case under dynamic-page document access).
+- **Fix:** `delete` now blocks frames containing `COMPONENT` / `COMPONENT_SET` descendants by default. Response includes `blocked: "contains-components"`, `componentCount`, `componentNames`. Caller passes `force: true` to override after confirming.
+
+**BUG-CONN-01 (MEDIUM): plugin disconnect after idle, no auto-reconnect** (`plugin/ui.html`)
+- v2.5.25 added visibility listener but only force-reconnected when `consecutiveErrors > 0` or poll in-flight. Idle case (poll succeeded recently but server expired session before user returned) slipped through.
+- **Fix:** track `lastSuccessfulPollAt`; if user returns to tab > 20s after last successful poll, force-reconnect regardless of error state.
+
+**Documentation-only:**
+- BUG-TS-02 (MEDIUM): `fontWeight: "Medium"` on `text/label` falling back to `"Regular"` — this was already handled by the legacy fallback loop on line 691-695. The actual root cause was font load failure mid-chain; with BUG-FONT-01 improvements the error is now explicit instead of silent fallback.
+- BUG-TIMEOUT-01 (MEDIUM): retrying `setupDesignTokens` on an existing collection with full payload (15 colors × 2 modes + 16 numbers + 7 textStyles) takes ~60s. Not a bug — Figma's variable + style API doesn't batch. Recommendation: only call `setupDesignTokens` once per session; use `modifyVariable` for individual updates.
+
+### Tests
+- `scripts/test-v2526-feedback.mjs` — 23 tests covering every fixable bug above:
+  - BUG-NUM-01 scalar all-modes + per-mode object preserved (×5)
+  - BUG-FONT-02 STRING var all-modes (×3)
+  - BUG-TS-01 unbind on literal (×1)
+  - BUG-FONT-01 SF Mono / SF Pro hints (×4)
+  - BUG-TEXT-01 hug / width-only / both (×7)
+  - BUG-DEL-01 component-block + force override (×3)
+- Full suite: **398 tests, 0 failures**
+
+---
+
 ## [2.5.25] — 2026-05-19
 
 ### Fixed — Connection stability + INSTANCE_SWAP defaultValue

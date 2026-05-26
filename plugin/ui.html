@@ -169,6 +169,7 @@
     var SHORT_POLL_TIMEOUT = 3000;  // used when reconnecting (no long poll)
     var consecutiveErrors = 0;
     var everConnected = false;      // track if we ever had a successful connection
+    var lastSuccessfulPollAt = Date.now();  // for visibility-driven reconnect heuristic
     var sessionId = null;        // assigned from plugin main thread (fileName-based)
     var fileName = null;
 
@@ -247,6 +248,7 @@
 
           consecutiveErrors = 0;
           everConnected = true;
+          lastSuccessfulPollAt = Date.now();
 
           for (var i = 0; i < reqs.length; i++) {
             var req = reqs[i];
@@ -287,12 +289,15 @@
     // immediately force-reconnect so they don't wait for the next poll cycle
     // (browsers throttle background fetch to ~1Hz; HEALTH_TTL may have expired).
     document.addEventListener("visibilitychange", function() {
-      if (document.visibilityState === "visible" && everConnected) {
-        // Only force-reconnect if a poll is in-flight or we recently errored.
-        if (consecutiveErrors > 0 || activeAbortController) {
-          log("Tab visible — forcing reconnect", "info");
-          reconnect();
-        }
+      if (document.visibilityState !== "visible" || !everConnected) return;
+      var idleMs = Date.now() - lastSuccessfulPollAt;
+      // Force reconnect if any of:
+      //  - in-flight poll (might be stuck on a backgrounded socket)
+      //  - last successful poll was > 20s ago (server may have expired session)
+      //  - consecutive errors
+      if (consecutiveErrors > 0 || activeAbortController || idleMs > 20000) {
+        log("Tab visible after " + Math.round(idleMs / 1000) + "s — forcing reconnect", "info");
+        reconnect();
       }
     });
 

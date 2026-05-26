@@ -239,6 +239,7 @@ async function buildText(params, width, height, fill, fontSize, fontWeight, line
   // Auto-resize: explicit > both dims fixed > centered/right width > width-only > default hug
   if (params.textAutoResize) {
     node.textAutoResize = params.textAutoResize;
+    if (params.textAutoResize === "NONE" && width && height) node.resize(width, height);
   } else if (width && height) {
     // BUG-01 fix: both dimensions given → fixed box, resize after setting NONE
     node.textAutoResize = "NONE";
@@ -253,7 +254,15 @@ async function buildText(params, width, height, fill, fontSize, fontWeight, line
       node.textAutoResize = "HEIGHT";
     }
   } else if (width) {
+    // BUG-TEXT-01: width-only → set width but let height auto-fit content.
+    // Previously left node.height at default 100 → caused vertical overflow.
     node.textAutoResize = "HEIGHT";
+    node.resize(width, node.height);
+  } else {
+    // BUG-TEXT-01: neither width nor height → hug both axes (natural text bounds).
+    // Default text size in Figma is 100x100 if textAutoResize stays at its initial value;
+    // WIDTH_AND_HEIGHT makes the box shrink-wrap the actual rendered glyphs.
+    node.textAutoResize = "WIDTH_AND_HEIGHT";
   }
   return node;
 }
@@ -394,7 +403,14 @@ handlers.create = async (params) => {
       node = buildLine(params, width, stroke, strokeWeight);
       break;
     case "TEXT":
-      node = await buildText(params, width, height, fill, fontSize, fontWeight, lineHeight);
+      // BUG-TEXT-01: pass `undefined` for w/h that the caller didn't set,
+      // so buildText can default to WIDTH_AND_HEIGHT hug instead of being stuck at 100×100.
+      node = await buildText(
+        params,
+        hasExplicitWidth  ? width  : undefined,
+        hasExplicitHeight ? height : undefined,
+        fill, fontSize, fontWeight, lineHeight
+      );
       break;
     case "SVG":
       node = buildSvg(params, width, height, fill, stroke, strokeWeight);
@@ -454,13 +470,15 @@ handlers.create = async (params) => {
   if (type === "TEXT") {
     var textAutoResize = params.textAutoResize;
     if (!textAutoResize) {
-      if (width && height)  textAutoResize = "NONE";
-      else if (width)       textAutoResize = "HEIGHT";
+      if (hasExplicitWidth && hasExplicitHeight) textAutoResize = "NONE";
+      else if (hasExplicitWidth)                 textAutoResize = "HEIGHT";
+      else                                       textAutoResize = "WIDTH_AND_HEIGHT";
     }
-    if (textAutoResize) {
-      node.textAutoResize = textAutoResize;
-      if (textAutoResize === "NONE") node.resize(width, height);
-      else if (textAutoResize === "HEIGHT") node.resize(width, node.height);
+    node.textAutoResize = textAutoResize;
+    if (textAutoResize === "NONE" && hasExplicitWidth && hasExplicitHeight) {
+      node.resize(width, height);
+    } else if (textAutoResize === "HEIGHT" && hasExplicitWidth) {
+      node.resize(width, node.height);
     }
   }
 
@@ -584,8 +602,40 @@ handlers.modify = async (params) => {
   return nodeToInfo(node);
 };
 
+// BUG-DEL-01: warn when deleting frames containing COMPONENT masters.
+// Deleting a COMPONENT cascades: every INSTANCE of that component in the document
+// is broken. Figma also has reported edge cases where deleting a frame containing
+// component masters that bind variables can leave variable collections in an odd
+// state. We don't block — the user might know what they're doing — but we surface
+// the warning in the response so AI agents can confirm before proceeding.
+function findComponentDescendants(node) {
+  if (!node || node.removed || typeof node.findAll !== "function") return [];
+  try {
+    return node.findAll(function(n) { return n.type === "COMPONENT" || n.type === "COMPONENT_SET"; });
+  } catch (e) { return []; }
+}
+
+function describeDeleteImpact(node) {
+  var impact = { hasComponents: false, componentCount: 0, componentNames: [] };
+  if (!node) return impact;
+  if (node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
+    impact.hasComponents = true;
+    impact.componentCount = 1;
+    impact.componentNames = [node.name];
+    return impact;
+  }
+  var found = findComponentDescendants(node);
+  if (found.length > 0) {
+    impact.hasComponents = true;
+    impact.componentCount = found.length;
+    impact.componentNames = found.slice(0, 10).map(function(c) { return c.name; });
+  }
+  return impact;
+}
+
 // "delete" is a JS reserved keyword — use bracket notation
 handlers["delete"] = async (params) => {
+  var allowComponentDelete = params && params.force === true;
   if (params && Array.isArray(params.ids)) {
     var results = [];
     for (var di = 0; di < params.ids.length; di++) {
@@ -594,6 +644,16 @@ handlers["delete"] = async (params) => {
       if (!n || n.removed) {
         results.push({ deleted: true, alreadyGone: true, ref: targetId });
       } else {
+        var impact = describeDeleteImpact(n);
+        if (impact.hasComponents && !allowComponentDelete) {
+          results.push({
+            deleted: false, ref: targetId, blocked: "contains-components",
+            componentCount: impact.componentCount, componentNames: impact.componentNames,
+            hint: "Deleting this would remove " + impact.componentCount + " component master(s) " +
+                  "and break every instance in the file. Pass force:true to override."
+          });
+          continue;
+        }
         var inf = nodeToInfo(n);
         n.remove();
         results.push(Object.assign({ deleted: true }, inf));
@@ -605,6 +665,15 @@ handlers["delete"] = async (params) => {
   if (!node || node.removed) {
     var ref = params.id || params.nodeId || params.name || params.nodeName;
     return { deleted: true, alreadyGone: true, ref: ref };
+  }
+  var impactSingle = describeDeleteImpact(node);
+  if (impactSingle.hasComponents && !allowComponentDelete) {
+    return {
+      deleted: false, ref: node.id, blocked: "contains-components",
+      componentCount: impactSingle.componentCount, componentNames: impactSingle.componentNames,
+      hint: "Deleting this would remove " + impactSingle.componentCount + " component master(s) " +
+            "and break every instance in the file. Pass force:true to override."
+    };
   }
   const info = nodeToInfo(node);
   node.remove();
