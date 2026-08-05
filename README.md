@@ -1,5 +1,7 @@
 # figma-ui-mcp
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.TranHoaiHung%2Ffigma-ui-mcp.svg)](https://mcptoplist.com/server/io.github.TranHoaiHung%2Ffigma-ui-mcp)
+
 <p align="center">
   <img src="assets/logo-v6.png" alt="figma-ui-mcp — Claude Code to Figma, AI to Figma, MCP Figma Bridge" width="480" />
 </p>
