@@ -242,8 +242,10 @@ function extractDesignTree(node, depth, maxDepth, detailLevel, filterInvisible) 
       info.content = node.characters;
       info.fill = getFillHex(node);
       info.fontSize = node.fontSize;
-      info.fontFamily = node.fontName ? node.fontName.family : null;
-      info.fontWeight = node.fontName ? node.fontName.style : null;
+      var rhFont = readFontName(node);
+      info.fontFamily = rhFont.family;
+      info.fontWeight = rhFont.style;
+      if (rhFont.mixed) info.mixedFonts = true;
       if (node.lineHeight) {
         if (node.lineHeight.unit === "AUTO") info.lineHeight = "auto";
         else if (node.lineHeight.unit === "PERCENT") info.lineHeight = Math.round(node.lineHeight.value) + "%";

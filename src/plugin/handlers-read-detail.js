@@ -132,8 +132,10 @@ handlers.get_node_detail = async function(params) {
       detail.content = node.characters;
       detail.color = getFillHex(node);
       detail.fontSize = node.fontSize + "px";
-      detail.fontFamily = node.fontName ? node.fontName.family : null;
-      detail.fontWeight = node.fontName ? node.fontName.style : null;
+      var detFont = readFontName(node);
+      detail.fontFamily = detFont.family;
+      detail.fontWeight = detFont.style;
+      if (detFont.mixed) detail.mixedFonts = true;
       if (node.lineHeight) {
         if (node.lineHeight.unit === "AUTO") detail.lineHeight = "normal";
         else if (node.lineHeight.unit === "PERCENT") detail.lineHeight = Math.round(node.lineHeight.value) + "%";

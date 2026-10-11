@@ -186,3 +186,45 @@ function nodeToInfo(node) {
   if ("height" in node) info.height = Math.round(node.height);
   return info;
 }
+
+// ─── TEXT FONT ────────────────────────────────────────────────────────────────
+
+// A text node's font, with mixed style runs handled.
+//
+// `node.fontName` is `figma.mixed` — a Symbol — whenever the node's characters
+// do not all share one font. Symbols are truthy, so the common idiom
+//
+//     info.fontFamily = node.fontName ? node.fontName.family : null;
+//
+// takes the wrong branch: `.family` on a Symbol is `undefined`, not a throw. A
+// key set to `undefined` is then dropped when the result is serialised, so the
+// field arrives *absent* rather than null — which downstream cannot tell apart
+// from "this node has no font". Whole files report `allFonts: []` this way while
+// rendering perfectly well in Figma.
+//
+// Reading a mixed property returns the sentinel instead of throwing, so wrapping
+// the read in try/catch does not help either; the runs have to be asked for.
+function readFontName(node) {
+  var fn;
+  try { fn = node.fontName; } catch (e) { return { family: null, style: null, mixed: false }; }
+
+  if (typeof fn !== "symbol") {
+    return fn ? { family: fn.family, style: fn.style, mixed: false }
+              : { family: null, style: null, mixed: false };
+  }
+
+  // Mixed. Report the first run, and say that it is only the first.
+  try {
+    var segs = node.getStyledTextSegments(["fontName"]);
+    if (segs && segs.length && segs[0].fontName) {
+      return { family: segs[0].fontName.family, style: segs[0].fontName.style, mixed: segs.length > 1 };
+    }
+  } catch (e) {}
+  try {
+    var first = node.getRangeFontName(0, 1);
+    if (first && typeof first !== "symbol") {
+      return { family: first.family, style: first.style, mixed: true };
+    }
+  } catch (e) {}
+  return { family: null, style: null, mixed: true };
+}

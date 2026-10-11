@@ -133,8 +133,10 @@ handlers.scan_design = async function(params) {
         textInfo.content = node.characters;
         textInfo.fill = getFillHex(node);
         textInfo.fontSize = node.fontSize;
-        textInfo.fontFamily = node.fontName ? node.fontName.family : null;
-        textInfo.fontWeight = node.fontName ? node.fontName.style : null;
+        var scanFont = readFontName(node);
+        textInfo.fontFamily = scanFont.family;
+        textInfo.fontWeight = scanFont.style;
+        if (scanFont.mixed) textInfo.mixedFonts = true;
       } catch(e) {
         try { textInfo.content = node.characters; } catch(e2) {}
       }
@@ -288,10 +290,11 @@ handlers.search_nodes = async function(params) {
     if (node.type === "TEXT") {
       try {
         if (criteria.text && node.characters.indexOf(criteria.text) === -1) return false;
-        if (criteria.fontFamily && node.fontName && node.fontName.family !== criteria.fontFamily) return false;
-        if (criteria.fontWeight && node.fontName && node.fontName.style !== criteria.fontWeight) return false;
+        var matchFont = readFontName(node);
+        if (criteria.fontFamily && matchFont.family && matchFont.family !== criteria.fontFamily) return false;
+        if (criteria.fontWeight && matchFont.style && matchFont.style !== criteria.fontWeight) return false;
         if (criteria.fontSize && node.fontSize !== criteria.fontSize) return false;
-      } catch(e) { /* mixed styles, skip font filter */ }
+      } catch(e) { /* unreadable characters or size — skip the text filters */ }
     } else {
       if (criteria.fontFamily || criteria.fontWeight || criteria.fontSize) return false;
     }
@@ -322,8 +325,10 @@ handlers.search_nodes = async function(params) {
           try {
             info.content = node.characters;
             info.fontSize = node.fontSize;
-            info.fontFamily = node.fontName ? node.fontName.family : null;
-            info.fontWeight = node.fontName ? node.fontName.style : null;
+            var hitFont = readFontName(node);
+            info.fontFamily = hitFont.family;
+            info.fontWeight = hitFont.style;
+            if (hitFont.mixed) info.mixedFonts = true;
           } catch(e) { try { info.content = node.characters; } catch(e2) {} }
         }
         // Find page path for context

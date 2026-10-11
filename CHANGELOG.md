@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+**BUG-FONT-03 (HIGH): font family and weight silently absent on every text node** (`src/plugin/utils.js`, `read-helpers.js`, `handlers-read.js`, `handlers-read-detail.js`)
+- All four read paths used `node.fontName ? node.fontName.family : null`. `node.fontName` can be `figma.mixed` — a **Symbol, and therefore truthy** — so `.family` evaluates to `undefined` rather than throwing. A key set to `undefined` is dropped on serialisation, so `fontFamily` and `fontWeight` arrived **absent** rather than `null`, which a consumer cannot tell apart from "this node has no font".
+- This is not an edge case for mixed-typography nodes. On the file where it was found, `node.fontName` was the sentinel for **every text node in the document**, including a one-character node whose content is `"$"` — so `get_node_detail` returned content, size, line height, colour and alignment with no family at all, and `scan_design` reported `allFonts: []` for a 276-node frame that renders in Poppins throughout.
+- `read-helpers.js` already contained a correct per-segment recovery using `getRangeFontName`, but it sat inside a `catch` labelled "mixed text styles". Reading a mixed property returns the sentinel instead of throwing, so the catch never fired and the recovery never ran.
+- `search_nodes` was affected twice over: every result was missing `fontFamily`/`fontWeight`, and the filter evaluated `undefined !== criteria.fontFamily`, excluding every text node from any font search.
+- **Fix:** new `readFontName(node)` in `utils.js`, used by all five call sites. It tests for the Symbol explicitly, resolves the font with `getStyledTextSegments(["fontName"])` and falls back to `getRangeFontName`, returns `null` — never `undefined` — when nothing is readable, and sets `mixedFonts: true` only when the node genuinely carries more than one run.
+- Verified against the file that surfaced it: `allFonts` goes from `[]` to twelve family/weight/size combinations, and no node reports `mixedFonts`.
+
 ## [2.5.26] — 2026-05-25
 
 ### Fixed — 10 bugs from field report (Clean Master Plus project)
