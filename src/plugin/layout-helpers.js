@@ -68,6 +68,25 @@ function applyChildLayout(node, params) {
   if (params.layoutSizingVertical !== undefined && "layoutSizingVertical" in node) {
     try { node.layoutSizingVertical = params.layoutSizingVertical; } catch (e) {}
   }
+
+  // BUG-STRETCH-01: layoutAlign "STRETCH" is silently ignored on a child that is
+  // itself an auto-layout frame with no children yet. Figma starts such a frame
+  // at counterAxisSizingMode "AUTO" (hug), and hug wins over STRETCH, so the
+  // child collapses to its 100px default instead of filling the parent.
+  //
+  // A plain frame does not hit this, which is why it only shows up when building
+  // a screen out of nested auto-layout sections — exactly the common case.
+  //
+  // Promote the cross-axis sizing to FILL, unless the caller asked for a
+  // specific sizing on that axis or gave an explicit width/height.
+  if (params.layoutAlign === "STRETCH" && node.parent && "layoutMode" in node && node.layoutMode !== "NONE") {
+    var parentMode = node.parent.layoutMode;
+    if (parentMode === "VERTICAL" && params.layoutSizingHorizontal === undefined && params.width === undefined) {
+      try { node.layoutSizingHorizontal = "FILL"; } catch (e) {}
+    } else if (parentMode === "HORIZONTAL" && params.layoutSizingVertical === undefined && params.height === undefined) {
+      try { node.layoutSizingVertical = "FILL"; } catch (e) {}
+    }
+  }
 }
 
 // When TEXT content is changed on a node inside a hug-axis auto-layout parent,

@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.5.29] — 2026-10-11
+
+### Fixed
+
+**Plugin UI counted advisory messages as errors** (`plugin/ui.html`)
+- `handlers-create.js` posts a `{ type: "log" }` warning when a child is created with explicit x/y inside an auto-layout parent. `window.onmessage` only special-cased `session-info`, so that warning fell through to the operation-result path: `msg.success` was `undefined`, the error counter incremented, and the Activity log printed `✗ ? undefined` — no op id, no message. One `create` therefore produced a visible error alongside its own success line.
+- It then called `sendResponse(undefined, ...)`, and the bridge logged `settle ORPHAN response id=undefined` for each one.
+- `type: "log"` is now handled, and any message without an op id is ignored rather than treated as a failed operation.
+
+**`layoutAlign: "STRETCH"` silently ignored on empty auto-layout children** (`src/plugin/layout-helpers.js`)
+- A child that is itself an auto-layout frame starts at `counterAxisSizingMode: "AUTO"` (hug) before it has children, and hug wins over `STRETCH`. The child collapsed to the 100px default instead of filling the parent — so a screen built from nested auto-layout sections came out with a 196px header and 25px cards inside a 390px frame. A plain frame does not hit this, which is why it only showed up when composing real screens.
+- `applyChildLayout` now promotes the cross-axis sizing to `FILL` when `layoutAlign: "STRETCH"` is set on an auto-layout child, unless the caller gave an explicit sizing or width/height for that axis.
+- Verified on a live Figma file: the same section goes from 100px to 350px.
+
 ## [2.5.28] — 2026-10-11
 
 ### Added

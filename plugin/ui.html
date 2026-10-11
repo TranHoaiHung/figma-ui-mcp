@@ -347,6 +347,17 @@
         if (sessionId) log("Session: " + sessionId + " (" + fileName + ")", "info");
         return;
       }
+      // Advisory messages from the main thread (e.g. the auto-layout x/y warning
+      // in handlers-create.js). These carry no op id and no success flag, so
+      // without this branch they fell through to the error path below, logged
+      // "✗ ? undefined", inflated the error counter, and then POSTed a response
+      // with an undefined id back to the bridge.
+      if (msg.type === "log") {
+        log(msg.message, msg.level === "error" ? "err" : "info");
+        return;
+      }
+      // Anything without an op id is not an operation result either.
+      if (!msg.id) return;
       var isRead = READ_OPS.indexOf(msg.operation) >= 0;
       if (msg.success) {
         if (isRead) { readCount++; document.getElementById("read-count").textContent = readCount; }
