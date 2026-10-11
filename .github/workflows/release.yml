@@ -117,8 +117,34 @@ jobs:
       - name: Publish to MCP Registry
         if: steps.check.outputs.skip == 'false'
         run: |
+          VERSION="${{ steps.pkg.outputs.version }}"
+
+          # The registry verifies the npm version exists before registering it,
+          # and npm's read path needs a moment to see a just-published version.
+          # v2.5.28 failed here with a 404 on a version npm already had.
+          for i in $(seq 1 12); do
+            if npm view "figma-ui-mcp@$VERSION" version >/dev/null 2>&1; then
+              echo "npm is serving $VERSION"
+              break
+            fi
+            echo "waiting for npm to serve $VERSION ($i/12)"
+            sleep 10
+          done
+
           ./mcp-publisher login github-oidc
-          ./mcp-publisher publish
+
+          # Retry the publish itself: the registry can still 404 briefly after
+          # npm's own read path has caught up.
+          for i in $(seq 1 5); do
+            if ./mcp-publisher publish; then
+              echo "registry publish ok"
+              exit 0
+            fi
+            echo "registry publish failed (attempt $i/5), retrying in 20s"
+            sleep 20
+          done
+          echo "::error::MCP Registry publish failed after 5 attempts"
+          exit 1
         env:
           ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}

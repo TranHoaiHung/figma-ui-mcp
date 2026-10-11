@@ -9,6 +9,9 @@
 - It then called `sendResponse(undefined, ...)`, and the bridge logged `settle ORPHAN response id=undefined` for each one.
 - `type: "log"` is now handled, and any message without an op id is ignored rather than treated as a failed operation.
 
+**Release workflow failed at the MCP Registry step** (`.github/workflows/release.yml`)
+- The registry verifies the npm version exists before registering it, and npm's read path needs a moment to serve a just-published version. v2.5.28 published to npm successfully and then failed the registry step with a 404 for a version npm already had. The step now waits for npm to serve the version and retries the registry publish.
+
 **`modifyVariable` could not rename a variable or edit its description** (`src/plugin/handlers-styles.js`)
 - It threw `value is required` unless a per-mode value was supplied, but `name` and `description` are variable-level, not per-mode. Renaming a token therefore needed a dummy value. It now accepts `value`, `name` or `description` in any combination, and still rejects a call that changes nothing.
 
