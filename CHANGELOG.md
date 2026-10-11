@@ -2,6 +2,13 @@
 
 ## [2.5.27] — 2026-10-11
 
+### Security
+
+**Bridge was reachable from the LAN** (`server/bridge-server.js`)
+- `CONFIG.HOST` was `null`, so `listen(port, null)` bound every interface. Verified before the fix: `lsof` reported `*:38451` and `GET /health` answered on the machine's LAN address.
+- `POST /exec` forwarded `body.operation` straight into `sendOperation` with no allowlist and no authentication — the `ALL_OPS` check only guarded the MCP path — and `Access-Control-Allow-Origin` is `*`. Any host on the network, or any page open in the user's browser, could read, modify and delete their Figma document.
+- `HOST` now defaults to `127.0.0.1` (override with `FIGMA_MCP_HOST`), and `/exec` rejects operations outside `ALL_OPS`.
+
 ### Added
 
 **Prototype interactions reachable from `figma_write`** (`src/plugin/handlers-write.js`, `server/code-executor.js`)
@@ -18,6 +25,43 @@
 
 **Server version no longer drifts from the published release** (`server/index.js`)
 - `serverInfo.version` was hardcoded to `2.5.13` while `package.json` was at `2.5.26`, so MCP clients reported a version thirteen patches stale. It is now read from `package.json` at startup — one source of truth. (The plugin's `handlers.status` already used the `{{PLUGIN_VERSION}}` build placeholder, and `server.json` is synced by CI.)
+
+**Mixed-style text: every property besides fontFamily still had the PR #16 bug** (`src/plugin/text-utils.js` and all read paths)
+- `figma.mixed` is a truthy Symbol, so `node.fontSize + "px"` throws a TypeError and `node.lineHeight.value + "px"` yields the string `"undefinedpx"`. The TypeError was the worse case: the catch around it in `get_node_detail` discarded colour, alignment and the font `readFontName` had just resolved.
+- `get_design_context` still contained the verbatim pre-#16 idiom — it was a missed call site.
+- `loadFontAsync(node.fontName)` was passed the Symbol itself in four places, and `{family: undefined}` in `modify`. New `ensureTextFontLoaded` enumerates the runs and loads each distinct font once.
+- New `readTextProps` is used by all five read paths. Scalars are `null`, never `undefined`, and a `mixed` map reports which properties actually disagree.
+
+**`segments` / `mixedStyles` never worked** (`src/plugin/extract-design-tree.js`)
+- 66 lines of per-segment recovery sat inside a `catch` labelled "mixed text styles". Reading a mixed property returns the sentinel instead of throwing, so the catch could never fire and the output documented in `figma_docs` was never emitted. Replaced with `readTextSegments`, so the documented feature works.
+
+**`setScrollBehavior` had no handler** (`src/plugin/handlers-prototype.js`)
+- It was in the executor allowlist, `tool-definitions.js`, `api-docs` and `CLAUDE.md`, but no plugin handler existed, so every call failed with "Unknown operation". Implemented, validating `overflowDirection` against NONE/HORIZONTAL/VERTICAL/BOTH.
+
+**`scan_design` section counts were always wrong** (`src/plugin/handlers-scan-design.js`)
+- `iconCount`/`imageCount` compared against `summary.icons[].parentId`, which is never set, so a section only ever counted itself. Now walks each section's subtree.
+
+**Allowlist drift** (`server/allowed-ops.js`)
+- `get_css`, `get_design_context`, `get_component_map` and `get_unmapped_components` had handlers but were missing from `READ_OPS`, so they worked via `figma_read` yet failed as `figma.get_css()` inside `figma_write`.
+- `getReactions` was missing entirely; added, and the duplicate WRITE_OPS entry dropped.
+
+**`figma.getChildren()` always returned `[]`** (`server/figma-proxy.js`)
+- It read `detail.children` from `get_node_detail`, which only ever returns `childCount`. It now asks `get_design`. The test mocked `get_node_detail` as returning a children array, which the real handler never does — that disagreement is why the bug shipped with a green suite.
+
+**`BridgeServer.stop()` hung** (`server/bridge-server.js`)
+- Parked long polls were left open, and `server.close()` waits for live connections, so shutdown never completed. Also: the `sendOperation` timeout cleared `pending` and `queue` but not `#opToSession`, permanently inflating `pendingCount`; and the `/` route reported a hardcoded version `2.4.5`.
+
+### Performance
+
+- `findNodeByIdAsync` ran `currentPage.findOne` before `getNodeByIdAsync`, so every id resolution walked the whole page tree — 40 call sites, and a 50-op `batch` paid it 50 times. Index first, scan as fallback.
+- `get_variables` awaited `getVariableByIdAsync` once per variable; now a single bulk `getLocalVariablesAsync`.
+- `search_nodes` resolves the font only when a font criterion is set (it was a `getStyledTextSegments` call per mixed node).
+- `scan_design` checks the cheap `.length < 50` guards before `hasImageFill`/`isLikelyIcon`.
+
+### Changed
+
+- Oversized files split: 11 plugin files became 37, `api-docs.js` 1752 -> 33 lines with the sections in `server/docs/*.md`, `code-executor.js` 404 -> 56 lines plus four modules. The built bundle's executable lines are byte-identical before and after, and `getDocs()` returns byte-identical text for every section.
+- Test suite decoupled from plugin file layout via `scripts/lib/load-plugin.mjs`; 13 tests previously read individual source files by name. Suite went from 23/27 to 28/28, and `test-multi-session` from 41s to 1s.
 
 **BUG-FONT-03 (HIGH): font family and weight silently absent on every text node** (`src/plugin/utils.js`, `read-helpers.js`, `handlers-read.js`, `handlers-read-detail.js`)
 - All four read paths used `node.fontName ? node.fontName.family : null`. `node.fontName` can be `figma.mixed` — a **Symbol, and therefore truthy** — so `.family` evaluates to `undefined` rather than throwing. A key set to `undefined` is dropped on serialisation, so `fontFamily` and `fontWeight` arrived **absent** rather than `null`, which a consumer cannot tell apart from "this node has no font".
