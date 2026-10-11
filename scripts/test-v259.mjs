@@ -24,8 +24,11 @@ const builtPlug = readFileSync(new URL("../plugin/code.js", import.meta.url), "u
 console.log("\n── get_design_context ──");
 {
   assert("handler defined", src.includes("handlers.get_design_context = async function"));
-  assert("builds variable name map via getVariableByIdAsync",
-    src.includes("varNameMap[v.id] = v.name"));
+  // Was pinned to `varNameMap[v.id] = v.name` from the per-id
+  // getVariableByIdAsync loop. That was replaced by the bulk
+  // getLocalVariablesAsync, so assert the map is built, not how.
+  assert("builds a variable name map keyed by variable id",
+    /varNameMap\[\w+\.id\]\s*=\s*\w+\.name/.test(src));
   assert("builds style name map via getLocalPaintStylesAsync",
     src.includes("styleNameMap[s.id] = s.name"));
   assert("resolveFill uses var(--token) for bound variables",

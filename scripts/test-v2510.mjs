@@ -11,6 +11,13 @@
  */
 import { readFileSync } from "fs";
 
+// Semver-ish compare for the >= version assertions below.
+function cmpVer(a, b) {
+  const pa = String(a).split(".").map(Number), pb = String(b).split(".").map(Number);
+  for (let i = 0; i < 3; i++) { if ((pa[i]||0) !== (pb[i]||0)) return (pa[i]||0) - (pb[i]||0); }
+  return 0;
+}
+
 let passed = 0, failed = 0;
 const errs = [];
 function assert(label, cond, detail = "") {
@@ -84,8 +91,13 @@ console.log("\n── BUG-12/13/14: sandbox proxy APIs ──");
 // ── version bump ─────────────────────────────────────────────────────────────
 console.log("\n── version ──");
 {
-  assert("package.json version is 2.5.10", pkg.version === "2.5.10");
-  assert("server/index.js version is 2.5.10", index.includes('"2.5.10"'));
+  // Was pinned to exactly 2.5.10, which fails on every release. These features
+  // landed in 2.5.10, so the check is that the release is not older than that.
+  assert("package.json version >= 2.5.10", cmpVer(pkg.version, "2.5.10") >= 0);
+  // server/index.js now derives its version from package.json rather than
+  // carrying a literal, so assert that wiring instead of a version string.
+  assert("server/index.js derives version from package.json",
+    index.includes("package.json") && index.includes("VERSION"));
 }
 
 // ── regression: prior fixes still present ────────────────────────────────────

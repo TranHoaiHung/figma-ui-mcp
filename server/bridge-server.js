@@ -25,7 +25,9 @@ export const CONFIG = {
   MAX_BODY_BYTES: 5_000_000,
   MAX_QUEUE: 50,
   HEALTH_TTL_MS: 120_000,    // 2 min — survives browser tab throttling (~1Hz background polls)
-  LONG_POLL_MS: 8_000,       // short for Figma iframe compat (some envs limit fetch ~10s)
+  // Short for Figma iframe compat (some envs limit fetch ~10s). Overridable so
+  // tests need not wait the full hold for each parked poll.
+  LONG_POLL_MS: parseInt(process.env.FIGMA_MCP_LONG_POLL_MS || "8000", 10),
   SESSION_EXPIRE_MS: 1_800_000, // 30 min — keep session around when user steps away briefly
 };
 
@@ -449,6 +451,16 @@ export class BridgeServer {
   }
 
   stop() {
+    // Close any long poll still held open first. server.close() waits for live
+    // connections, so a parked poll keeps the process alive: the bridge appears
+    // to hang on shutdown instead of exiting.
+    for (var [, sess] of this.#sessions) {
+      if (sess.longPoll) {
+        clearTimeout(sess.longPoll.timer);
+        try { sess.longPoll.res.end(JSON.stringify({ requests: [] })); } catch (e) {}
+        sess.longPoll = null;
+      }
+    }
     if (this.#server) { this.#server.close(); this.#server = null; }
     for (var [id, sid] of this.#opToSession) {
       var s = this.#sessions.get(sid);

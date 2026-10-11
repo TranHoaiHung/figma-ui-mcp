@@ -2,21 +2,11 @@
 // No module system used: files are plain JS sharing a single scope when concatenated.
 import { readFileSync, writeFileSync } from "fs";
 
-const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+// Concatenation order is shared with the test loader so a file split only has to
+// be recorded in one place. See scripts/lib/plugin-files.mjs.
+import { PLUGIN_FILES as files } from "./lib/plugin-files.mjs";
 
-const files = [
-  "src/plugin/utils.js",
-  "src/plugin/svg-path-helpers.js",
-  "src/plugin/paint-and-effects.js",
-  "src/plugin/read-helpers.js",
-  "src/plugin/handlers-write.js",
-  "src/plugin/handlers-library.js",
-  "src/plugin/handlers-read.js",
-  "src/plugin/handlers-read-detail.js",
-  "src/plugin/handlers-tokens.js",
-  "src/plugin/handlers-write-ops.js",
-  "src/plugin/main.js",
-];
+const { version } = JSON.parse(readFileSync("package.json", "utf8"));
 
 const banner = `// figma-ui-mcp — Figma Plugin main thread v1.2.1
 // Handles both WRITE (draw UI) and READ (extract design) operations.
