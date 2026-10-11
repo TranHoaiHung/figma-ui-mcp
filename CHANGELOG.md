@@ -1,8 +1,23 @@
 # Changelog
 
-## [Unreleased]
+## [2.5.27] — 2026-10-11
+
+### Added
+
+**Prototype interactions reachable from `figma_write`** (`src/plugin/handlers-write.js`, `server/code-executor.js`)
+- `setReactions` / `getReactions` / `removeReactions` handlers added to the plugin. `setReactions` accepts the shorthand the docs have always shown — `{ type: "NAVIGATE", destinationId, transition }` — and normalizes it to Figma's Action shape `{ type: "NODE", navigation: "NAVIGATE", ... }`, so the documented snippet now works as written.
+- `getReactions` was documented in `tool-definitions.js` and `api-docs.js` but missing from the `code-executor.js` allowlist, so calling it failed. Added.
+
+**Prototype flow starting points** (`src/plugin/handlers-write.js`)
+- `setPage` accepts `flowStartingPoints: [{ nodeId, name }]` and returns the page's current list, so a generated prototype can declare its entry frames instead of requiring a manual pass in Figma.
+
+**`cornerSmoothing` for iOS-style squircles** (`src/plugin/paint-and-effects.js`)
+- `cornerSmoothing` passed to `create`/`modify` is clamped to 0–1 and applied where the node supports it (0 = circular, 0.6 = iOS squircle, 1 = max).
 
 ### Fixed
+
+**Server version no longer drifts from the published release** (`server/index.js`)
+- `serverInfo.version` was hardcoded to `2.5.13` while `package.json` was at `2.5.26`, so MCP clients reported a version thirteen patches stale. It is now read from `package.json` at startup — one source of truth. (The plugin's `handlers.status` already used the `{{PLUGIN_VERSION}}` build placeholder, and `server.json` is synced by CI.)
 
 **BUG-FONT-03 (HIGH): font family and weight silently absent on every text node** (`src/plugin/utils.js`, `read-helpers.js`, `handlers-read.js`, `handlers-read-detail.js`)
 - All four read paths used `node.fontName ? node.fontName.family : null`. `node.fontName` can be `figma.mixed` — a **Symbol, and therefore truthy** — so `.family` evaluates to `undefined` rather than throwing. A key set to `undefined` is dropped on serialisation, so `fontFamily` and `fontWeight` arrived **absent** rather than `null`, which a consumer cannot tell apart from "this node has no font".

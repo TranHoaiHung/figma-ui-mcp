@@ -28,7 +28,7 @@ const WRITE_OPS = [
   "clone", "group", "ungroup", "flatten", "resize",
   "set_selection", "set_viewport", "batch",
   // Prototyping & interactions (v2.4.0)
-  "setReactions", "removeReactions",
+  "setReactions", "getReactions", "removeReactions",
   // Scroll behavior (v2.4.0)
   "setScrollBehavior",
   // Component variant swapping (v2.4.0)

@@ -23,7 +23,13 @@ handlers.setPage = async (params) => {
   if (!page && figma.root.children.length === 1) page = figma.root.children[0];
   if (!page) throw new Error("Page not found: \"" + (name || id) + "\". Available: " + figma.root.children.map(function(p) { return p.name; }).join(", "));
   await figma.setCurrentPageAsync(page);
-  return { id: page.id, name: page.name };
+  // Optional prototype flow starts: [{ nodeId, name }] — replaces the page's list.
+  if (Array.isArray(params.flowStartingPoints)) {
+    page.flowStartingPoints = params.flowStartingPoints.map(function(f) {
+      return { nodeId: f.nodeId || f.id, name: f.name || "Flow" };
+    });
+  }
+  return { id: page.id, name: page.name, flowStartingPoints: page.flowStartingPoints };
 };
 
 handlers.createPage = async ({ name }) => {
@@ -928,6 +934,53 @@ handlers.getComponentProperties = async function(params) {
     name: node.name,
     properties: node.componentProperties,
   };
+};
+
+// setReactions — prototype interactions on a node (server already exposes the op).
+// Accepts the docs shorthand { type: "NAVIGATE", destinationId, transition } and
+// normalizes it to Figma's Action shape { type: "NODE", navigation: "NAVIGATE", ... }.
+function normalizeReactionAction(action) {
+  if (action && action.type === "NAVIGATE") {
+    return {
+      type: "NODE",
+      destinationId: action.destinationId,
+      navigation: "NAVIGATE",
+      transition: action.transition || null,
+      preserveScrollPosition: false,
+    };
+  }
+  return action;
+}
+
+handlers.setReactions = async function(params) {
+  var nodeId = params.id || params.nodeId;
+  if (!nodeId) throw new Error("id is required");
+  var node = await findNodeByIdAsync(nodeId);
+  if (!node) throw new Error("Node not found: " + nodeId);
+  if (!("setReactionsAsync" in node)) throw new Error("Node does not support reactions: " + node.type);
+  var reactions = (params.reactions || []).map(function(r) {
+    var actions = r.actions || (r.action ? [r.action] : []);
+    return { trigger: r.trigger, actions: actions.map(normalizeReactionAction) };
+  });
+  await node.setReactionsAsync(reactions);
+  return { id: node.id, name: node.name, count: reactions.length };
+};
+
+handlers.getReactions = async function(params) {
+  var nodeId = params.id || params.nodeId;
+  if (!nodeId) throw new Error("id is required");
+  var node = await findNodeByIdAsync(nodeId);
+  if (!node) throw new Error("Node not found: " + nodeId);
+  return { id: node.id, name: node.name, reactions: node.reactions || [] };
+};
+
+handlers.removeReactions = async function(params) {
+  var nodeId = params.id || params.nodeId;
+  if (!nodeId) throw new Error("id is required");
+  var node = await findNodeByIdAsync(nodeId);
+  if (!node) throw new Error("Node not found: " + nodeId);
+  await node.setReactionsAsync([]);
+  return { id: node.id, removed: true };
 };
 
 // swapComponent — point an instance at a different main component.

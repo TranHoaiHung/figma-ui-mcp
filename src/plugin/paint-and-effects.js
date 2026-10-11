@@ -105,4 +105,8 @@ function applyCornerRadii(node, params) {
       node[key] = params[key];
     }
   }
+  // iOS-style continuous corners: 0 = circular, 0.6 = iOS squircle, 1 = max
+  if (params.cornerSmoothing !== undefined && "cornerSmoothing" in node) {
+    node.cornerSmoothing = Math.max(0, Math.min(1, params.cornerSmoothing));
+  }
 }

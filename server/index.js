@@ -5,6 +5,9 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import http from "node:http";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 import { BridgeServer, CONFIG } from "./bridge-server.js";
 import { executeCode } from "./code-executor.js";
@@ -102,8 +105,13 @@ if (existingHealth.pluginConnected) {
   }
 }
 
+// Version comes from package.json so it cannot drift from the published release.
+const VERSION = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")
+).version;
+
 const server = new Server(
-  { name: "figma-ui-mcp", version: "2.5.13" },
+  { name: "figma-ui-mcp", version: VERSION },
   { capabilities: { tools: {} } }
 );
 
