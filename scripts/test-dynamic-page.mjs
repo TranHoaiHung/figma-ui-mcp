@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import vm from "node:vm";
 import { executeCode } from "../server/code-executor.js";
+import { pluginSource } from "./lib/load-plugin.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, "..");
@@ -58,18 +59,12 @@ console.log("\nLayer A: op is on the WRITE_OPS allowlist");
 // ──────────────────────────────────────────────────────────────────────────────
 // LAYER B — plugin handler logic with mocked Figma globals
 // ──────────────────────────────────────────────────────────────────────────────
-// handlers-write.js depends on helpers from utils.js and paint-and-effects.js
-// (normalizeHex, solidFill, etc.). We concat those + handlers-write itself
-// into a vm context and exercise handlers.instantiate against mocked Figma.
+// The handlers depend on helpers from utils.js and paint-and-effects.js
+// (normalizeHex, solidFill, etc.), so the whole plugin is concatenated into a vm
+// context — via scripts/lib/load-plugin.mjs, which mirrors the build order — and
+// handlers.instantiate is exercised against mocked Figma.
 
 function loadPluginContext() {
-  const utils = readFileSync(resolve(REPO, "src/plugin/utils.js"), "utf8");
-  const paintFx = readFileSync(resolve(REPO, "src/plugin/paint-and-effects.js"), "utf8");
-  // handlers-write.js is the first file in the build concat order and declares
-  // `const handlers = {}` at the top. Strip that line so handler assignments
-  // target the sandbox's pre-seeded `handlers` instead of a shadowed const.
-  const writeH = readFileSync(resolve(REPO, "src/plugin/handlers-write.js"), "utf8")
-    .replace(/^const handlers = \{\};\s*$/m, "// (handlers seeded by test harness)");
 
   const callLog = [];
   const sandbox = {
@@ -103,8 +98,8 @@ function loadPluginContext() {
   `;
 
   vm.createContext(sandbox);
-  vm.runInContext(utils + "\n" + paintFx + "\n" + writeH + "\n" + shim, sandbox, {
-    filename: "handlers-write.test.cjs",
+  vm.runInContext(pluginSource() + "\n" + shim, sandbox, {
+    filename: "plugin-under-test.js",
   });
   return sandbox;
 }

@@ -5,6 +5,7 @@
 import { executeCode } from "../server/code-executor.js";
 import { readFileSync } from "fs";
 import vm from "node:vm";
+import { pluginSource } from "./lib/load-plugin.mjs";
 
 let passed = 0, failed = 0;
 function assert(label, condition, detail = "") {
@@ -49,7 +50,11 @@ console.log("\nLayer B: bindComponentProperty (mocked Figma)");
 
 // Build a minimal sandbox with the plugin handler code
 function loadHandlers(mockFigma) {
-  const src = readFileSync("src/plugin/handlers-tokens.js", "utf-8");
+  // Only the token handlers: this sandbox seeds its own findNodeByIdAsync, and
+  // loading utils.js too would redeclare it and shadow the mock.
+  const src = pluginSource({ only: [
+    "handlers-component-property-defs.js", "handlers-component-property-bind.js",
+  ] });
   const ctx = {
     figma: mockFigma,
     handlers: {},

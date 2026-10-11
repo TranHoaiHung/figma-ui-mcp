@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import vm from "node:vm";
 import { executeCode } from "../server/code-executor.js";
+import { pluginSource } from "./lib/load-plugin.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, "..");
@@ -86,13 +87,7 @@ console.log("\nLayer A: proxy forwards swapComponent");
 // ──────────────────────────────────────────────────────────────────────────────
 
 function loadPluginContext() {
-  const utils = readFileSync(resolve(REPO, "src/plugin/utils.js"), "utf8");
-  const paintFx = readFileSync(resolve(REPO, "src/plugin/paint-and-effects.js"), "utf8");
-  // handlers-write.js declares `const handlers = {}` as the first statement
-  // (it's first in build-plugin.js concat order). Strip so the sandbox-seeded
-  // handlers object receives our assignments instead of a shadowed const.
-  const writeH = readFileSync(resolve(REPO, "src/plugin/handlers-write.js"), "utf8")
-    .replace(/^const handlers = \{\};\s*$/m, "// (handlers seeded by test harness)");
+  // Whole plugin via the shared loader, so file splits stay invisible here.
 
   const sandbox = {
     handlers: {},
@@ -113,7 +108,7 @@ function loadPluginContext() {
   `;
 
   vm.createContext(sandbox);
-  vm.runInContext(utils + "\n" + paintFx + "\n" + writeH + "\n" + shim, sandbox, {
+  vm.runInContext(pluginSource() + "\n" + shim, sandbox, {
     filename: "handlers-write.test.cjs",
   });
   return sandbox;

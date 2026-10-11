@@ -10,6 +10,7 @@
  * - BUG-14: figma.getCurrentPage in sandbox
  */
 import { readFileSync } from "fs";
+import { pluginSource, serverSource } from "./lib/load-plugin.mjs";
 
 // Semver-ish compare for the >= version assertions below.
 function cmpVer(a, b) {
@@ -25,9 +26,9 @@ function assert(label, cond, detail = "") {
   else { const m = `  ✗ ${label}${detail ? " — " + detail : ""}`; console.error(m); errs.push(m); failed++; }
 }
 
-const write   = readFileSync(new URL("../src/plugin/handlers-write.js", import.meta.url), "utf-8");
+const write   = pluginSource();
 const writeOps= readFileSync(new URL("../src/plugin/handlers-write-ops.js", import.meta.url), "utf-8");
-const executor= readFileSync(new URL("../server/code-executor.js", import.meta.url), "utf-8");
+const executor= serverSource();
 const built   = readFileSync(new URL("../plugin/code.js", import.meta.url), "utf-8");
 const pkg     = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
 const index   = readFileSync(new URL("../server/index.js", import.meta.url), "utf-8");

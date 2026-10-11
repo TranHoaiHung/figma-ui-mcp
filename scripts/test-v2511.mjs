@@ -13,6 +13,7 @@
  * - server/index.js calls getDocs(args?.section)
  */
 import { readFileSync } from "fs";
+import { pluginSource, serverSource } from "./lib/load-plugin.mjs";
 
 // Semver-ish compare for the >= version assertions below.
 function cmpVer(a, b) {
@@ -89,9 +90,9 @@ console.log("\n── getDocs() functional tests ──");
 // ── regression: v2.5.10 fixes still present ──────────────────────────────────
 console.log("\n── regression: v2.5.10 fixes ──");
 {
-  const write    = readFileSync(new URL("../src/plugin/handlers-write.js", import.meta.url), "utf-8");
+  const write    = pluginSource();
   const writeOps = readFileSync(new URL("../src/plugin/handlers-write-ops.js", import.meta.url), "utf-8");
-  const executor = readFileSync(new URL("../server/code-executor.js", import.meta.url), "utf-8");
+  const executor = serverSource();
 
   assert("BUG-03: characters alias still present", write.includes("params.characters !== undefined ? params.characters"));
   assert("BUG-04: fontColor in TEXT create still present", write.includes("var textFill = fill || params.fontColor"));

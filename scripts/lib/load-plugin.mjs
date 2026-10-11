@@ -19,13 +19,21 @@ function stripHandlersDecl(src) {
   return src.replace(/^const handlers = \{\};\s*$/m, "// (handlers supplied by the test sandbox)");
 }
 
+// main.js is the plugin entry point: at load it calls figma.showUI and registers
+// message handlers. A test sandbox has no __html__ and no real figma, so running
+// it throws. Tests want the handlers, not the bootstrap, so it is excluded by
+// default; pass { entry: true } if you specifically need it.
+const ENTRY_FILE = "src/plugin/main.js";
+
 // Concatenated plugin source. `only` picks a subset by basename or path fragment,
 // for tests that deliberately exercise one layer.
 export function pluginSource(opts) {
   const only = opts && opts.only;
-  const picked = only
+  const wantEntry = !!(opts && opts.entry);
+  let picked = only
     ? PLUGIN_FILES.filter((f) => only.some((o) => f.endsWith(o) || f.includes(o)))
     : PLUGIN_FILES;
+  if (!wantEntry && !only) picked = picked.filter((f) => f !== ENTRY_FILE);
   if (only && picked.length === 0) {
     throw new Error("load-plugin: no files matched " + JSON.stringify(only));
   }
@@ -49,3 +57,20 @@ export function loadPlugin(globals, opts) {
 }
 
 export { PLUGIN_FILES, REPO };
+
+// Server-side counterpart: the sandbox and its helpers were one file and are now
+// several, so tests that grep for a proxy method or an allowlist entry read the
+// concatenation rather than guessing which file it landed in.
+const SERVER_FILES = [
+  "server/allowed-ops.js",
+  "server/icon-libraries.js",
+  "server/http-fetch.js",
+  "server/figma-proxy.js",
+  "server/code-executor.js",
+];
+
+export function serverSource() {
+  return SERVER_FILES
+    .map((f) => "// ── " + f + " ──\n" + readFileSync(resolve(REPO, f), "utf8"))
+    .join("\n\n");
+}

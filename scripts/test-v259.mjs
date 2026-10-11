@@ -7,6 +7,7 @@
  * - figma_rules (server-side MCP tool)
  */
 import { readFileSync } from "fs";
+import { pluginSource } from "./lib/load-plugin.mjs";
 
 let passed = 0, failed = 0;
 const errs = [];
@@ -15,7 +16,7 @@ function assert(label, cond, detail = "") {
   else { const m = `  ✗ ${label}${detail ? " — " + detail : ""}`; console.error(m); errs.push(m); failed++; }
 }
 
-const src       = readFileSync(new URL("../src/plugin/handlers-read-detail.js", import.meta.url), "utf-8");
+const src       = pluginSource();
 const toolDefs  = readFileSync(new URL("../server/tool-definitions.js", import.meta.url), "utf-8");
 const indexSrc  = readFileSync(new URL("../server/index.js", import.meta.url), "utf-8");
 const builtPlug = readFileSync(new URL("../plugin/code.js", import.meta.url), "utf-8");

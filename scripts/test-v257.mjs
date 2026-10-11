@@ -4,6 +4,7 @@
  */
 import { readFileSync } from "fs";
 import { executeCode } from "../server/code-executor.js";
+import { pluginSource } from "./lib/load-plugin.mjs";
 
 let passed = 0, failed = 0;
 const errs = [];
@@ -34,7 +35,7 @@ function makeBridge(overrides = {}) {
 // source contains the auto-reflow logic, (c) explicit overrides are respected in params.
 console.log("\n── BUG-07: modify({ content }) reflow logic ──");
 {
-  const src = readFileSync(new URL("../src/plugin/handlers-write.js", import.meta.url), "utf-8");
+  const src = pluginSource();
 
   // Verify fix is present in plugin source
   assert("plugin source has WIDTH_AND_HEIGHT reflow on content change",

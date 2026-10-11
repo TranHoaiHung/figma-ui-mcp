@@ -10,6 +10,7 @@ import { readFileSync } from "fs";
 import { resolve as pathResolve } from "path";
 import { fileURLToPath } from "url";
 import vm from "node:vm";
+import { pluginSource } from "./lib/load-plugin.mjs";
 
 const REPO = pathResolve(fileURLToPath(import.meta.url), "../..");
 let passed = 0, failed = 0;
@@ -27,8 +28,16 @@ function makeBridge(overrides = {}) {
 
 // ── Plugin-side sandbox loader ─────────────────────────────────────────────
 function loadPluginContext() {
-  const utils = readFileSync(pathResolve(REPO, "src/plugin/utils.js"), "utf8");
-  const tokens = readFileSync(pathResolve(REPO, "src/plugin/handlers-tokens.js"), "utf8");
+  // Via the shared loader so file splits stay invisible. The two-stage load
+  // matters: utils first, then findNodeByIdAsync is overridden, and only then
+  // the token handlers, which call it.
+  const utils = pluginSource({ only: ["utils.js"] });
+  const tokens = pluginSource({ only: [
+    "token-helpers.js", "handlers-variables.js", "handlers-variable-modes.js",
+    "handlers-variable-binding.js", "handlers-styles.js", "handlers-setup-tokens.js",
+    "handlers-text-styles.js", "handlers-component-property-defs.js",
+    "handlers-component-property-bind.js",
+  ] });
   const sandbox = {
     handlers: {},
     figma: {

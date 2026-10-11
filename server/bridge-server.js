@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { ALL_OPS } from "./code-executor.js";
+import { ALL_OPS } from "./allowed-ops.js";
 
 // From package.json so the / route cannot report a stale version.
 const VERSION = JSON.parse(

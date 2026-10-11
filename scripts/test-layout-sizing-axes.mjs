@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import vm from "node:vm";
+import { pluginSource } from "./lib/load-plugin.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, "..");
@@ -33,10 +34,7 @@ function assert(label, condition, detail = "") {
 // ──────────────────────────────────────────────────────────────────────────────
 
 function loadPluginContext() {
-  const utils = readFileSync(resolve(REPO, "src/plugin/utils.js"), "utf8");
-  const paintFx = readFileSync(resolve(REPO, "src/plugin/paint-and-effects.js"), "utf8");
-  const writeH = readFileSync(resolve(REPO, "src/plugin/handlers-write.js"), "utf8")
-    .replace(/^const handlers = \{\};\s*$/m, "// (handlers seeded by test harness)");
+  // Whole plugin via the shared loader, so file splits stay invisible here.
 
   const sandbox = {
     handlers: {},
@@ -57,7 +55,7 @@ function loadPluginContext() {
   `;
 
   vm.createContext(sandbox);
-  vm.runInContext(utils + "\n" + paintFx + "\n" + writeH + "\n" + shim, sandbox, {
+  vm.runInContext(pluginSource() + "\n" + shim, sandbox, {
     filename: "handlers-write.test.cjs",
   });
   return sandbox;

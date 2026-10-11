@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import vm from "node:vm";
 import { executeCode } from "../server/code-executor.js";
+import { pluginSource } from "./lib/load-plugin.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, "..");
@@ -151,9 +152,8 @@ function makeMockText(name, parent) {
 
 function loadPluginContext() {
   // Concatenate the dependent source files the same way build-plugin.js does.
-  // handlers-tokens.js depends on findNodeByIdAsync from utils.js.
-  const utils = readFileSync(resolve(REPO, "src/plugin/utils.js"), "utf8");
-  const tokens = readFileSync(resolve(REPO, "src/plugin/handlers-tokens.js"), "utf8");
+  // Whole plugin via the shared loader, so file splits stay invisible here.
+  const plugin = pluginSource();
 
   // figma plugin globals the source touches at module top-level. We provide
   // just enough to let the file evaluate. Handlers we don't call won't run.
@@ -187,7 +187,7 @@ function loadPluginContext() {
   `;
 
   vm.createContext(sandbox);
-  vm.runInContext(utils + "\n" + shim + "\n" + tokens, sandbox, { filename: "handlers-tokens.test.cjs" });
+  vm.runInContext(plugin + "\n" + shim, sandbox, { filename: "plugin-under-test.js" });
   return sandbox;
 }
 
