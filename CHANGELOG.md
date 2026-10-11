@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.5.28] — 2026-10-11
+
+### Added
+
+- `scripts/test-read-parity.mjs` — runs the pre-refactor `extractDesignTree` and the current one over the same mock nodes and fails if a field present in the baseline is gone. Confirms the v2.5.27 refactor dropped nothing: FRAME, RECTANGLE with a gradient and INSTANCE outputs are field-for-field identical, and the mixed-text node gains `fontFamily`, `fontWeight` and `mixedStyles` where the old code sent `{}`.
+
+### Notes
+
+No behaviour change over 2.5.27; this release carries the parity test and the version bump.
+
 ## [2.5.27] — 2026-10-11
 
 ### Security
