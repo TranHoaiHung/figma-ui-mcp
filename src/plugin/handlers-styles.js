@@ -108,7 +108,11 @@ handlers.modifyVariable = async function(params) {
   var value = params.value;
 
   if (!variableId && !variableName) throw new Error("variableId or variableName is required");
-  if (value === undefined) throw new Error("value is required");
+  // name and description are variable-level, not per-mode, so a rename or a
+  // description edit is a valid call with no value. Only require one of the three.
+  if (value === undefined && params.name === undefined && params.description === undefined) {
+    throw new Error("Nothing to change: pass value, name or description");
+  }
 
   var variable = await findVariableAsync(variableId, variableName, null);
   if (!variable) throw new Error("Variable not found: " + (variableId || variableName));
@@ -128,22 +132,28 @@ handlers.modifyVariable = async function(params) {
   // Default to first mode when neither modeId nor modeName specified
   if (!resolvedModeId) resolvedModeId = collection.modes[0].modeId;
 
-  if (variable.resolvedType === "COLOR") {
-    variable.setValueForMode(resolvedModeId, hexToRgbA(value));
-  } else if (variable.resolvedType === "FLOAT") {
-    variable.setValueForMode(resolvedModeId, Number(value));
-  } else if (variable.resolvedType === "STRING") {
-    variable.setValueForMode(resolvedModeId, String(value));
-  } else if (variable.resolvedType === "BOOLEAN") {
-    variable.setValueForMode(resolvedModeId, Boolean(value));
+  if (value !== undefined) {
+    if (variable.resolvedType === "COLOR") {
+      variable.setValueForMode(resolvedModeId, hexToRgbA(value));
+    } else if (variable.resolvedType === "FLOAT") {
+      variable.setValueForMode(resolvedModeId, Number(value));
+    } else if (variable.resolvedType === "STRING") {
+      variable.setValueForMode(resolvedModeId, String(value));
+    } else if (variable.resolvedType === "BOOLEAN") {
+      variable.setValueForMode(resolvedModeId, Boolean(value));
+    }
   }
+
+  if (params.name !== undefined) variable.name = String(params.name);
+  if (params.description !== undefined) variable.description = String(params.description);
 
   return {
     id: variable.id,
     name: variable.name,
+    description: variable.description,
     resolvedType: variable.resolvedType,
     modeId: resolvedModeId,
-    newValue: value,
+    newValue: value !== undefined ? value : null,
   };
 };
 

@@ -9,6 +9,9 @@
 - It then called `sendResponse(undefined, ...)`, and the bridge logged `settle ORPHAN response id=undefined` for each one.
 - `type: "log"` is now handled, and any message without an op id is ignored rather than treated as a failed operation.
 
+**`modifyVariable` could not rename a variable or edit its description** (`src/plugin/handlers-styles.js`)
+- It threw `value is required` unless a per-mode value was supplied, but `name` and `description` are variable-level, not per-mode. Renaming a token therefore needed a dummy value. It now accepts `value`, `name` or `description` in any combination, and still rejects a call that changes nothing.
+
 **`layoutAlign: "STRETCH"` silently ignored on empty auto-layout children** (`src/plugin/layout-helpers.js`)
 - A child that is itself an auto-layout frame starts at `counterAxisSizingMode: "AUTO"` (hug) before it has children, and hug wins over `STRETCH`. The child collapsed to the 100px default instead of filling the parent — so a screen built from nested auto-layout sections came out with a 196px header and 25px cards inside a 390px frame. A plain frame does not hit this, which is why it only showed up when composing real screens.
 - `applyChildLayout` now promotes the cross-axis sizing to `FILL` when `layoutAlign: "STRETCH"` is set on an auto-layout child, unless the caller gave an explicit sizing or width/height for that axis.
