@@ -238,92 +238,31 @@ function extractDesignTree(node, depth, maxDepth, detailLevel, filterInvisible) 
 
   // ── TEXT node — comprehensive extraction ──
   if (node.type === "TEXT") {
-    try {
-      info.content = node.characters;
-      info.fill = getFillHex(node);
-      info.fontSize = node.fontSize;
-      var rhFont = readFontName(node);
-      info.fontFamily = rhFont.family;
-      info.fontWeight = rhFont.style;
-      if (rhFont.mixed) info.mixedFonts = true;
-      if (node.lineHeight) {
-        if (node.lineHeight.unit === "AUTO") info.lineHeight = "auto";
-        else if (node.lineHeight.unit === "PERCENT") info.lineHeight = Math.round(node.lineHeight.value) + "%";
-        else info.lineHeight = node.lineHeight.value;
-      }
-      if (node.letterSpacing && node.letterSpacing.value !== 0) info.letterSpacing = node.letterSpacing.value;
-      info.textAlign = node.textAlignHorizontal;
-      if (node.textAlignVertical && node.textAlignVertical !== "TOP") info.textAlignVertical = node.textAlignVertical;
-      if (node.textDecoration && node.textDecoration !== "NONE") info.textDecoration = node.textDecoration;
-      if (node.textTruncation && node.textTruncation !== "DISABLED") info.textTruncation = node.textTruncation;
-      if (node.textAutoResize) info.textAutoResize = node.textAutoResize;
-    } catch(e) {
-      // Mixed text styles — extract per-segment with style runs
-      try {
-        info.content = node.characters;
-        info.fill = getFillHex(node);
-        info.textAlign = node.textAlignHorizontal;
-        info.mixedStyles = true;
-
-        // Extract style segments
-        if (node.characters.length > 0) {
-          var segments = [];
-          var text = node.characters;
-          var segStart = 0;
-
-          for (var si = 0; si <= text.length; si++) {
-            if (si === text.length || si > segStart) {
-              // Check if style changed at this position
-              var changed = (si === text.length);
-              if (!changed && si > 0) {
-                try {
-                  var prevFont = node.getRangeFontName(si - 1, si);
-                  var curFont = node.getRangeFontName(si, si + 1);
-                  var prevSize = node.getRangeFontSize(si - 1, si);
-                  var curSize = node.getRangeFontSize(si, si + 1);
-                  if (prevFont.family !== curFont.family || prevFont.style !== curFont.style || prevSize !== curSize) changed = true;
-                  // Check fill change
-                  try {
-                    var prevFills = node.getRangeFills(si - 1, si);
-                    var curFills = node.getRangeFills(si, si + 1);
-                    if (prevFills[0] && curFills[0] && prevFills[0].type === "SOLID" && curFills[0].type === "SOLID") {
-                      if (rgbToHex(prevFills[0].color) !== rgbToHex(curFills[0].color)) changed = true;
-                    }
-                  } catch(e4) {}
-                } catch(e5) {}
-              }
-
-              if (changed && segStart < si) {
-                var seg = { text: text.substring(segStart, si) };
-                try {
-                  var sFont = node.getRangeFontName(segStart, segStart + 1);
-                  seg.fontFamily = sFont.family;
-                  seg.fontWeight = sFont.style;
-                  seg.fontSize = node.getRangeFontSize(segStart, segStart + 1);
-                  var sFills = node.getRangeFills(segStart, segStart + 1);
-                  if (sFills && sFills[0] && sFills[0].type === "SOLID") seg.fill = rgbToHex(sFills[0].color);
-                } catch(e6) {}
-                segments.push(seg);
-                segStart = si;
-              }
-            }
-          }
-
-          if (segments.length > 1) {
-            info.segments = segments;
-            // Use first segment as representative
-            info.fontFamily = segments[0].fontFamily;
-            info.fontWeight = segments[0].fontWeight;
-            info.fontSize = segments[0].fontSize;
-            info.fill = segments[0].fill;
-          } else if (segments.length === 1) {
-            info.fontFamily = segments[0].fontFamily;
-            info.fontWeight = segments[0].fontWeight;
-            info.fontSize = segments[0].fontSize;
-            info.fill = segments[0].fill;
-          }
-        }
-      } catch(e2) { info.content = node.characters || ""; }
+    // This used to be a try block whose catch did per-segment recovery for
+    // "mixed text styles". Reading a mixed property returns the figma.mixed
+    // Symbol rather than throwing, so that catch could never fire and the
+    // segments/mixedStyles output documented in api-docs was never emitted.
+    // readTextProps resolves the mixed values up front; readTextSegments
+    // supplies the per-run detail when there genuinely is more than one run.
+    var rhTp = readTextProps(node);
+    info.content = rhTp.content;
+    info.fill = getFillHex(node);
+    info.fontSize = rhTp.fontSize;
+    info.fontFamily = rhTp.fontFamily;
+    info.fontWeight = rhTp.fontWeight;
+    var rhLh = formatLineHeight(rhTp.lineHeight, "auto");
+    if (rhLh !== null) info.lineHeight = rhTp.lineHeight.unit === "PIXELS" ? rhTp.lineHeight.value : rhLh;
+    if (!rhTp.letterSpacing.mixed && rhTp.letterSpacing.value) info.letterSpacing = rhTp.letterSpacing.value;
+    info.textAlign = node.textAlignHorizontal;
+    if (node.textAlignVertical && node.textAlignVertical !== "TOP") info.textAlignVertical = node.textAlignVertical;
+    if (node.textDecoration && node.textDecoration !== "NONE") info.textDecoration = node.textDecoration;
+    if (node.textTruncation && node.textTruncation !== "DISABLED") info.textTruncation = node.textTruncation;
+    if (node.textAutoResize) info.textAutoResize = node.textAutoResize;
+    if (rhTp.anyMixed) {
+      info.mixedStyles = rhTp.mixed;
+      if (rhTp.mixed.font) info.mixedFonts = true;
+      var rhSegs = readTextSegments(node);
+      if (rhSegs) info.segments = rhSegs;
     }
   }
 

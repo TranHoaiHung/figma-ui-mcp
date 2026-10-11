@@ -170,8 +170,11 @@ function buildFigmaProxy(bridge) {
 
   // ── BUG-09: figma.getChildren(nodeId) — returns children array ──────────
   proxy.getChildren = async (nodeId) => {
-    const detail = await bridge.sendOperation("get_node_detail", { id: nodeId, depth: 1 });
-    return (detail && Array.isArray(detail.children)) ? detail.children : [];
+    // get_node_detail never returns a children array, so this always answered
+    // []. get_design builds the tree, so ask it for one level.
+    const tree = await bridge.sendOperation("get_design", { id: nodeId, depth: 1 });
+    const root = tree && tree.tree ? tree.tree : tree;
+    return root && Array.isArray(root.children) ? root.children : [];
   };
 
   // ── BUG-10: figma.getNode(id) — alias for getNodeById ───────────────────

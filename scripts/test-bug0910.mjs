@@ -15,9 +15,12 @@ function makeBridge(overrides = {}) {
 console.log("\nBUG-09: figma.getChildren(nodeId)");
 {
   const bridge = makeBridge({
-    get_node_detail: (p) => ({
-      id: p.id, type: "FRAME", name: "card",
-      children: [{ id: "2:1", type: "TEXT", name: "title" }, { id: "2:2", type: "RECTANGLE", name: "bg" }]
+    get_design: (p) => ({
+      tree: {
+        id: p.id, type: "FRAME", name: "card",
+        children: [{ id: "2:1", type: "TEXT", name: "title" }, { id: "2:2", type: "RECTANGLE", name: "bg" }]
+      },
+      meta: {}
     })
   });
   const r = await executeCode(`
@@ -31,7 +34,8 @@ console.log("\nBUG-09: figma.getChildren(nodeId)");
 
 console.log("\nBUG-09: getChildren with no children field");
 {
-  const bridge = makeBridge({ get_node_detail: () => ({ id: "1:1", type: "TEXT" }) });
+  // A TEXT node has no children key at all.
+  const bridge = makeBridge({ get_design: () => ({ tree: { id: "1:1", type: "TEXT" }, meta: {} }) });
   const r = await executeCode(`
     var ch = await figma.getChildren("1:1");
     return { isArray: Array.isArray(ch), len: ch.length };
@@ -43,7 +47,7 @@ console.log("\nBUG-09: getChildren → loop → modify");
 {
   const modifyCalls = [];
   const bridge = makeBridge({
-    get_node_detail: () => ({ id: "1:1", children: [{ id: "2:1" }, { id: "2:2" }] }),
+    get_design: () => ({ tree: { id: "1:1", children: [{ id: "2:1" }, { id: "2:2" }] }, meta: {} }),
     modify: (p) => { modifyCalls.push(p); return { id: p.id }; }
   });
   const r = await executeCode(`

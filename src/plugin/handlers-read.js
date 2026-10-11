@@ -129,17 +129,13 @@ handlers.scan_design = async function(params) {
         x: Math.round(node.x), y: Math.round(node.y),
         width: Math.round(node.width), height: Math.round(node.height),
       };
-      try {
-        textInfo.content = node.characters;
-        textInfo.fill = getFillHex(node);
-        textInfo.fontSize = node.fontSize;
-        var scanFont = readFontName(node);
-        textInfo.fontFamily = scanFont.family;
-        textInfo.fontWeight = scanFont.style;
-        if (scanFont.mixed) textInfo.mixedFonts = true;
-      } catch(e) {
-        try { textInfo.content = node.characters; } catch(e2) {}
-      }
+      var scanTp = readTextProps(node);
+      textInfo.content = scanTp.content;
+      textInfo.fill = getFillHex(node);
+      textInfo.fontSize = scanTp.fontSize;
+      textInfo.fontFamily = scanTp.fontFamily;
+      textInfo.fontWeight = scanTp.fontWeight;
+      if (scanTp.mixed.font) textInfo.mixedFonts = true;
       if (summary.allText.length < 500) summary.allText.push(textInfo);
 
       // Count font usage
@@ -160,7 +156,7 @@ handlers.scan_design = async function(params) {
     } catch(e) {}
 
     // Collect images
-    if (hasImageFill(node) && summary.images.length < 50) {
+    if (summary.images.length < 50 && hasImageFill(node)) {
       summary.images.push({
         id: node.id, name: node.name,
         x: Math.round(node.x), y: Math.round(node.y),
@@ -169,7 +165,7 @@ handlers.scan_design = async function(params) {
     }
 
     // Collect icons
-    if (isLikelyIcon(node) && summary.icons.length < 50) {
+    if (summary.icons.length < 50 && isLikelyIcon(node)) {
       summary.icons.push({ id: node.id, name: node.name, width: Math.round(node.width), height: Math.round(node.height) });
     }
 
@@ -215,13 +211,19 @@ handlers.scan_design = async function(params) {
       };
       var sectionTexts = collectTextContent(child, 20);
       if (sectionTexts.length) section.textContent = sectionTexts;
-      // Count icons/images that belong to this section's subtree (by checking collected lists)
-      for (var si = 0; si < summary.icons.length; si++) {
-        if (summary.icons[si].id === child.id || (summary.icons[si].parentId && summary.icons[si].parentId === child.id)) section.iconCount++;
-      }
-      for (var sj = 0; sj < summary.images.length; sj++) {
-        if (summary.images[sj].id === child.id || (summary.images[sj].parentId && summary.images[sj].parentId === child.id)) section.imageCount++;
-      }
+      // Count the icons and images inside this section's subtree. The previous
+      // version compared against summary.icons[].parentId, which is never set,
+      // so a section only ever counted itself. sectionIconIds/sectionImageIds
+      // are already built above; walk the subtree once and test membership.
+      (function countInSubtree(n) {
+        if (!n || typeof n !== "object") return;
+        if (!scanIncludeHidden && n.visible === false) return;
+        if (sectionIconIds[n.id]) section.iconCount++;
+        if (sectionImageIds[n.id]) section.imageCount++;
+        if ("children" in n) {
+          for (var k = 0; k < n.children.length; k++) countInSubtree(n.children[k]);
+        }
+      })(child);
       summary.sections.push(section);
     }
   }
@@ -290,11 +292,18 @@ handlers.search_nodes = async function(params) {
     if (node.type === "TEXT") {
       try {
         if (criteria.text && node.characters.indexOf(criteria.text) === -1) return false;
-        var matchFont = readFontName(node);
-        if (criteria.fontFamily && matchFont.family && matchFont.family !== criteria.fontFamily) return false;
-        if (criteria.fontWeight && matchFont.style && matchFont.style !== criteria.fontWeight) return false;
-        if (criteria.fontSize && node.fontSize !== criteria.fontSize) return false;
-      } catch(e) { /* unreadable characters or size — skip the text filters */ }
+        // Resolve the font only when it is actually being filtered on: for a
+        // mixed node readFontName costs a getStyledTextSegments call per node.
+        if (criteria.fontFamily || criteria.fontWeight) {
+          var matchFont = readFontName(node);
+          if (criteria.fontFamily && matchFont.family && matchFont.family !== criteria.fontFamily) return false;
+          if (criteria.fontWeight && matchFont.style && matchFont.style !== criteria.fontWeight) return false;
+        }
+        if (criteria.fontSize) {
+          var matchSize = readMixedNumber(node, "fontSize");
+          if (matchSize.value !== criteria.fontSize) return false;
+        }
+      } catch(e) { /* unreadable characters — skip the text filters */ }
     } else {
       if (criteria.fontFamily || criteria.fontWeight || criteria.fontSize) return false;
     }
@@ -322,14 +331,12 @@ handlers.search_nodes = async function(params) {
         };
         try { info.fill = getFillHex(node); } catch(e) {}
         if (node.type === "TEXT") {
-          try {
-            info.content = node.characters;
-            info.fontSize = node.fontSize;
-            var hitFont = readFontName(node);
-            info.fontFamily = hitFont.family;
-            info.fontWeight = hitFont.style;
-            if (hitFont.mixed) info.mixedFonts = true;
-          } catch(e) { try { info.content = node.characters; } catch(e2) {} }
+          var hitTp = readTextProps(node);
+          info.content = hitTp.content;
+          info.fontSize = hitTp.fontSize;
+          info.fontFamily = hitTp.fontFamily;
+          info.fontWeight = hitTp.fontWeight;
+          if (hitTp.mixed.font) info.mixedFonts = true;
         }
         // Find page path for context
         var path = [];

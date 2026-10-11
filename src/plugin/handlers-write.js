@@ -542,8 +542,10 @@ handlers.modify = async (params) => {
 
   if (node.type === "TEXT") {
     if (params.content !== undefined || params.fontWeight !== undefined || params.fontFamily !== undefined) {
-      const family = params.fontFamily || node.fontName.family;
-      const style = FONT_STYLE_MAP[params.fontWeight] || node.fontName.style;
+      var curFont = readFontName(node);
+      const family = params.fontFamily || curFont.family;
+      const style = FONT_STYLE_MAP[params.fontWeight] || curFont.style;
+      if (!family) throw new Error("Cannot resolve a font for text node " + node.id + " — pass fontFamily explicitly.");
       await figma.loadFontAsync({ family, style });
       node.fontName = { family, style };
       if (params.content !== undefined) {
@@ -560,7 +562,7 @@ handlers.modify = async (params) => {
     }
     if (params.fontSize !== undefined) node.fontSize = params.fontSize;
     if (params.textAlign !== undefined || params.textAlignVertical !== undefined || params.lineHeight !== undefined) {
-      await figma.loadFontAsync(node.fontName);
+      await ensureTextFontLoaded(node);
       if (params.textAlign         !== undefined) node.textAlignHorizontal = params.textAlign.toUpperCase();
       if (params.textAlignVertical !== undefined) node.textAlignVertical   = params.textAlignVertical.toUpperCase();
       if (params.lineHeight !== undefined) {
@@ -972,6 +974,48 @@ handlers.getReactions = async function(params) {
   var node = await findNodeByIdAsync(nodeId);
   if (!node) throw new Error("Node not found: " + nodeId);
   return { id: node.id, name: node.name, reactions: node.reactions || [] };
+};
+
+// setScrollBehavior — scroll overflow on a frame.
+// This op was in the executor allowlist, tool-definitions and api-docs, and
+// documented in CLAUDE.md, but no handler existed, so every call failed with
+// "Unknown operation".
+var OVERFLOW_DIRECTIONS = ["NONE", "HORIZONTAL", "VERTICAL", "BOTH"];
+
+handlers.setScrollBehavior = async function(params) {
+  var node = await resolveNode(params);
+  if (!node) throw new Error("Node not found: " + (params.id || params.nodeId || params.name));
+
+  var out = { id: node.id, name: node.name };
+
+  if (params.overflowDirection !== undefined) {
+    if (!("overflowDirection" in node)) {
+      throw new Error("Node type " + node.type + " has no overflowDirection (frame-like nodes only)");
+    }
+    var dir = String(params.overflowDirection).toUpperCase();
+    if (OVERFLOW_DIRECTIONS.indexOf(dir) === -1) {
+      throw new Error("overflowDirection must be one of " + OVERFLOW_DIRECTIONS.join(", ") + " — got " + params.overflowDirection);
+    }
+    node.overflowDirection = dir;
+    out.overflowDirection = node.overflowDirection;
+  }
+
+  if (params.clipsContent !== undefined) {
+    if (!("clipsContent" in node)) {
+      throw new Error("Node type " + node.type + " has no clipsContent (frame-like nodes only)");
+    }
+    node.clipsContent = !!params.clipsContent;
+    out.clipsContent = node.clipsContent;
+  }
+
+  // scrollBehavior governs whether the node scrolls with the frame or stays
+  // fixed — the companion property to overflowDirection in prototypes.
+  if (params.scrollBehavior !== undefined && "scrollBehavior" in node) {
+    node.scrollBehavior = String(params.scrollBehavior).toUpperCase();
+    out.scrollBehavior = node.scrollBehavior;
+  }
+
+  return out;
 };
 
 handlers.removeReactions = async function(params) {

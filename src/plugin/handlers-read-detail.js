@@ -128,22 +128,25 @@ handlers.get_node_detail = async function(params) {
 
   // Text properties
   if (node.type === "TEXT") {
-    try {
-      detail.content = node.characters;
-      detail.color = getFillHex(node);
-      detail.fontSize = node.fontSize + "px";
-      var detFont = readFontName(node);
-      detail.fontFamily = detFont.family;
-      detail.fontWeight = detFont.style;
-      if (detFont.mixed) detail.mixedFonts = true;
-      if (node.lineHeight) {
-        if (node.lineHeight.unit === "AUTO") detail.lineHeight = "normal";
-        else if (node.lineHeight.unit === "PERCENT") detail.lineHeight = Math.round(node.lineHeight.value) + "%";
-        else detail.lineHeight = node.lineHeight.value + "px";
-      }
-      if (node.letterSpacing && node.letterSpacing.value !== 0) detail.letterSpacing = node.letterSpacing.value + "px";
-      detail.textAlign = node.textAlignHorizontal ? node.textAlignHorizontal.toLowerCase() : null;
-    } catch(e) { try { detail.content = node.characters; } catch(e2) {} }
+    // readTextProps handles the figma.mixed Symbol on every property. The old
+    // code did `node.fontSize + "px"`, which throws a TypeError on a mixed node,
+    // and the catch then discarded colour, alignment and the resolved font too.
+    var tp = readTextProps(node);
+    detail.content = tp.content;
+    detail.color = getFillHex(node);
+    if (tp.fontSize !== null) detail.fontSize = tp.fontSize + "px";
+    detail.fontFamily = tp.fontFamily;
+    detail.fontWeight = tp.fontWeight;
+    var detLh = formatLineHeight(tp.lineHeight, "normal");
+    if (detLh !== null) detail.lineHeight = detLh;
+    if (!tp.letterSpacing.mixed && tp.letterSpacing.value) detail.letterSpacing = tp.letterSpacing.value + "px";
+    detail.textAlign = tp.textAlign;
+    if (tp.anyMixed) {
+      detail.mixedStyles = tp.mixed;
+      if (tp.mixed.font) detail.mixedFonts = true;
+      var detSegs = readTextSegments(node);
+      if (detSegs) detail.segments = detSegs;
+    }
   }
 
   // P1: Resolve bound variables → name + resolvedType + value (not just IDs)
@@ -460,14 +463,19 @@ handlers.get_design_context = async function(params) {
     // Text
     if (nd.type === "TEXT") {
       try {
-        ctx.text = { content: nd.characters };
+        // This call site kept the pre-readFontName idiom, so a mixed node left
+        // fontFamily/fontWeight absent here even after the other paths were fixed.
+        var ctxTp = readTextProps(nd);
+        ctx.text = { content: ctxTp.content };
         if (nd.textStyleId && styleNameMap[nd.textStyleId]) ctx.text.style = styleNameMap[nd.textStyleId];
-        ctx.text.fontSize = nd.fontSize;
-        ctx.text.fontFamily = nd.fontName ? nd.fontName.family : null;
-        ctx.text.fontWeight = nd.fontName ? nd.fontName.style : null;
-        if (nd.lineHeight && nd.lineHeight.unit !== "AUTO") ctx.text.lineHeight = nd.lineHeight.value + (nd.lineHeight.unit === "PERCENT" ? "%" : "px");
+        ctx.text.fontSize = ctxTp.fontSize;
+        ctx.text.fontFamily = ctxTp.fontFamily;
+        ctx.text.fontWeight = ctxTp.fontWeight;
+        var ctxLh = formatLineHeight(ctxTp.lineHeight, null);
+        if (ctxLh !== null) ctx.text.lineHeight = ctxLh;
         ctx.text.color = resolveFill(nd);
-        ctx.text.align = nd.textAlignHorizontal ? nd.textAlignHorizontal.toLowerCase() : null;
+        ctx.text.align = ctxTp.textAlign;
+        if (ctxTp.anyMixed) ctx.text.mixedStyles = ctxTp.mixed;
       } catch(e) {}
     }
 
@@ -750,11 +758,16 @@ handlers.get_variables = async function() {
   var collections = [];
   try {
     var localCollections = await figma.variables.getLocalVariableCollectionsAsync();
+    // One bulk read instead of an awaited getVariableByIdAsync per variable:
+    // a file with 500 variables used to cost 500 round trips.
+    var allVars = await figma.variables.getLocalVariablesAsync();
+    var varsById = {};
+    for (var avi = 0; avi < allVars.length; avi++) varsById[allVars[avi].id] = allVars[avi];
     for (var ci = 0; ci < localCollections.length; ci++) {
       var col = localCollections[ci];
       var variables = [];
       for (var vi = 0; vi < col.variableIds.length; vi++) {
-        var v = await figma.variables.getVariableByIdAsync(col.variableIds[vi]);
+        var v = varsById[col.variableIds[vi]];
         if (!v) continue;
         var values = {};
         for (var modeId in v.valuesByMode) {

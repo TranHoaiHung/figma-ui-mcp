@@ -150,10 +150,13 @@ function findNodeById(id) {
 async function findNodeByIdAsync(id) {
   if (figma.currentPage.id === id) return figma.currentPage;
   if (figma.root.id === id) return figma.root;
-  var node = figma.currentPage.findOne(n => n.id === id);
+  // getNodeByIdAsync is an indexed lookup; currentPage.findOne walks the whole
+  // page tree. This used to scan first and only fall back to the index, so every
+  // id resolution cost a full traversal — 40 call sites, and a 50-op batch paid
+  // it 50 times. Index first, keep the scan as the fallback.
+  try { var n = await figma.getNodeByIdAsync(id); if (n) return n; } catch(e) {}
+  var node = figma.currentPage.findOne(n2 => n2.id === id);
   if (node) return node;
-  // Use async API as cross-page fallback (Figma removed the sync getNodeById)
-  try { var n2 = await figma.getNodeByIdAsync(id); if (n2) return n2; } catch(e) {}
   return null;
 }
 
@@ -227,4 +230,129 @@ function readFontName(node) {
     }
   } catch (e) {}
   return { family: null, style: null, mixed: true };
+}
+
+// ─── TEXT PROPERTIES ──────────────────────────────────────────────────────────
+
+// Every mixed-capable scalar on a text node has the same trap as fontName: when
+// the characters disagree, the property is `figma.mixed`, a Symbol. Symbols are
+// truthy and do not throw on property access, so the usual idioms misfire in two
+// distinct ways:
+//
+//     detail.fontSize = node.fontSize + "px";        // TypeError on a Symbol
+//     detail.lineHeight = node.lineHeight.value + "px";  // "undefinedpx"
+//
+// The TypeError is the worse of the two, because the surrounding catch then
+// discards every *other* field it had already gathered — colour, alignment, and
+// the font that readFontName just resolved correctly.
+function readMixedNumber(node, prop) {
+  var v;
+  try { v = node[prop]; } catch (e) { return { value: null, mixed: false }; }
+  if (typeof v === "symbol") return { value: null, mixed: true };
+  return { value: typeof v === "number" ? v : null, mixed: false };
+}
+
+// lineHeight and letterSpacing are objects ({ value, unit }) rather than scalars,
+// so a mixed read yields a Symbol whose .value is undefined.
+function readMixedUnitValue(node, prop) {
+  var v;
+  try { v = node[prop]; } catch (e) { return { value: null, unit: null, mixed: false }; }
+  if (typeof v === "symbol") return { value: null, unit: null, mixed: true };
+  if (!v) return { value: null, unit: null, mixed: false };
+  return { value: typeof v.value === "number" ? v.value : null, unit: v.unit || null, mixed: false };
+}
+
+// Formats lineHeight the way the read handlers present it. `autoLabel` differs
+// between call sites by accident of history — get_node_detail says "normal",
+// extractDesignTree says "auto" — so it stays a parameter until that is unified.
+function formatLineHeight(lh, autoLabel) {
+  if (!lh || lh.mixed) return null;
+  if (lh.unit === "AUTO") return autoLabel;
+  if (lh.value === null) return null;
+  if (lh.unit === "PERCENT") return Math.round(lh.value) + "%";
+  return lh.value + "px";
+}
+
+// One reader for every text property, so a fix lands in one place instead of the
+// five call sites that each had their own copy. Scalars are null when unreadable,
+// never undefined, and `mixed` says which properties actually disagree.
+function readTextProps(node) {
+  var font = readFontName(node);
+  var size = readMixedNumber(node, "fontSize");
+  var lh   = readMixedUnitValue(node, "lineHeight");
+  var ls   = readMixedUnitValue(node, "letterSpacing");
+
+  var content = null;
+  try { content = node.characters; } catch (e) {}
+
+  var align = null;
+  try { align = node.textAlignHorizontal ? String(node.textAlignHorizontal).toLowerCase() : null; } catch (e) {}
+
+  var out = {
+    content:       content,
+    fontFamily:    font.family,
+    fontWeight:    font.style,
+    fontSize:      size.value,
+    lineHeight:    lh,
+    letterSpacing: ls,
+    textAlign:     align,
+    mixed: {
+      font:          font.mixed,
+      fontSize:      size.mixed,
+      lineHeight:    lh.mixed,
+      letterSpacing: ls.mixed,
+    },
+  };
+  out.anyMixed = out.mixed.font || out.mixed.fontSize || out.mixed.lineHeight || out.mixed.letterSpacing;
+  return out;
+}
+
+// Per-run styling, for consumers that need the detail rather than the first run.
+// Returns null when the node is single-styled, so callers can omit the field.
+function readTextSegments(node) {
+  if (typeof node.getStyledTextSegments !== "function") return null;
+  var segs;
+  try { segs = node.getStyledTextSegments(["fontName", "fontSize", "fills"]); } catch (e) { return null; }
+  if (!segs || segs.length < 2) return null;
+  var out = [];
+  for (var i = 0; i < segs.length; i++) {
+    var s = segs[i];
+    out.push({
+      characters: s.characters,
+      start:      s.start,
+      end:        s.end,
+      fontFamily: s.fontName ? s.fontName.family : null,
+      fontWeight: s.fontName ? s.fontName.style : null,
+      fontSize:   typeof s.fontSize === "number" ? s.fontSize : null,
+      fill:       s.fills && s.fills.length ? rgbToHex(s.fills[0].color) : null,
+    });
+  }
+  return out;
+}
+
+// Loads every font a text node uses. A mixed node has no single fontName to pass
+// to loadFontAsync — handing it the Symbol, or {family: undefined}, throws — so
+// the runs have to be enumerated and loaded individually.
+async function ensureTextFontLoaded(node) {
+  var fn;
+  try { fn = node.fontName; } catch (e) { return; }
+
+  if (typeof fn !== "symbol") {
+    if (fn && fn.family) { try { await figma.loadFontAsync(fn); } catch (e) {} }
+    return;
+  }
+
+  var segs = null;
+  try { segs = node.getStyledTextSegments(["fontName"]); } catch (e) {}
+  if (!segs || !segs.length) return;
+
+  var seen = {};
+  for (var i = 0; i < segs.length; i++) {
+    var f = segs[i].fontName;
+    if (!f || !f.family) continue;
+    var key = f.family + "|" + f.style;
+    if (seen[key]) continue;
+    seen[key] = true;
+    try { await figma.loadFontAsync(f); } catch (e) {}
+  }
 }

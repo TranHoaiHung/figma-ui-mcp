@@ -339,11 +339,11 @@ handlers.applyVariable = async function(params) {
     if (variable.resolvedType !== "STRING") {
       throw new Error("field \"" + field + "\" requires a STRING variable, got " + variable.resolvedType);
     }
-    try { await figma.loadFontAsync(node.fontName); } catch (e) {}
+    try { await ensureTextFontLoaded(node); } catch (e) {}
     node.setBoundVariable(figmaField, variable);
   } else if (figmaField === "characters") {
     if (node.type !== "TEXT") throw new Error("field \"characters\" can only be applied to TEXT nodes");
-    try { await figma.loadFontAsync(node.fontName); } catch (e) {}
+    try { await ensureTextFontLoaded(node); } catch (e) {}
     node.setBoundVariable("characters", variable);
   } else if (figmaField === "letterSpacing" || figmaField === "lineHeight") {
     if (node.type !== "TEXT") throw new Error("field \"" + field + "\" can only be applied to TEXT nodes");
