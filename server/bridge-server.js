@@ -2,10 +2,25 @@
 // Supports long polling, multi-instance sessions, and connection resilience
 import http from "node:http";
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+import { ALL_OPS } from "./code-executor.js";
+
+// From package.json so the / route cannot report a stale version.
+const VERSION = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")
+).version;
+
 export const CONFIG = {
   PORT: parseInt(process.env.FIGMA_MCP_PORT || "38451", 10),
   PORT_RANGE: 10,
-  HOST: null,
+  // Loopback only. The bridge has no authentication and /exec drives the user's
+  // Figma document, so binding every interface would let any host on the LAN —
+  // and, with CORS "*" below, any web page the user has open — read, modify and
+  // delete their design. Override only if you know what you are exposing.
+  HOST: process.env.FIGMA_MCP_HOST || "127.0.0.1",
   OP_TIMEOUT_MS: 60_000,
   MAX_BODY_BYTES: 5_000_000,
   MAX_QUEUE: 50,
@@ -147,6 +162,7 @@ export class BridgeServer {
       var timer = setTimeout(function() {
         session.pending.delete(opId);
         session.queue = session.queue.filter(function(r) { return r.id !== opId; });
+        self.#opToSession.delete(opId);
         reject(new Error("Operation \"" + operation + "\" timed out after " + timeout + "ms"));
       }, timeout);
       session.pending.set(opId, { resolve: resolve, reject: reject, timer: timer, startMs: Date.now() });
@@ -255,7 +271,7 @@ export class BridgeServer {
     if (path === "/" && req.method === "GET") {
       res.writeHead(200);
       res.end(JSON.stringify({
-        server: "figma-ui-mcp", version: "2.4.5", port: this.#actualPort,
+        server: "figma-ui-mcp", version: VERSION, port: this.#actualPort,
         pluginConnected: this.isPluginConnected(),
         sessions: this.getSessions(),
         queueLength: this.queueLength,
@@ -320,6 +336,13 @@ export class BridgeServer {
         .then(async function(body) {
           if (!self.isPluginConnected(sessionId)) {
             res.writeHead(503); res.end(JSON.stringify({ error: "Plugin not connected" })); return;
+          }
+          // /exec used to forward any operation name straight to the plugin,
+          // bypassing the allowlist that guards the MCP path.
+          if (ALL_OPS.indexOf(body.operation) === -1) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: "Unknown operation: " + body.operation }));
+            return;
           }
           try {
             var data = await self.sendOperation(body.operation, body.params || {}, sessionId);

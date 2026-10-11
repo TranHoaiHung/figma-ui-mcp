@@ -28,7 +28,7 @@ const WRITE_OPS = [
   "clone", "group", "ungroup", "flatten", "resize",
   "set_selection", "set_viewport", "batch",
   // Prototyping & interactions (v2.4.0)
-  "setReactions", "getReactions", "removeReactions",
+  "setReactions", "removeReactions",
   // Scroll behavior (v2.4.0)
   "setScrollBehavior",
   // Component variant swapping (v2.4.0)
@@ -52,9 +52,12 @@ const READ_OPS = [
   "get_node_detail", "export_image", "search_nodes", "scan_design",
   // Prototyping & component reads (v2.4.0)
   "getReactions", "getComponentProperties",
+  // Design-to-code reads (v2.5.9) — handlers existed but were unreachable from
+  // user code because they were missing here.
+  "get_css", "get_design_context", "get_component_map", "get_unmapped_components",
 ];
 
-const ALL_OPS = [...WRITE_OPS, ...READ_OPS];
+export const ALL_OPS = [...WRITE_OPS, ...READ_OPS];
 
 // ─── Icon library config ──────────────────────────────────────────────────────
 // Priority order: iOS-style filled → Win11 filled → Bootstrap filled → Phosphor filled
