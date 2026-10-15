@@ -65,6 +65,16 @@ handlers.get_node_detail = async function(params) {
       }
       detail.strokeWeight = node.strokeWeight;
       detail.strokeAlign = node.strokeAlign;
+      // A dashed stroke is a decision, and it was the one stroke property this
+      // reader dropped. The write side has forwarded `dashPattern` since BUG-17,
+      // so a border drawn through this bridge could not be read back as it was
+      // drawn. Worse, `get_css` asserted `solid` for every stroke, so an
+      // agent reading faithfully rendered a dashed affordance as a solid one and
+      // every other field — colour, weight, radius, size — agreed with it.
+      // Empty array means solid; it is omitted rather than reported as [].
+      if (node.dashPattern && node.dashPattern.length) {
+        detail.dashPattern = Array.prototype.slice.call(node.dashPattern);
+      }
     }
   } catch(e) {}
 

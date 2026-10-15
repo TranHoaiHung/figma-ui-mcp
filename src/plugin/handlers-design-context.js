@@ -81,6 +81,11 @@ handlers.get_design_context = async function(params) {
     try {
       if (nd.strokes && nd.strokes.length && nd.strokes[0].type === "SOLID") {
         ctx.stroke = { color: rgbToHex(nd.strokes[0].color), weight: nd.strokeWeight };
+        // Same omission as get_node_detail had: a consumer of this context had
+        // no way to learn a border was dashed, from any read path on the bridge.
+        if (nd.dashPattern && nd.dashPattern.length) {
+          ctx.stroke.dashPattern = Array.prototype.slice.call(nd.dashPattern);
+        }
       }
     } catch(e) {}
 

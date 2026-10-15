@@ -48,7 +48,17 @@ handlers.get_css = async function(params) {
   }
 
   // Stroke / border
-  if (detail.stroke) lines.push("border: " + (detail.strokeWeight || 1) + "px solid " + detail.stroke + ";");
+  if (detail.stroke) {
+    // `solid` used to be hardcoded here, which stated as fact something this
+    // reader had never looked at.
+    var strokeStyle = detail.dashPattern && detail.dashPattern.length ? "dashed" : "solid";
+    lines.push("border: " + (detail.strokeWeight || 1) + "px " + strokeStyle + " " + detail.stroke + ";");
+    if (detail.dashPattern && detail.dashPattern.length) {
+      // CSS has no single property for Figma's dash/gap array, and the comment
+      // carries the numbers a border-image or an SVG stroke-dasharray needs.
+      lines.push("/* figma dashPattern: " + detail.dashPattern.join(", ") + " */");
+    }
+  }
 
   // Border radius
   if (detail.borderRadius) lines.push("border-radius: " + detail.borderRadius + ";");
