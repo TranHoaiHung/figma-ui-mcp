@@ -87,6 +87,13 @@ function extractDesignTree(node, depth, maxDepth, detailLevel, filterInvisible) 
         info.stroke = rgbToHex(strokes[0].color);
         if (node.strokeWeight) info.strokeWeight = node.strokeWeight;
         if (node.strokeAlign) info.strokeAlign = node.strokeAlign;
+        // PR #17 added dashPattern to get_node_detail, get_css and
+        // get_design_context but not here, so get_design and scan_design still
+        // reported a dashed border as if it were solid. Empty means solid and
+        // is omitted rather than reported as [].
+        if (node.dashPattern && node.dashPattern.length) {
+          info.dashPattern = Array.prototype.slice.call(node.dashPattern);
+        }
       } else {
         info.strokes = strokes.map(function(s) {
           var sd = { type: s.type };

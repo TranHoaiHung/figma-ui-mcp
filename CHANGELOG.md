@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.5.30] — 2026-10-26
+
+### Fixed
+
+**Dashed borders were read back as solid** (`src/plugin/handlers-node-detail.js`, `handlers-css.js`, `handlers-design-context.js`, `extract-design-tree.js`)
+- `get_node_detail` returned every stroke property except the one that says a border is dashed, and `get_css` hardcoded `solid` for all of them — stating as fact something the reader never looked at. An agent reading faithfully rendered a dashed affordance as a solid one, with colour, weight, radius and size all agreeing with the wrong answer.
+- The write side has forwarded `dashPattern` since BUG-17, so a border drawn through this bridge could not be read back as it was drawn.
+- `get_node_detail` and `get_design_context` now report `dashPattern` when non-empty; `get_css` emits `dashed` plus a comment carrying the numbers, since CSS has no single property for Figma's dash/gap array. An empty array means solid and is omitted rather than reported as `[]`.
+- Thanks to [@wamynobe](https://github.com/wamynobe) (PR #17) for finding this and fixing the first three read paths. `extract-design-tree.js` — behind `get_design` and `scan_design` — had the same omission and is fixed here too, so all four read paths now agree.
+- `scripts/test-dash-pattern.mjs` covers the round trip: dashed reported, solid omitted rather than sent as `[]`, a missing property not throwing, the CSS output for both cases, and the array being copied rather than aliased to Figma's live object.
+
 ## [2.5.29] — 2026-10-11
 
 ### Fixed
